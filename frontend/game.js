@@ -24,6 +24,7 @@ const lobbyScreen = document.getElementById('lobby-screen');
 const hud = document.getElementById('game-hud');
 const gameOverScreen = document.getElementById('game-over');
 const loadingProgress = document.getElementById('loading-progress');
+const fpsCounter = document.getElementById('fps-counter');
 
 const usernameInput = document.getElementById('username');
 const hostBtn = document.getElementById('host-btn');
@@ -223,6 +224,8 @@ function updateHUD() {
 
 let fpsInterval = 1000 / 60;
 let then = performance.now();
+let lastFpsTime = performance.now();
+let framesThisSecond = 0;
 
 function renderLoop(now) {
     requestAnimationFrame(renderLoop);
@@ -230,6 +233,13 @@ function renderLoop(now) {
     const elapsed = now - then;
     if (elapsed < fpsInterval) return;
     then = now - (elapsed % fpsInterval);
+
+    framesThisSecond++;
+    if (now - lastFpsTime >= 1000) {
+        fpsCounter.innerText = `${framesThisSecond} FPS`;
+        framesThisSecond = 0;
+        lastFpsTime = now;
+    }
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
