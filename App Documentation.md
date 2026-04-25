@@ -47,12 +47,21 @@ The core of the game engine lives on the **Node.js server**.
 
 ---
 
+### 3. Monorepo Structure
+- **Backend**: `/backend/server.js` (Express + Socket.io + Matter.js)
+- **Frontend**: `/frontend/` (Vite + Vanilla JS)
+- **Shared**: `/backend/gameConfig.js` contains the source of truth for weapon and chassis data.
+
+---
+
+## 🎮 Gameplay Features
+...
 ## 🛠️ Technology Stack
-- **Backend**: Node.js, Express
-- **Frontend**: Vanilla JavaScript, HTML5 Canvas
+- **Backend**: Node.js, Express (ES Modules)
+- **Frontend**: Vite 6, Vanilla JavaScript, HTML5 Canvas
 - **Physics**: Matter.js (Server-side)
 - **Real-time**: Socket.io
-- **Deployment**: Configured for Railway (`npm start`)
+- **Deployment**: Railway Monorepo Pattern (`postinstall` builds frontend)
 
 ---
 
@@ -63,6 +72,7 @@ The core of the game engine lives on the **Node.js server**.
 npm install
 npm run dev
 ```
+*Runs backend (Nodemon) and frontend (Vite HMR) concurrently.*
 
 ### Controls
 - **Movement**: `W, A, S, D` or `Arrow Keys`

@@ -199,8 +199,8 @@ button {
 }
 
 #enter-btn, #host-btn, #join-btn {
-    opacity: 0;
-    pointer-events: none;
+    opacity: 1;
+    pointer-events: auto;
 }
 
 .multiplayer-actions {
