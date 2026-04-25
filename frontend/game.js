@@ -23,6 +23,7 @@ const lobbyScreen = document.getElementById('lobby-screen');
 const hud = document.getElementById('game-hud');
 const gameOverScreen = document.getElementById('game-over');
 const loadingProgress = document.getElementById('loading-progress');
+const fpsCounter = document.getElementById('fps-counter');
 
 const usernameInput = document.getElementById('username');
 const hostBtn = document.getElementById('host-btn');
@@ -314,12 +315,24 @@ function updateHUD() {
     }
 }
 
+let fpsInterval = 1000 / 60;
+let then = performance.now();
+let lastFpsTime = performance.now();
+let framesThisSecond = 0;
+
 function renderLoop(now) {
     requestAnimationFrame(renderLoop);
     const rawDt = now - lastFrameTime;
     lastFrameTime = now;
     renderTime = now;
     const dt = Math.min(rawDt / 16.667, 3); // 1.0 at 60fps
+
+    framesThisSecond++;
+    if (now - lastFpsTime >= 1000) {
+        fpsCounter.innerText = `${framesThisSecond} FPS`;
+        framesThisSecond = 0;
+        lastFpsTime = now;
+    }
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
