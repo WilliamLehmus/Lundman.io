@@ -27,15 +27,17 @@ const lobbyIdSpan = document.getElementById('lobby-id');
 const lobbyStatus = document.getElementById('lobby-status');
 
 const p1HpBar = document.getElementById('p1-hp');
+const p1Scrap = document.getElementById('p1-scrap');
 const p2HpBar = document.getElementById('p2-hp');
 const p1CooldownBar = document.getElementById('p1-cooldown');
 const p2CooldownBar = document.getElementById('p2-cooldown');
 
 // Game State
-let gameState = { players: [], bullets: [] };
+let gameState = { players: [], bullets: [], worldSize: 4000 };
 let myId = null;
 let gameActive = false;
 let particles = [];
+let camera = { x: 0, y: 0, zoom: 1 };
 const keys = { up: false, down: false, left: false, right: false, shoot: false };
 
 // Constants
@@ -90,11 +92,14 @@ function handleInput(code, isPressed) {
         socket.emit('input', keys);
     }
 
-    // Weapon switching
+    // Weapon slot switching
     if (isPressed) {
-        if (code === 'Digit1') socket.emit('switch-weapon', 1);
-        if (code === 'Digit2') socket.emit('switch-weapon', 2);
-        if (code === 'Digit3') socket.emit('switch-weapon', 3);
+        if (code === 'Digit1') socket.emit('switch-weapon', 0);
+        if (code === 'Digit2') socket.emit('switch-weapon', 1);
+        if (code === 'Digit3') socket.emit('switch-weapon', 2);
+        if (code === 'Digit4') socket.emit('switch-weapon', 3);
+        if (code === 'Digit5') socket.emit('switch-weapon', 4);
+        if (code === 'Digit6') socket.emit('switch-weapon', 5);
     }
 }
 
@@ -144,20 +149,55 @@ socket.on('state', (state) => {
 function updateHUD() {
     const me = gameState.players.find(p => p.id === myId);
     if (me) {
-        p1HpBar.style.width = `${me.hp}%`;
-        // Weapon icons update
+        p1HpBar.style.width = `${(me.hp / me.maxHp) * 100}%`;
+        if (p1Scrap) p1Scrap.innerText = me.scrap;
+        
         const icons = document.querySelectorAll(`.weapon-icon[data-player="1"]`);
-        icons.forEach(icon => {
-            icon.classList.toggle('active', parseInt(icon.dataset.type) === me.weapon);
+        icons.forEach((icon, index) => {
+            icon.classList.toggle('active', index === me.currentSlot);
         });
     }
 }
 
 function renderLoop() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    drawGrid();
 
     if (gameActive) {
+        // Update Camera
+        const me = gameState.players.find(p => p.id === myId);
+        if (me) {
+            camera.x = me.x - canvas.width / 2;
+            camera.y = me.y - canvas.height / 2;
+        }
+
+        ctx.save();
+        ctx.translate(-camera.x, -camera.y);
+
+        drawGrid();
+
+        // Draw World Boundary
+        ctx.strokeStyle = 'rgba(0, 242, 255, 0.5)';
+        ctx.lineWidth = 5;
+        ctx.strokeRect(0, 0, gameState.worldSize, gameState.worldSize);
+
+        // Draw Elements
+        if (gameState.elements) {
+            gameState.elements.forEach(e => {
+                ctx.save();
+                ctx.fillStyle = e.color;
+                ctx.shadowBlur = e.type === 'fire' ? 15 : 5;
+                ctx.shadowColor = e.color;
+                ctx.beginPath();
+                if (e.type === 'dirt') {
+                    ctx.roundRect(e.x - e.radius, e.y - e.radius, e.radius * 2, e.radius * 2, 5);
+                } else {
+                    ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+                }
+                ctx.fill();
+                ctx.restore();
+            });
+        }
+
         // Draw Bullets
         gameState.bullets.forEach(b => {
             ctx.save();
@@ -174,20 +214,28 @@ function renderLoop() {
         gameState.players.forEach(p => {
             drawTank(p);
         });
-    }
 
-    particles.forEach((p, i) => {
-        p.update();
-        p.draw();
-        if (p.alpha <= 0) particles.splice(i, 1);
-    });
+        particles.forEach((p, i) => {
+            p.update();
+            p.draw();
+            if (p.alpha <= 0) particles.splice(i, 1);
+        });
+
+        ctx.restore();
+    } else {
+        drawGrid();
+    }
 
     requestAnimationFrame(renderLoop);
 }
 
 function drawTank(p) {
+    if (p.hidden && p.id !== myId) return;
+
     const color = p.team === 'blue' ? '#00f2ff' : '#ff00ff';
     ctx.save();
+    if (p.hidden && p.id === myId) ctx.globalAlpha = 0.5;
+    
     ctx.translate(p.x, p.y);
     ctx.rotate(p.angle);
 
@@ -227,26 +275,43 @@ function drawTank(p) {
 }
 
 function drawGrid() {
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+    const gridSize = 60;
+    const worldSize = gameState.worldSize || 4000;
+    
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
     ctx.lineWidth = 1;
-    const size = 60;
-    for (let x = 0; x < canvas.width; x += size) {
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+
+    // Only draw grid visible to camera
+    const startX = Math.max(0, Math.floor(camera.x / gridSize) * gridSize);
+    const endX = Math.min(worldSize, Math.ceil((camera.x + canvas.width) / gridSize) * gridSize);
+    const startY = Math.max(0, Math.floor(camera.y / gridSize) * gridSize);
+    const endY = Math.min(worldSize, Math.ceil((camera.y + canvas.height) / gridSize) * gridSize);
+
+    for (let x = startX; x <= endX; x += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, startY);
+        ctx.lineTo(x, endY);
+        ctx.stroke();
     }
-    for (let y = 0; y < canvas.height; y += size) {
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+    for (let y = startY; y <= endY; y += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(startX, y);
+        ctx.lineTo(endX, y);
+        ctx.stroke();
     }
 }
 
 // Action Handlers
 hostBtn.onclick = () => {
     const name = usernameInput.value.trim() || 'RECRUIT';
-    socket.emit('host-game', { username: name });
+    const chassis = document.getElementById('chassis-select').value;
+    socket.emit('host-game', { username: name, chassisType: chassis });
 };
 
 joinBtn.onclick = () => {
     const name = usernameInput.value.trim() || 'RECRUIT';
-    socket.emit('join-game', { username: name });
+    const chassis = document.getElementById('chassis-select').value;
+    socket.emit('join-game', { username: name, chassisType: chassis });
 };
 
 startGameBtn.onclick = () => {

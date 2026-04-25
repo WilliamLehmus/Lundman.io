@@ -24,11 +24,9 @@ const { Engine, Bodies, Body, Composite, Vector, Events } = Matter;
 const TICK_RATE = 60;
 const STATE_RATE = 20; // Send state 20 times per second
 const TANK_SIZE = 45;
-const WEAPONS = {
-    1: { name: 'Standard', reload: 400, damage: 10, speed: 12, radius: 4, recoil: 0.005, impact: 0.005 },
-    2: { name: 'Blast', reload: 2000, damage: 35, speed: 8, radius: 10, recoil: 0.03, impact: 0.05 },
-    3: { name: 'Burst', reload: 1500, damage: 5, speed: 15, radius: 3, burst: 3, recoil: 0.003, impact: 0.002 }
-};
+const WORLD_SIZE = 4000; // 4000x4000 world
+
+const { MATERIALS, CHASSIS, WEAPON_MODULES } = require('./gameConfig');
 
 // Global State
 let lobbies = {}; // roomId -> lobbyData
@@ -40,12 +38,15 @@ class Lobby {
         this.active = false;
         this.engine = Engine.create({ gravity: { x: 0, y: 0 } });
         this.bullets = {}; // bulletId -> bulletBody
+        this.elements = {}; // elementId -> { body, type, hp, expiresAt }
         this.lastBulletId = 0;
+        this.lastElementId = 0;
         
         // Start Physics Loop
         this.physicsInterval = setInterval(() => {
             Engine.update(this.engine, 1000 / TICK_RATE);
             this.handleCollisions();
+            this.cleanupElements();
         }, 1000 / TICK_RATE);
 
         // Start State Sync Loop
@@ -54,13 +55,14 @@ class Lobby {
         }, 1000 / STATE_RATE);
     }
 
-    addPlayer(socket, username) {
+    addPlayer(socket, username, chassisType = 'SCOUT') {
         const team = Object.keys(this.players).length % 2 === 0 ? 'blue' : 'pink';
-        const startPos = team === 'blue' ? { x: 150, y: 300 } : { x: 1000, y: 300 };
+        const startPos = team === 'blue' ? { x: 400, y: WORLD_SIZE/2 } : { x: WORLD_SIZE - 400, y: WORLD_SIZE/2 };
+        const config = CHASSIS[chassisType];
         
         const body = Bodies.rectangle(startPos.x, startPos.y, TANK_SIZE, TANK_SIZE, {
-            frictionAir: 0.1,
-            mass: 5,
+            frictionAir: config.speed > 0.005 ? 0.1 : 0.2,
+            mass: config.mass,
             label: `tank-${socket.id}`
         });
         
@@ -71,10 +73,15 @@ class Lobby {
             id: socket.id,
             username,
             team,
-            hp: 100,
+            chassis: chassisType,
+            hp: config.hp,
+            maxHp: config.hp,
             body,
-            currentWeapon: 1,
+            slots: ['STANDARD', 'FLAMETHROWER', 'WATER_CANNON', 'TESLA', 'FROST_GUN', 'DIRT_GUN'], // Full arsenal for testing
+            currentSlot: 0,
             lastShot: 0,
+            scrap: 0,
+            statusEffects: { stun: 0, slip: 0 },
             inputs: { up: false, down: false, left: false, right: false, shoot: false }
         };
     }
@@ -90,60 +97,215 @@ class Lobby {
         Events.on(this.engine, 'collisionStart', (event) => {
             event.pairs.forEach((pair) => {
                 const { bodyA, bodyB } = pair;
-                let bullet, target;
                 
-                if (bodyA.label === 'bullet') { bullet = bodyA; target = bodyB; }
-                else if (bodyB.label === 'bullet') { bullet = bodyB; target = bodyA; }
+                // Bullet Logic
+                if (bodyA.label === 'bullet' || bodyB.label === 'bullet') {
+                    const bullet = bodyA.label === 'bullet' ? bodyA : bodyB;
+                    const target = bodyA.label === 'bullet' ? bodyB : bodyA;
+                    this.processBulletCollision(bullet, target);
+                }
 
-                if (bullet && target.label && target.label.startsWith('tank-')) {
-                    const targetId = target.label.split('tank-')[1];
-                    const bulletData = bullet.customData;
-                    
-                    if (targetId !== bulletData.ownerId) {
-                        const victim = this.players[targetId];
-                        if (victim) {
-                            victim.hp -= bulletData.damage;
-                            
-                            // Impact
-                            const forceDir = Vector.normalise(bullet.velocity);
-                            Body.applyForce(target, target.position, Vector.mult(forceDir, bulletData.impact));
-
-                            // Destroy Bullet
-                            Composite.remove(this.engine.world, bullet);
-                            delete this.bullets[bullet.id];
-                            
-                            if (victim.hp <= 0) this.respawn(victim);
-                        }
-                    }
+                // Elemental Interaction Logic
+                if (bodyA.label === 'element' || bodyB.label === 'element') {
+                    this.processElementInteraction(bodyA, bodyB);
                 }
             });
         });
     }
 
+    processBulletCollision(bullet, target) {
+        const bulletData = bullet.customData;
+        
+        // Hit Tank
+        if (target.label && target.label.startsWith('tank-')) {
+            const targetId = target.label.split('tank-')[1];
+            if (targetId !== bulletData.ownerId) {
+                const victim = this.players[targetId];
+                if (victim) {
+                    victim.hp -= bulletData.damage;
+                    const forceDir = Vector.normalise(bullet.velocity);
+                    Body.applyForce(target, target.position, Vector.mult(forceDir, bulletData.impact));
+                    
+                    // Elemental Status Application
+                    if (bulletData.type === MATERIALS.ELECTRIC) {
+                        victim.statusEffects.stun = Date.now() + 1000;
+                    }
+
+                    // Oil Leak at 50% HP
+                    if (victim.hp < victim.maxHp * 0.5) {
+                        this.spawnElement(victim.body.position, MATERIALS.OIL, 5000);
+                    }
+
+                    this.destroyBullet(bullet.id);
+                    if (victim.hp <= 0) this.respawn(victim);
+                }
+            }
+        }
+        
+        // Hit Element (e.g. Dirt Mound)
+        if (target.label === 'element') {
+            const element = this.elements[target.elementId];
+            if (element && element.hp !== undefined) {
+                element.hp -= bulletData.damage;
+                if (element.hp <= 0) this.destroyElement(target.elementId);
+                this.destroyBullet(bullet.id);
+            }
+        }
+    }
+
+    processElementInteraction(bodyA, bodyB) {
+        const elementA = bodyA.label === 'element' ? this.elements[bodyA.elementId] : null;
+        const elementB = bodyB.label === 'element' ? this.elements[bodyB.elementId] : null;
+        const bullet = bodyA.label === 'bullet' ? bodyA : (bodyB.label === 'bullet' ? bodyB : null);
+
+        const pos = bullet ? bullet.position : bodyA.position;
+
+        // 1. Fire + Oil = Ablaze
+        if ((elementA?.type === MATERIALS.OIL && bullet?.customData.type === MATERIALS.FIRE) ||
+            (elementB?.type === MATERIALS.OIL && bullet?.customData.type === MATERIALS.FIRE)) {
+            this.spawnElement(pos, MATERIALS.FIRE, 3000);
+            if (elementA?.type === MATERIALS.OIL) this.destroyElement(elementA.id);
+            if (elementB?.type === MATERIALS.OIL) this.destroyElement(elementB.id);
+        }
+
+        // 2. Electricity + Water = Electrified Puddle
+        if ((elementA?.type === MATERIALS.WATER && bullet?.customData.type === MATERIALS.ELECTRIC) ||
+            (elementB?.type === MATERIALS.WATER && bullet?.customData.type === MATERIALS.ELECTRIC)) {
+            const targetElement = elementA?.type === MATERIALS.WATER ? elementA : elementB;
+            targetElement.type = MATERIALS.ELECTRIC; // Puddle becomes electrified
+            targetElement.expiresAt = Date.now() + 2000;
+        }
+
+        // 3. Fire + Water = Steam
+        if ((elementA?.type === MATERIALS.WATER && bullet?.customData.type === MATERIALS.FIRE) ||
+            (elementB?.type === MATERIALS.WATER && bullet?.customData.type === MATERIALS.FIRE)) {
+            this.spawnElement(pos, MATERIALS.STEAM, 4000);
+            if (elementA?.type === MATERIALS.WATER) this.destroyElement(elementA.id);
+            if (elementB?.type === MATERIALS.WATER) this.destroyElement(elementB.id);
+        }
+
+        // 4. Ice + Water = Frozen
+        if ((elementA?.type === MATERIALS.WATER && bullet?.customData.type === MATERIALS.ICE) ||
+            (elementB?.type === MATERIALS.WATER && bullet?.customData.type === MATERIALS.ICE)) {
+            const targetElement = elementA?.type === MATERIALS.WATER ? elementA : elementB;
+            targetElement.type = MATERIALS.ICE;
+        }
+
+        // 5. Tank entering Element
+        const tankBody = bodyA.label.startsWith('tank-') ? bodyA : (bodyB.label.startsWith('tank-') ? bodyB : null);
+        const element = elementA || elementB;
+        if (tankBody && element) {
+            const pId = tankBody.label.split('tank-')[1];
+            const p = this.players[pId];
+            if (p) {
+                if (element.type === MATERIALS.ELECTRIC) p.statusEffects.stun = Date.now() + 500;
+                if (element.type === MATERIALS.ICE) p.statusEffects.slip = Date.now() + 1000;
+                if (element.type === MATERIALS.FIRE) p.hp -= 0.5; // Burn damage
+                if (element.type === MATERIALS.STEAM) p.hidden = true;
+                
+                // Collection
+                if (element.type === MATERIALS.SCRAP) {
+                    p.scrap += 10;
+                    this.destroyElement(element.id);
+                }
+            }
+        }
+    }
+
+    spawnElement(pos, type, duration, hp) {
+        const id = ++this.lastElementId;
+        const radius = type === MATERIALS.SCRAP ? 10 : 
+                      (type === MATERIALS.OIL || type === MATERIALS.FIRE) ? 20 : 
+                      (type === MATERIALS.STEAM ? 40 : 30);
+        
+        const body = Bodies.circle(pos.x, pos.y, radius, {
+            label: 'element',
+            isSensor: type !== MATERIALS.DIRT, // Dirt is solid
+            friction: type === MATERIALS.ICE ? 0.001 : 0.5
+        });
+        body.elementId = id;
+        
+        this.elements[id] = {
+            id,
+            body,
+            type,
+            hp,
+            expiresAt: duration ? Date.now() + duration : null
+        };
+        Composite.add(this.engine.world, body);
+    }
+
+    // ... destroy methods ...
+    destroyBullet(id) {
+        const b = this.bullets[id];
+        if (b) {
+            Composite.remove(this.engine.world, b);
+            delete this.bullets[id];
+        }
+    }
+
+    destroyElement(id) {
+        const e = this.elements[id];
+        if (e) {
+            Composite.remove(this.engine.world, e.body);
+            delete this.elements[id];
+        }
+    }
+
+    cleanupElements() {
+        const now = Date.now();
+        Object.keys(this.elements).forEach(id => {
+            const e = this.elements[id];
+            if (e.expiresAt && now > e.expiresAt) {
+                this.destroyElement(id);
+            }
+        });
+    }
+
     respawn(player) {
-        player.hp = 100;
-        const pos = player.team === 'blue' ? { x: 150, y: 300 } : { x: 1000, y: 300 };
+        // Spawn scrap at death location
+        for (let i = 0; i < 5; i++) {
+            this.spawnElement({
+                x: player.body.position.x + (Math.random() - 0.5) * 60,
+                y: player.body.position.y + (Math.random() - 0.5) * 60
+            }, MATERIALS.SCRAP, 30000);
+        }
+
+        player.hp = CHASSIS[player.chassis].hp;
+        player.scrap = Math.floor(player.scrap / 2);
+        const pos = player.team === 'blue' ? { x: 400, y: WORLD_SIZE/2 } : { x: WORLD_SIZE - 400, y: WORLD_SIZE/2 };
         Body.setPosition(player.body, pos);
         Body.setVelocity(player.body, { x: 0, y: 0 });
     }
 
     update() {
+        const now = Date.now();
         Object.values(this.players).forEach(p => {
-            const { inputs, body } = p;
-            if (inputs.left) Body.setAngularVelocity(body, -0.06);
-            if (inputs.right) Body.setAngularVelocity(body, 0.06);
+            const { inputs, body, chassis, statusEffects } = p;
+            const config = CHASSIS[chassis];
             
-            const force = 0.005;
+            // Handle Stun
+            if (now < statusEffects.stun) return;
+
+            p.hidden = false; // Reset hidden state
+
+            // Handle Slippery Ground (Ice)
+            const friction = now < statusEffects.slip ? 0.01 : config.speed > 0.005 ? 0.1 : 0.2;
+            if (body.frictionAir !== friction) body.frictionAir = friction;
+
+            if (inputs.left) Body.setAngularVelocity(body, -config.turnSpeed);
+            if (inputs.right) Body.setAngularVelocity(body, config.turnSpeed);
+            
             if (inputs.up) {
                 Body.applyForce(body, body.position, {
-                    x: Math.cos(body.angle) * force,
-                    y: Math.sin(body.angle) * force
+                    x: Math.cos(body.angle) * config.speed,
+                    y: Math.sin(body.angle) * config.speed
                 });
             }
             if (inputs.down) {
                 Body.applyForce(body, body.position, {
-                    x: -Math.cos(body.angle) * force,
-                    y: -Math.sin(body.angle) * force
+                    x: -Math.cos(body.angle) * config.speed,
+                    y: -Math.sin(body.angle) * config.speed
                 });
             }
 
@@ -152,8 +314,20 @@ class Lobby {
     }
 
     playerShoot(p) {
-        const weapon = WEAPONS[p.currentWeapon];
+        const moduleName = p.slots[p.currentSlot];
+        const baseWeapon = WEAPON_MODULES[moduleName];
         const now = Date.now();
+
+        // Scrap Buffs (Damage & Reload)
+        const buffFactor = 1 + (p.scrap / 100);
+        const reloadFactor = 1 / (1 + p.scrap / 200);
+
+        const weapon = {
+            ...baseWeapon,
+            damage: baseWeapon.damage * buffFactor,
+            reload: baseWeapon.reload * reloadFactor
+        };
+
         if (now - p.lastShot > weapon.reload) {
             this.fire(p, weapon);
             p.lastShot = now;
@@ -174,7 +348,12 @@ class Lobby {
         });
         
         bullet.id = id;
-        bullet.customData = { ownerId: p.id, damage: weapon.damage, impact: weapon.impact };
+        bullet.customData = { 
+            ownerId: p.id, 
+            damage: weapon.damage, 
+            impact: weapon.impact,
+            type: weapon.type 
+        };
         
         Body.setVelocity(bullet, {
             x: Math.cos(p.body.angle) * weapon.speed,
@@ -189,11 +368,17 @@ class Lobby {
 
         this.bullets[id] = bullet;
         Composite.add(this.engine.world, bullet);
+
+        // Special logic for Dirt Gun
+        if (weapon.type === MATERIALS.DIRT) {
+            this.spawnElement(pos, MATERIALS.DIRT, 10000, weapon.hp);
+        }
     }
 
     broadcastState() {
         this.update();
         const state = {
+            worldSize: WORLD_SIZE,
             players: Object.values(this.players).map(p => ({
                 id: p.id,
                 username: p.username,
@@ -202,24 +387,50 @@ class Lobby {
                 y: p.body.position.y,
                 angle: p.body.angle,
                 hp: p.hp,
-                weapon: p.currentWeapon
+                maxHp: p.maxHp,
+                weapon: p.slots[p.currentSlot],
+                currentSlot: p.currentSlot,
+                scrap: p.scrap,
+                hidden: p.hidden
             })),
             bullets: Object.values(this.bullets).map(b => ({
                 id: b.id,
                 x: b.position.x,
                 y: b.position.y,
-                color: this.players[b.customData.ownerId]?.team === 'blue' ? '#00f2ff' : '#ff00ff'
+                type: b.customData.type,
+                color: this.getElementColor(b.customData.type)
+            })),
+            elements: Object.values(this.elements).map(e => ({
+                id: e.id,
+                x: e.body.position.x,
+                y: e.body.position.y,
+                type: e.type,
+                radius: e.body.circleRadius,
+                color: this.getElementColor(e.type)
             }))
         };
         io.to(this.id).emit('state', state);
 
         // Cleanup offscreen bullets
         Object.values(this.bullets).forEach(b => {
-            if (b.position.x < -100 || b.position.x > 2000 || b.position.y < -100 || b.position.y > 2000) {
-                Composite.remove(this.engine.world, b);
-                delete this.bullets[b.id];
+            if (b.position.x < -100 || b.position.x > WORLD_SIZE + 100 || 
+                b.position.y < -100 || b.position.y > WORLD_SIZE + 100) {
+                this.destroyBullet(b.id);
             }
         });
+    }
+
+    getElementColor(type) {
+        switch(type) {
+            case MATERIALS.FIRE: return '#ff4d00';
+            case MATERIALS.WATER: return '#00a2ff';
+            case MATERIALS.OIL: return '#222222';
+            case MATERIALS.ELECTRIC: return '#ffff00';
+            case MATERIALS.DIRT: return '#8b4513';
+            case MATERIALS.STEAM: return 'rgba(255, 255, 255, 0.3)';
+            case MATERIALS.ICE: return '#aaddff';
+            default: return '#ffffff';
+        }
     }
 
     destroy() {
@@ -231,7 +442,7 @@ class Lobby {
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
-    socket.on('join-game', ({ username }) => {
+    socket.on('join-game', ({ username, chassisType }) => {
         // Matchmaking: Find lobby with most players that isn't full and hasn't started
         let bestLobby = Object.values(lobbies).find(l => !l.active && Object.keys(l.players).length < 10);
         
@@ -241,27 +452,27 @@ io.on('connection', (socket) => {
             lobbies[id] = bestLobby;
         }
 
-        bestLobby.addPlayer(socket, username);
+        bestLobby.addPlayer(socket, username, chassisType);
         socket.join(bestLobby.id);
         socket.lobbyId = bestLobby.id;
 
         io.to(bestLobby.id).emit('lobby-update', {
             id: bestLobby.id,
-            players: Object.values(bestLobby.players).map(p => ({ username: p.username, team: p.team, id: p.id }))
+            players: Object.values(bestLobby.players).map(p => ({ username: p.username, team: p.team, id: p.id, chassis: p.chassis }))
         });
     });
 
-    socket.on('host-game', ({ username }) => {
+    socket.on('host-game', ({ username, chassisType }) => {
         const id = Math.random().toString(36).substring(7);
         const lobby = new Lobby(id);
         lobbies[id] = lobby;
-        lobby.addPlayer(socket, username);
+        lobby.addPlayer(socket, username, chassisType);
         socket.join(id);
         socket.lobbyId = id;
 
         socket.emit('lobby-update', {
             id,
-            players: Object.values(lobby.players).map(p => ({ username: p.username, team: p.team, id: p.id }))
+            players: Object.values(lobby.players).map(p => ({ username: p.username, team: p.team, id: p.id, chassis: p.chassis }))
         });
     });
 
@@ -272,10 +483,13 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('switch-weapon', (type) => {
+    socket.on('switch-weapon', (slotIndex) => {
         const lobby = lobbies[socket.lobbyId];
         if (lobby && lobby.players[socket.id]) {
-            lobby.players[socket.id].currentWeapon = type;
+            const p = lobby.players[socket.id];
+            if (slotIndex >= 0 && slotIndex < p.slots.length) {
+                p.currentSlot = slotIndex;
+            }
         }
     });
 

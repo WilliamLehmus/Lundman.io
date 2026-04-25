@@ -393,3 +393,31 @@ button:active {
 #start-screen h1 {
     animation: float 4s ease-in-out infinite;
 }
+
+.premium-select {
+    width: 300px;
+    background: rgba(26, 26, 46, 0.8);
+    border: 2px solid rgba(0, 242, 255, 0.3);
+    border-radius: 50px;
+    color: white;
+    padding: 1rem 1rem;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 700;
+    margin-top: 15px;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.3s ease;
+    appearance: none;
+    text-align: center;
+    pointer-events: auto;
+}
+
+.premium-select:hover {
+    border-color: #00f2ff;
+    box-shadow: 0 0 15px rgba(0, 242, 255, 0.2);
+}
+
+.premium-select option {
+    background: #1a1a2e;
+    color: white;
+}
