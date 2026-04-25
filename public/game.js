@@ -1,3 +1,6 @@
+// Matter.js Aliases
+const { Engine, Render, Runner, Bodies, Body, Composite, Events, Vector } = Matter;
+
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
@@ -17,43 +20,62 @@ const splashScreen = document.getElementById('splash-screen');
 const enterBtn = document.getElementById('enter-btn');
 const loadingProgress = document.getElementById('loading-progress');
 
+// Physics Engine Setup
+const engine = Engine.create();
+engine.gravity.y = 0; // Top-down game
+const runner = Runner.create();
+
 // Game State
 let gameActive = false;
 let particles = [];
-let bullets = [];
+let bulletBodies = new Map(); // body -> data
 
 // Configuration
-const TANK_SIZE = 40;
-const BULLET_SPEED = 7;
-const ROTATION_SPEED = 0.05;
-const MOVE_SPEED = 3;
+const TANK_SIZE = 45;
+const ROTATION_SPEED = 0.06;
+const MOVE_FORCE = 0.005;
+const RECOIL_FORCE = 0.02;
+const IMPACT_FORCE = 0.01;
 
 const WEAPONS = {
-    1: { name: 'Standard', reload: 400, damage: 10, speed: 8, radius: 4, color: 'match' },
-    2: { name: 'Blast', reload: 2000, damage: 30, speed: 5, radius: 10, color: '#ffeb3b', isAdvanced: true },
-    3: { name: 'Burst', reload: 1500, damage: 5, speed: 10, radius: 3, color: '#4caf50', isAdvanced: true, burst: 3 }
+    1: { name: 'Standard', reload: 400, damage: 10, speed: 12, radius: 4, color: 'match', recoil: 0.005, impact: 0.005 },
+    2: { name: 'Blast', reload: 2000, damage: 35, speed: 8, radius: 10, color: '#ffeb3b', recoil: 0.03, impact: 0.05 },
+    3: { name: 'Burst', reload: 1500, damage: 5, speed: 15, radius: 3, color: '#4caf50', burst: 3, recoil: 0.003, impact: 0.002 }
 };
 
 class Tank {
     constructor(x, y, color, controls, id) {
-        this.x = x;
-        this.y = y;
         this.color = color;
         this.controls = controls;
         this.id = id;
-        this.angle = id === 1 ? 0 : Math.PI;
         this.hp = 100;
         this.lastShot = 0;
-        this.width = TANK_SIZE;
-        this.height = TANK_SIZE;
         this.currentWeapon = 1;
-        this.cooldown = 0; // 0 to 1
+        this.cooldown = 0;
+
+        // Create Physics Body
+        this.body = Bodies.rectangle(x, y, TANK_SIZE, TANK_SIZE, {
+            frictionAir: 0.1,
+            friction: 0.5,
+            restitution: 0.4,
+            label: `tank-${id}`,
+            mass: 5
+        });
+        
+        if (id === 2) {
+            Body.setAngle(this.body, Math.PI);
+        }
+
+        Composite.add(engine.world, this.body);
     }
 
     draw() {
+        const { x, y } = this.body.position;
+        const angle = this.body.angle;
+
         ctx.save();
-        ctx.translate(this.x, this.y);
-        ctx.rotate(this.angle);
+        ctx.translate(x, y);
+        ctx.rotate(angle);
 
         // Body glow
         ctx.shadowBlur = 15;
@@ -64,20 +86,20 @@ class Tank {
         ctx.strokeStyle = this.color;
         ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.roundRect(-this.width/2, -this.height/2, this.width, this.height, 5);
+        ctx.roundRect(-TANK_SIZE/2, -TANK_SIZE/2, TANK_SIZE, TANK_SIZE, 5);
         ctx.fill();
         ctx.stroke();
 
         // Turret
         ctx.beginPath();
-        ctx.arc(0, 0, 10, 0, Math.PI * 2);
+        ctx.arc(0, 0, 12, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
 
         // Barrel
         const weapon = WEAPONS[this.currentWeapon];
-        const barrelLen = weapon.radius > 5 ? 32 : 25;
-        const barrelWidth = weapon.radius > 5 ? 12 : 8;
+        const barrelLen = weapon.radius > 5 ? 35 : 28;
+        const barrelWidth = weapon.radius > 5 ? 14 : 10;
         ctx.beginPath();
         ctx.roundRect(0, -barrelWidth/2, barrelLen, barrelWidth, 2);
         ctx.fill();
@@ -86,10 +108,7 @@ class Tank {
         ctx.restore();
     }
 
-    update(keys, otherTank) {
-        const prevX = this.x;
-        const prevY = this.y;
-
+    update(keys) {
         // Weapon switching
         if (this.id === 1) {
             if (keys['Digit1']) this.setWeapon(1);
@@ -102,38 +121,24 @@ class Tank {
         }
 
         // Rotation
-        if (keys[this.controls.left]) this.angle -= ROTATION_SPEED;
-        if (keys[this.controls.right]) this.angle += ROTATION_SPEED;
+        if (keys[this.controls.left]) {
+            Body.setAngularVelocity(this.body, -ROTATION_SPEED);
+        } else if (keys[this.controls.right]) {
+            Body.setAngularVelocity(this.body, ROTATION_SPEED);
+        }
 
         // Movement
-        let moved = false;
+        const angle = this.body.angle;
+        const forceVector = { x: Math.cos(angle) * MOVE_FORCE, y: Math.sin(angle) * MOVE_FORCE };
+
         if (keys[this.controls.up]) {
-            this.x += Math.cos(this.angle) * MOVE_SPEED;
-            this.y += Math.sin(this.angle) * MOVE_SPEED;
-            moved = true;
+            Body.applyForce(this.body, this.body.position, forceVector);
         }
         if (keys[this.controls.down]) {
-            this.x -= Math.cos(this.angle) * MOVE_SPEED;
-            this.y -= Math.sin(this.angle) * MOVE_SPEED;
-            moved = true;
+            Body.applyForce(this.body, this.body.position, { x: -forceVector.x, y: -forceVector.y });
         }
 
-        // Tank-to-Tank Collision
-        const dx = this.x - otherTank.x;
-        const dy = this.y - otherTank.y;
-        const dist = Math.sqrt(dx*dx + dy*dy);
-        if (dist < TANK_SIZE) {
-            // Simple push-back logic
-            const angle = Math.atan2(dy, dx);
-            this.x = otherTank.x + Math.cos(angle) * TANK_SIZE;
-            this.y = otherTank.y + Math.sin(angle) * TANK_SIZE;
-        }
-
-        // Screen bounds
-        this.x = Math.max(TANK_SIZE/2, Math.min(canvas.width - TANK_SIZE/2, this.x));
-        this.y = Math.max(TANK_SIZE/2, Math.min(canvas.height - TANK_SIZE/2, this.y));
-
-        // Update cooldown UI
+        // Cooldown UI
         const weapon = WEAPONS[this.currentWeapon];
         const timeSinceShot = Date.now() - this.lastShot;
         this.cooldown = Math.min(1, timeSinceShot / weapon.reload);
@@ -151,8 +156,6 @@ class Tank {
     setWeapon(type) {
         if (this.currentWeapon === type) return;
         this.currentWeapon = type;
-        
-        // Update UI icons
         const icons = document.querySelectorAll(`.weapon-icon[data-player="${this.id}"]`);
         icons.forEach(icon => {
             icon.classList.toggle('active', parseInt(icon.dataset.type) === type);
@@ -165,9 +168,7 @@ class Tank {
         if (now - this.lastShot > weapon.reload) {
             if (weapon.burst) {
                 for (let i = 0; i < weapon.burst; i++) {
-                    setTimeout(() => {
-                        this.fireBullet(weapon);
-                    }, i * 100);
+                    setTimeout(() => this.fireBullet(weapon), i * 100);
                 }
             } else {
                 this.fireBullet(weapon);
@@ -177,20 +178,47 @@ class Tank {
     }
 
     fireBullet(weapon) {
-        bullets.push(new Bullet(
-            this.x + Math.cos(this.angle) * 30,
-            this.y + Math.sin(this.angle) * 30,
-            this.angle,
-            weapon.color === 'match' ? this.color : weapon.color,
-            this.id,
-            weapon
-        ));
-        createExplosion(this.x + Math.cos(this.angle) * 25, this.y + Math.sin(this.angle) * 25, this.color, 5);
+        const angle = this.body.angle;
+        const pos = {
+            x: this.body.position.x + Math.cos(angle) * 40,
+            y: this.body.position.y + Math.sin(angle) * 40
+        };
+
+        const bulletBody = Bodies.circle(pos.x, pos.y, weapon.radius, {
+            frictionAir: 0,
+            friction: 0,
+            restitution: 1,
+            label: 'bullet',
+            isSensor: false, // Set to false to allow impact force
+            mass: 0.1
+        });
+
+        Body.setVelocity(bulletBody, {
+            x: Math.cos(angle) * weapon.speed,
+            y: Math.sin(angle) * weapon.speed
+        });
+
+        // Recoil
+        Body.applyForce(this.body, this.body.position, {
+            x: -Math.cos(angle) * weapon.recoil,
+            y: -Math.sin(angle) * weapon.recoil
+        });
+
+        bulletBodies.set(bulletBody, {
+            color: weapon.color === 'match' ? this.color : weapon.color,
+            damage: weapon.damage,
+            ownerId: this.id,
+            impact: weapon.impact,
+            radius: weapon.radius
+        });
+
+        Composite.add(engine.world, bulletBody);
+        createExplosion(pos.x, pos.y, this.color, 5);
     }
 
     takeDamage(amount) {
         this.hp -= amount;
-        createExplosion(this.x, this.y, this.color, 15);
+        createExplosion(this.body.position.x, this.body.position.y, this.color, 15);
         updateUI();
         if (this.hp <= 0) {
             endGame(this.id === 1 ? 2 : 1);
@@ -198,73 +226,50 @@ class Tank {
     }
 }
 
-class Bullet {
-    constructor(x, y, angle, color, ownerId, config) {
-        this.x = x;
-        this.y = y;
-        this.vx = Math.cos(angle) * config.speed;
-        this.vy = Math.sin(angle) * config.speed;
-        this.color = color;
-        this.ownerId = ownerId;
-        this.radius = config.radius;
-        this.damage = config.damage;
-    }
-
-    draw() {
-        ctx.save();
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = this.color;
-        ctx.fillStyle = this.color;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-    }
-
-    update() {
-        this.x += this.vx;
-        this.y += this.vy;
-    }
-}
-
-class Particle {
-    constructor(x, y, color) {
-        this.x = x;
-        this.y = y;
-        this.color = color;
-        this.vx = (Math.random() - 0.5) * 10;
-        this.vy = (Math.random() - 0.5) * 10;
-        this.alpha = 1;
-        this.life = 0.02 + Math.random() * 0.03;
-    }
-
-    draw() {
-        ctx.save();
-        ctx.globalAlpha = this.alpha;
-        ctx.fillStyle = this.color;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, 2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-    }
-
-    update() {
-        this.x += this.vx;
-        this.y += this.vy;
-        this.alpha -= this.life;
-    }
-}
-
 let p1, p2;
 const keys = {};
+
+// Collision Events
+Events.on(engine, 'collisionStart', (event) => {
+    event.pairs.forEach((pair) => {
+        const { bodyA, bodyB } = pair;
+        
+        // Handle Bullet hits
+        if (bodyA.label === 'bullet' || bodyB.label === 'bullet') {
+            const bullet = bodyA.label === 'bullet' ? bodyA : bodyB;
+            const target = bodyA.label === 'bullet' ? bodyB : bodyA;
+            const bulletData = bulletBodies.get(bullet);
+
+            if (bulletData && target.label.startsWith('tank-')) {
+                const targetId = parseInt(target.label.split('-')[1]);
+                if (targetId !== bulletData.ownerId) {
+                    const tank = targetId === 1 ? p1 : p2;
+                    tank.takeDamage(bulletData.damage);
+                    
+                    // Impact Reaction: The engine handles physical collision, 
+                    // but we can add extra force for "oomph"
+                    const forceDir = Vector.normalise(bullet.velocity);
+                    Body.applyForce(target, target.position, {
+                        x: forceDir.x * bulletData.impact,
+                        y: forceDir.y * bulletData.impact
+                    });
+
+                    // Remove bullet
+                    Composite.remove(engine.world, bullet);
+                    bulletBodies.delete(bullet);
+                }
+            }
+        }
+    });
+});
 
 function init() {
     resize();
     
-    // Splash screen loading simulation
+    // Splash screen loading
     let progress = 0;
     const interval = setInterval(() => {
-        progress += Math.random() * 15;
+        progress += Math.random() * 20;
         if (progress >= 100) {
             progress = 100;
             clearInterval(interval);
@@ -272,15 +277,16 @@ function init() {
             enterBtn.style.pointerEvents = 'auto';
         }
         loadingProgress.style.width = `${progress}%`;
-    }, 150);
+    }, 100);
 
-    p1 = new Tank(100, canvas.height / 2, '#00f2ff', { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', shoot: 'Space' }, 1);
-    p2 = new Tank(canvas.width - 100, canvas.height / 2, '#ff00ff', { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', shoot: 'Enter' }, 2);
+    p1 = new Tank(150, canvas.height / 2, '#00f2ff', { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', shoot: 'Space' }, 1);
+    p2 = new Tank(canvas.width - 150, canvas.height / 2, '#ff00ff', { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', shoot: 'Enter' }, 2);
     
     window.addEventListener('keydown', e => keys[e.code] = true);
     window.addEventListener('keyup', e => keys[e.code] = false);
     window.addEventListener('resize', resize);
 
+    Runner.run(runner, engine);
     requestAnimationFrame(gameLoop);
 }
 
@@ -298,12 +304,6 @@ function resize() {
     canvas.height = window.innerHeight;
 }
 
-function createExplosion(x, y, color, count) {
-    for (let i = 0; i < count; i++) {
-        particles.push(new Particle(x, y, color));
-    }
-}
-
 function updateUI() {
     p1HpBar.style.width = `${Math.max(0, p1.hp)}%`;
     p2HpBar.style.width = `${Math.max(0, p2.hp)}%`;
@@ -319,47 +319,37 @@ function endGame(winnerId) {
 
 function gameLoop() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-
     drawGrid();
 
     if (gameActive) {
-        p1.update(keys, p2);
-        p2.update(keys, p1);
-
-        bullets.forEach((bullet, bIndex) => {
-            bullet.update();
-            bullet.draw();
-
-            if (bullet.x < 0 || bullet.x > canvas.width || bullet.y < 0 || bullet.y > canvas.height) {
-                bullets.splice(bIndex, 1);
-                return;
-            }
-
-            if (bullet.ownerId !== 1) {
-                const dx = bullet.x - p1.x;
-                const dy = bullet.y - p1.y;
-                const dist = Math.sqrt(dx*dx + dy*dy);
-                if (dist < TANK_SIZE / 1.5) {
-                    p1.takeDamage(bullet.damage);
-                    bullets.splice(bIndex, 1);
-                }
-            }
-
-            if (bullet.ownerId !== 2) {
-                const dx = bullet.x - p2.x;
-                const dy = bullet.y - p2.y;
-                const dist = Math.sqrt(dx*dx + dy*dy);
-                if (dist < TANK_SIZE / 1.5) {
-                    p2.takeDamage(bullet.damage);
-                    bullets.splice(bIndex, 1);
-                }
-            }
-        });
-
-        p1.draw();
-        p2.draw();
+        p1.update(keys);
+        p2.update(keys);
     }
 
+    // Draw Tanks
+    p1.draw();
+    p2.draw();
+
+    // Draw Bullets
+    bulletBodies.forEach((data, body) => {
+        const { x, y } = body.position;
+        ctx.save();
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = data.color;
+        ctx.fillStyle = data.color;
+        ctx.beginPath();
+        ctx.arc(x, y, data.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // Cleanup off-screen bullets
+        if (x < -50 || x > canvas.width + 50 || y < -50 || y > canvas.height + 50) {
+            Composite.remove(engine.world, body);
+            bulletBodies.delete(body);
+        }
+    });
+
+    // Draw Particles
     particles.forEach((p, i) => {
         p.update();
         p.draw();
@@ -372,19 +362,34 @@ function gameLoop() {
 function drawGrid() {
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
     ctx.lineWidth = 1;
-    const size = 50;
+    const size = 60;
     for (let x = 0; x < canvas.width; x += size) {
         ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, canvas.height);
-        ctx.stroke();
+        ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
     }
     for (let y = 0; y < canvas.height; y += size) {
         ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(canvas.width, y);
-        ctx.stroke();
+        ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
     }
+}
+
+class Particle {
+    constructor(x, y, color) {
+        this.x = x; this.y = y; this.color = color;
+        this.vx = (Math.random() - 0.5) * 10;
+        this.vy = (Math.random() - 0.5) * 10;
+        this.alpha = 1;
+        this.life = 0.02 + Math.random() * 0.03;
+    }
+    draw() {
+        ctx.save(); ctx.globalAlpha = this.alpha; ctx.fillStyle = this.color;
+        ctx.beginPath(); ctx.arc(this.x, this.y, 2, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    }
+    update() { this.x += this.vx; this.y += this.vy; this.alpha -= this.life; }
+}
+
+function createExplosion(x, y, color, count) {
+    for (let i = 0; i < count; i++) particles.push(new Particle(x, y, color));
 }
 
 startBtn.onclick = () => {
@@ -394,15 +399,16 @@ startBtn.onclick = () => {
 };
 
 restartBtn.onclick = () => {
-    p1.hp = 100;
-    p2.hp = 100;
-    p1.x = 100;
-    p1.y = canvas.height / 2;
-    p2.x = canvas.width - 100;
-    p2.y = canvas.height / 2;
-    p1.setWeapon(1);
-    p2.setWeapon(1);
-    bullets = [];
+    p1.hp = 100; p2.hp = 100;
+    Body.setPosition(p1.body, { x: 150, y: canvas.height / 2 });
+    Body.setPosition(p2.body, { x: canvas.width - 150, y: canvas.height / 2 });
+    Body.setAngle(p1.body, 0);
+    Body.setAngle(p2.body, Math.PI);
+    Body.setVelocity(p1.body, { x: 0, y: 0 });
+    Body.setVelocity(p2.body, { x: 0, y: 0 });
+    
+    bulletBodies.forEach((_, body) => Composite.remove(engine.world, body));
+    bulletBodies.clear();
     particles = [];
     updateUI();
     gameActive = true;
