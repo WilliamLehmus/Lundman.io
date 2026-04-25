@@ -197,9 +197,95 @@ button {
     letter-spacing: 0.1rem;
 }
 
-#enter-btn {
+#enter-btn, #host-btn, #join-btn {
     opacity: 0;
     pointer-events: none;
+}
+
+.multiplayer-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+}
+
+.secondary-btn {
+    background: transparent !important;
+    border: 2px solid var(--p1-color) !important;
+}
+
+.user-setup {
+    margin-bottom: 1rem;
+}
+
+#username {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--glass-border);
+    padding: 1rem 2rem;
+    border-radius: 50px;
+    color: white;
+    text-align: center;
+    font-size: 1.2rem;
+    letter-spacing: 0.2rem;
+    outline: none;
+    transition: all 0.3s;
+    width: 300px;
+}
+
+#username:focus {
+    border-color: var(--p1-color);
+    box-shadow: 0 0 15px rgba(0, 242, 255, 0.2);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Lobby Styles */
+#lobby-screen {
+    width: 800px;
+    pointer-events: auto;
+}
+
+.lobby-columns {
+    display: flex;
+    gap: 2rem;
+    margin: 2rem 0;
+}
+
+.team-column {
+    flex: 1;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 1.5rem;
+    border-radius: 15px;
+    border: 1px solid var(--glass-border);
+}
+
+.team-blue h3 { color: var(--p1-color); margin-bottom: 1rem; }
+.team-pink h3 { color: var(--p2-color); margin-bottom: 1rem; }
+
+.player-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-height: 200px;
+}
+
+.player-item {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 0.8rem;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    display: flex;
+    justify-content: space-between;
+}
+
+.player-item.self {
+    border: 1px solid #fff;
+    background: rgba(255, 255, 255, 0.15);
+}
+
+#lobby-status {
+    margin-bottom: 1.5rem;
+    font-weight: 300;
+    color: rgba(255, 255, 255, 0.6);
 }
 
 button:hover {

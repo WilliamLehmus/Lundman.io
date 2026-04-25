@@ -17,12 +17,34 @@
                 <div class="logo-container">
                     <h1 class="glitch" data-text="TANKS.IO">TANKS.IO</h1>
                 </div>
-                <p class="tagline">ULTIMATE LOCAL COMBAT</p>
+                <p class="tagline">ULTIMATE ONLINE COMBAT</p>
+                <div class="user-setup">
+                    <input type="text" id="username" placeholder="ENTER CALLSIGN..." maxlength="12">
+                </div>
                 <div class="loading-bar-container">
                     <div id="loading-progress"></div>
                 </div>
-                <button id="enter-btn">ENTER ARENA</button>
+                <div class="multiplayer-actions">
+                    <button id="host-btn" class="secondary-btn">HOST LOBBY</button>
+                    <button id="join-btn">JOIN BATTLE</button>
+                </div>
             </div>
+        </div>
+
+        <div id="lobby-screen" class="glass-panel hidden">
+            <h2>LOBBY: <span id="lobby-id">---</span></h2>
+            <div class="lobby-columns">
+                <div class="team-column team-blue">
+                    <h3>TEAM ALPHA</h3>
+                    <div id="blue-team-list" class="player-list"></div>
+                </div>
+                <div class="team-column team-pink">
+                    <h3>TEAM OMEGA</h3>
+                    <div id="pink-team-list" class="player-list"></div>
+                </div>
+            </div>
+            <div id="lobby-status">WAITING FOR PLAYERS (2/10)...</div>
+            <button id="start-game-btn" class="hidden">START GAME</button>
         </div>
 
         <div id="start-screen" class="glass-panel hidden">
@@ -78,6 +100,7 @@
 
     <link rel="icon" href="data:,">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
     <script src="game.js"></script>
 </body>
 </html>
