@@ -1,4 +1,10 @@
-const socket = io();
+const socket = io(window.location.origin, {
+    transports: ['websocket', 'polling']
+});
+
+socket.on('connect_error', (err) => {
+    console.error('Connection Error:', err.message);
+});
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');

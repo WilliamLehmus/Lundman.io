@@ -6,9 +6,15 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = require('socket.io')(server, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"]
+    }
+});
 const PORT = process.env.PORT || 3000;
 
+app.get('/health', (req, res) => res.send('Server is live!'));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Physics Aliases

@@ -55,6 +55,7 @@ canvas {
     justify-content: center;
     align-items: center;
     z-index: 100;
+    pointer-events: auto; /* Allow interaction with splash content */
     transition: opacity 1s ease-out, transform 1s ease-out;
 }
 
@@ -215,6 +216,7 @@ button {
 
 .user-setup {
     margin-bottom: 1rem;
+    pointer-events: auto;
 }
 
 #username {
