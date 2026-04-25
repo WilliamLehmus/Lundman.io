@@ -12,7 +12,20 @@
 </head>
 <body>
     <div id="ui-layer">
-        <div id="start-screen" class="glass-panel">
+        <div id="splash-screen">
+            <div class="splash-content">
+                <div class="logo-container">
+                    <h1 class="glitch" data-text="TANKS.IO">TANKS.IO</h1>
+                </div>
+                <p class="tagline">ULTIMATE LOCAL COMBAT</p>
+                <div class="loading-bar-container">
+                    <div id="loading-progress"></div>
+                </div>
+                <button id="enter-btn">ENTER ARENA</button>
+            </div>
+        </div>
+
+        <div id="start-screen" class="glass-panel hidden">
             <h1>TANKS.IO</h1>
             <p>Local 2-Player Combat</p>
             <div class="controls-guide">
