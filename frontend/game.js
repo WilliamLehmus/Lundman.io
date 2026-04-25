@@ -1,5 +1,4 @@
 import { io } from "socket.io-client";
-import Matter from "matter-js";
 
 // Connect directly to the backend port in development to avoid proxy timeouts
 const socket = io('http://localhost:3000', {
@@ -42,36 +41,117 @@ const p2HpBar = document.getElementById('p2-hp');
 const p1CooldownBar = document.getElementById('p1-cooldown');
 const p2CooldownBar = document.getElementById('p2-cooldown');
 
-// Game State
-let gameState = { players: [], bullets: [], elements: [], zones: [] };
+// Game State — server (authoritative) vs rendered (interpolated)
+let serverState = { players: [], bullets: [], elements: [], zones: [] };
+let gameState   = { players: [], bullets: [], elements: [], zones: [] };
 let lastScrap = 0;
 let popups = []; // { x, y, text, life }
 let myId = null;
 let gameActive = false;
-let particles = [];
-let camera = { x: 0, y: 0, zoom: 1 };
+let camera = { x: 0, y: 0 };
 const keys = { up: false, down: false, left: false, right: false, shoot: false };
+
+// Rendering
+let renderTime = 0;
+let lastFrameTime = performance.now();
+const bulletTrails = new Map();
 
 // Constants
 const TANK_SIZE = 45;
-const MATERIALS = {
-    METAL: 'metal',
-    FIRE: 'fire',
-    WATER: 'water',
-    OIL: 'oil',
-    ELECTRIC: 'electric',
-    ICE: 'ice',
-    DIRT: 'dirt',
-    ACID: 'acid',
-    GAS: 'gas',
-    STEAM: 'steam',
-    SCRAP: 'scrap',
-    BUILDING: 'building'
+
+// Audio setup
+const optionsMenu = document.getElementById('options-menu');
+const musicSlider = document.getElementById('music-volume');
+const sfxSlider = document.getElementById('sfx-volume');
+const closeOptionsBtn = document.getElementById('close-options');
+
+const musicTracks = [
+    new Audio('/music_track1.mp3'),
+    new Audio('/music_track2.mp3')
+];
+const shotSFX = new Audio('/tank_shot.mp3');
+
+let currentMusicIndex = 0;
+let musicVolume = parseFloat(localStorage.getItem('tanks_music_vol')) || 0.5;
+let sfxVolume = parseFloat(localStorage.getItem('tanks_sfx_vol')) || 0.7;
+let isMenuOpen = false;
+
+function setupAudio() {
+    musicTracks.forEach(track => {
+        track.loop = false;
+        track.volume = musicVolume;
+        track.onended = () => {
+            currentMusicIndex = (currentMusicIndex + 1) % musicTracks.length;
+            playMusic();
+        };
+    });
+    shotSFX.volume = sfxVolume;
+}
+
+function playMusic() {
+    const track = musicTracks[currentMusicIndex];
+    track.play().catch(e => console.log("Audio play blocked until interaction"));
+}
+
+function playShot() {
+    const sfx = shotSFX.cloneNode();
+    sfx.volume = sfxVolume;
+    sfx.play();
+}
+
+if (musicSlider) musicSlider.oninput = (e) => {
+    musicVolume = e.target.value;
+    musicTracks.forEach(t => t.volume = musicVolume);
+    localStorage.setItem('tanks_music_vol', musicVolume);
 };
+
+if (sfxSlider) sfxSlider.oninput = (e) => {
+    sfxVolume = e.target.value;
+    shotSFX.volume = sfxVolume;
+    localStorage.setItem('tanks_sfx_vol', sfxVolume);
+};
+
+function toggleMenu() {
+    isMenuOpen = !isMenuOpen;
+    optionsMenu.style.display = isMenuOpen ? 'flex' : 'none';
+}
+
+if (closeOptionsBtn) closeOptionsBtn.onclick = toggleMenu;
+
+const MATERIALS = {
+    METAL: 'metal', FIRE: 'fire', WATER: 'water', OIL: 'oil',
+    ELECTRIC: 'electric', ICE: 'ice', DIRT: 'dirt', ACID: 'acid',
+    GAS: 'gas', STEAM: 'steam', SCRAP: 'scrap', BUILDING: 'building'
+};
+
+const WEAPON_NAMES = {
+    STANDARD: 'Main Gun', FLAMETHROWER: 'Flamethrower', WATER_CANNON: 'Water Cannon',
+    DIRT_GUN: 'Dirt Gun', TESLA: 'Tesla Coil', FROST_GUN: 'Frost Gun'
+};
+const WEAPON_ABBR = {
+    STANDARD: 'GUN', FLAMETHROWER: 'FIRE', WATER_CANNON: 'H₂O',
+    DIRT_GUN: 'DIRT', TESLA: 'ARC', FROST_GUN: 'ICE'
+};
+const TRAIL_LENGTHS  = { metal: 6, fire: 4, water: 3, dirt: 3, electric: 8, ice: 7 };
+const TRAIL_COLORS   = { metal: '#ffcc44', fire: '#ff6600', water: '#00aaff', dirt: '#6b3410', electric: '#ffff44', ice: '#aaddff' };
+const TRAIL_WIDTHS   = { metal: 3, fire: 5, water: 4, dirt: 3, electric: 4, ice: 3 };
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+function lerpAngle(a, b, t) {
+    let d = b - a;
+    while (d > Math.PI)  d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    return a + d * t;
+}
 
 function init() {
     console.log('Game Initializing...');
     resize();
+    setupAudio();
+    
+    // Set initial slider values
+    musicSlider.value = musicVolume;
+    sfxSlider.value = sfxVolume;
     
     // Load username from local storage
     const savedName = localStorage.getItem('tanks_username');
@@ -117,7 +197,11 @@ function handleInput(code, isPressed) {
     if (code === 'KeyS' || code === 'ArrowDown') { keys.down = isPressed; changed = true; }
     if (code === 'KeyA' || code === 'ArrowLeft') { keys.left = isPressed; changed = true; }
     if (code === 'KeyD' || code === 'ArrowRight') { keys.right = isPressed; changed = true; }
-    if (code === 'Space' || code === 'Enter') { keys.shoot = isPressed; changed = true; }
+    if (code === 'Space' || code === 'Enter') {
+        if (isPressed && !keys.shoot) playShot();
+        keys.shoot = isPressed;
+        changed = true;
+    }
 
     if (changed) {
         socket.emit('input', keys);
@@ -125,6 +209,7 @@ function handleInput(code, isPressed) {
 
     // Weapon slot switching
     if (isPressed) {
+        if (code === 'Escape') toggleMenu();
         if (code === 'Digit1') socket.emit('switch-weapon', 0);
         if (code === 'Digit2') socket.emit('switch-weapon', 1);
         if (code === 'Digit3') socket.emit('switch-weapon', 2);
@@ -180,12 +265,18 @@ socket.on('game-started', () => {
 });
 
 socket.on('state', (state) => {
-    gameState = state;
+    serverState = state;
+    const me = state.players.find(p => p.id === myId);
+    if (me && me.scrap > lastScrap) {
+        const renderMe = gameState.players.find(p => p.id === myId) || me;
+        popups.push({ x: renderMe.x, y: renderMe.y - 40, text: `+${me.scrap - lastScrap} SCRAP`, life: 1.0 });
+        lastScrap = me.scrap;
+    }
     updateHUD();
 });
 
 function updateHUD() {
-    const me = gameState.players.find(p => p.id === myId);
+    const me = serverState.players.find(p => p.id === myId);
     if (me) {
         if (p1HpBar.dataset.val !== me.hp.toString()) {
             p1HpBar.style.width = `${(me.hp / me.maxHp) * 100}%`;
@@ -194,18 +285,20 @@ function updateHUD() {
         if (p1Scrap && p1Scrap.innerText !== me.scrap.toString()) {
             p1Scrap.innerText = me.scrap;
         }
-        
-        const selector = document.querySelector(`.p1-stats .weapon-selector`);
+
+        const weaponNameEl = document.getElementById('weapon-name');
+        if (weaponNameEl) weaponNameEl.innerText = WEAPON_NAMES[me.weapon] || me.weapon;
+
+        const selector = document.querySelector('.p1-stats .weapon-selector');
         if (selector) {
-            // Only rebuild if slot count changed or icons are missing
             if (selector.children.length !== me.slots.length) {
                 selector.innerHTML = '';
                 me.slots.forEach((slot, index) => {
                     const icon = document.createElement('div');
                     icon.className = `weapon-icon ${index === me.currentSlot ? 'active' : ''}`;
                     icon.dataset.player = "1";
-                    icon.dataset.type = index + 1;
-                    icon.innerText = index + 1;
+                    icon.dataset.slot = slot;
+                    icon.innerText = WEAPON_ABBR[slot] || (index + 1);
                     selector.appendChild(icon);
                 });
                 selector.dataset.currentSlot = me.currentSlot;
@@ -222,17 +315,16 @@ function updateHUD() {
     }
 }
 
-let fpsInterval = 1000 / 60;
-let then = performance.now();
 let lastFpsTime = performance.now();
 let framesThisSecond = 0;
 
 function renderLoop(now) {
     requestAnimationFrame(renderLoop);
 
-    const elapsed = now - then;
-    if (elapsed < fpsInterval - 2) return; // 2ms tolerance for browser variance
-    then = now - (elapsed % fpsInterval);
+    const rawDt = now - lastFrameTime;
+    lastFrameTime = now;
+    renderTime = now;
+    const dt = Math.min(rawDt / 16.667, 3); // 1.0 at 60fps
 
     framesThisSecond++;
     if (now - lastFpsTime >= 1000) {
@@ -244,17 +336,12 @@ function renderLoop(now) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (gameActive) {
-        // Update Camera
+        interpolateState(dt);
+
         const me = gameState.players.find(p => p.id === myId);
         if (me) {
             camera.x = me.x - canvas.width / 2;
             camera.y = me.y - canvas.height / 2;
-            
-            // HUD & Popups Logic
-            if (me.scrap > lastScrap) {
-                popups.push({ x: me.x, y: me.y - 40, text: `+${me.scrap - lastScrap} SCRAP`, life: 1.0 });
-            }
-            lastScrap = me.scrap;
         }
 
         ctx.save();
@@ -263,75 +350,19 @@ function renderLoop(now) {
         drawZones();
         drawGrid();
 
-        // Draw World Boundary
         ctx.strokeStyle = 'rgba(0, 242, 255, 0.5)';
         ctx.lineWidth = 5;
         ctx.strokeRect(0, 0, gameState.worldSize, gameState.worldSize);
 
-        // Draw Elements
-        if (gameState.elements) {
-            gameState.elements.forEach(e => {
-                ctx.save();
-                if (e.type === MATERIALS.BUILDING) {
-                    ctx.fillStyle = '#222';
-                    ctx.strokeStyle = 'rgba(0, 242, 255, 0.4)';
-                    ctx.lineWidth = 2;
-                    ctx.beginPath();
-                    ctx.roundRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h, 4);
-                    ctx.fill();
-                    ctx.stroke();
+        drawElements();
+        updateBulletTrails();
+        drawBulletTrails();
+        drawBullets();
 
-                    ctx.fillStyle = 'rgba(0, 242, 255, 0.1)';
-                    for(let i = 0; i < 2; i++) {
-                        for(let j = 0; j < 2; j++) {
-                            ctx.fillRect(e.x - e.w/3 + i*e.w/3, e.y - e.h/3 + j*e.h/3, 10, 10);
-                        }
-                    }
-                } else {
-                    ctx.fillStyle = e.color;
-                    ctx.beginPath();
-                    if (e.type === 'dirt') {
-                        ctx.roundRect(e.x - e.radius, e.y - e.radius, e.radius * 2, e.radius * 2, 5);
-                    } else {
-                        ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
-                    }
-                    ctx.fill();
-                }
-                ctx.restore();
-            });
-        }
-
-        // Draw Bullets
-        gameState.bullets.forEach(b => {
-            ctx.save();
-            ctx.fillStyle = b.color;
-            ctx.beginPath();
-            ctx.arc(b.x, b.y, 4, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
-        });
-
-        // Draw Tanks
-        gameState.players.forEach(p => {
-            drawTank(p);
-        });
-
-        // Draw Popups
-        popups = popups.filter(p => p.life > 0);
-        popups.forEach(p => {
-            ctx.save();
-            ctx.globalAlpha = p.life;
-            ctx.fillStyle = '#ffff00';
-            ctx.font = 'bold 24px Outfit';
-            ctx.textAlign = 'center';
-            ctx.fillText(p.text, p.x, p.y);
-            p.y -= 1;
-            p.life -= 0.02;
-            ctx.restore();
-        });
+        gameState.players.forEach(p => drawTank(p));
+        drawPopups(dt);
 
         ctx.restore();
-        // Removed updateHUD() here to save FPS. It runs in socket.on('state') instead.
     } else {
         drawGrid();
     }
@@ -421,6 +452,285 @@ function drawGrid() {
     ctx.stroke();
 }
 
+function interpolateState(dt) {
+    const P = 1 - Math.pow(0.75, dt); // frame-rate independent lerp (~0.25 at 60fps)
+
+    gameState.bullets   = serverState.bullets;
+    gameState.elements  = serverState.elements;
+    gameState.zones     = serverState.zones;
+    gameState.worldSize = serverState.worldSize;
+
+    gameState.players = serverState.players.map(sp => {
+        if (sp.id === myId) return { ...sp }; // local player snaps to server position
+        const gp = gameState.players.find(p => p.id === sp.id);
+        if (!gp) return { ...sp };
+        return {
+            ...sp,
+            x: lerp(gp.x, sp.x, P),
+            y: lerp(gp.y, sp.y, P),
+            angle: lerpAngle(gp.angle, sp.angle, P)
+        };
+    });
+}
+
+function drawElements() {
+    if (!gameState.elements) return;
+    gameState.elements.forEach(e => {
+        ctx.save();
+        if (e.type === MATERIALS.BUILDING) {
+            ctx.fillStyle = '#222';
+            ctx.strokeStyle = 'rgba(0, 242, 255, 0.4)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.roundRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h, 4);
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = 'rgba(0, 242, 255, 0.1)';
+            for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) {
+                ctx.fillRect(e.x - e.w/3 + i*e.w/3, e.y - e.h/3 + j*e.h/3, 10, 10);
+            }
+        } else {
+            ctx.fillStyle = e.color;
+            ctx.beginPath();
+            if (e.type === 'dirt') {
+                ctx.roundRect(e.x - e.radius, e.y - e.radius, e.radius * 2, e.radius * 2, 5);
+            } else {
+                ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+            }
+            ctx.fill();
+        }
+        ctx.restore();
+    });
+}
+
+function updateBulletTrails() {
+    const ids = new Set(gameState.bullets.map(b => b.id));
+    for (const id of bulletTrails.keys()) {
+        if (!ids.has(id)) bulletTrails.delete(id);
+    }
+    for (const b of gameState.bullets) {
+        if (!bulletTrails.has(b.id)) bulletTrails.set(b.id, []);
+        const trail = bulletTrails.get(b.id);
+        const last = trail[trail.length - 1];
+        if (!last || last.x !== b.x || last.y !== b.y) {
+            trail.push({ x: b.x, y: b.y });
+            const maxLen = TRAIL_LENGTHS[b.type] || 4;
+            if (trail.length > maxLen) trail.shift();
+        }
+    }
+}
+
+function drawBulletTrails() {
+    ctx.lineCap = 'round';
+    for (const b of gameState.bullets) {
+        const trail = bulletTrails.get(b.id);
+        if (!trail || trail.length < 2) continue;
+        const trailColor = TRAIL_COLORS[b.type] || b.color;
+        const trailW = TRAIL_WIDTHS[b.type] || 2;
+        for (let i = 0; i < trail.length - 1; i++) {
+            const t = (i + 1) / trail.length;
+            ctx.globalAlpha = t * 0.55;
+            ctx.strokeStyle = trailColor;
+            ctx.lineWidth = trailW * t;
+            ctx.beginPath();
+            ctx.moveTo(trail[i].x, trail[i].y);
+            ctx.lineTo(trail[i + 1].x, trail[i + 1].y);
+            ctx.stroke();
+        }
+    }
+    ctx.globalAlpha = 1.0;
+}
+
+function drawBullets() {
+    for (const b of gameState.bullets) {
+        ctx.save();
+        ctx.translate(b.x, b.y);
+        drawBulletBody(b);
+        ctx.restore();
+    }
+}
+
+function drawBulletBody(b) {
+    switch (b.type) {
+        case 'metal':    drawMetalBullet(b);    break;
+        case 'fire':     drawFireBullet(b);     break;
+        case 'water':    drawWaterBullet(b);    break;
+        case 'dirt':     drawDirtBullet(b);     break;
+        case 'electric': drawElectricBullet(b); break;
+        case 'ice':      drawIceBullet(b);      break;
+        default:
+            ctx.fillStyle = b.color;
+            ctx.beginPath();
+            ctx.arc(0, 0, 5, 0, Math.PI * 2);
+            ctx.fill();
+    }
+}
+
+function drawMetalBullet(b) {
+    ctx.rotate(b.angle || 0);
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = '#ff8844';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 14, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1.0;
+    ctx.fillStyle = '#ccaa44';
+    ctx.beginPath();
+    ctx.roundRect(-10, -3.5, 20, 7, 3.5);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(9, 0, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+}
+
+function drawFireBullet(b) {
+    const flicker = 0.85 + Math.sin(renderTime * 0.008 + b.id * 1.1) * 0.15;
+    const r = 9 * flicker;
+    ctx.globalAlpha = 0.2;
+    ctx.fillStyle = '#ff6600';
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 2.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 0.7;
+    ctx.fillStyle = '#ff3300';
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 1.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1.0;
+    ctx.fillStyle = '#ffdd00';
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.55, 0, Math.PI * 2);
+    ctx.fill();
+}
+
+function drawWaterBullet(b) {
+    ctx.rotate(b.angle || 0);
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = '#0088ff';
+    ctx.beginPath();
+    ctx.arc(0, 0, 14, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = '#00aaff';
+    ctx.beginPath();
+    ctx.arc(0, 0, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1.0;
+    ctx.fillStyle = '#cceeff';
+    ctx.beginPath();
+    ctx.arc(-4, -4, 4, 0, Math.PI * 2);
+    ctx.fill();
+}
+
+function drawDirtBullet(b) {
+    ctx.rotate(renderTime * 0.004 + b.id * 2.1);
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = '#2a1500';
+    ctx.beginPath();
+    ctx.ellipse(2, 3, 14, 10, 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1.0;
+    ctx.fillStyle = '#7a3d10';
+    ctx.beginPath();
+    ctx.roundRect(-13, -9, 26, 18, [5, 8, 4, 9]);
+    ctx.fill();
+    ctx.fillStyle = '#a05a20';
+    ctx.beginPath();
+    ctx.arc(-4, -3, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(5, 2, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#4a2008';
+    ctx.beginPath();
+    ctx.arc(1, -1, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+}
+
+function drawElectricBullet(b) {
+    const phase = renderTime * 0.03 + b.id * 0.5;
+    const flicker = 0.7 + Math.sin(phase) * 0.3;
+    ctx.globalAlpha = 0.2 * flicker;
+    ctx.fillStyle = '#00ffff';
+    ctx.beginPath();
+    ctx.arc(0, 0, 18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 0.5 * flicker;
+    ctx.fillStyle = '#ffff00';
+    ctx.beginPath();
+    ctx.arc(0, 0, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1.0;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(0, 0, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#ffff88';
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = flicker;
+    for (let i = 0; i < 4; i++) {
+        const a0 = (i / 4) * Math.PI * 2 + phase * 0.2;
+        const a1 = a0 + 0.5 + Math.sin(phase + i) * 0.3;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a0) * 5, Math.sin(a0) * 5);
+        ctx.lineTo(Math.cos(a1) * 12, Math.sin(a1) * 12);
+        ctx.lineTo(Math.cos(a0 + 0.8) * 16, Math.sin(a0 + 0.8) * 16);
+        ctx.stroke();
+    }
+    ctx.globalAlpha = 1.0;
+}
+
+function drawIceBullet(b) {
+    ctx.rotate(b.angle || 0);
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = '#aaddff';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 18, 8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = '#88ccee';
+    ctx.beginPath();
+    ctx.moveTo(14, 0);
+    ctx.lineTo(6, -5);
+    ctx.lineTo(-10, -4);
+    ctx.lineTo(-14, 0);
+    ctx.lineTo(-10, 4);
+    ctx.lineTo(6, 5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = '#ddeeff';
+    ctx.beginPath();
+    ctx.moveTo(10, 0);
+    ctx.lineTo(4, -3);
+    ctx.lineTo(-6, -2);
+    ctx.lineTo(-6, 2);
+    ctx.lineTo(4, 3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 1.0;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(8, -1, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+}
+
+function drawPopups(dt) {
+    popups = popups.filter(p => p.life > 0);
+    popups.forEach(p => {
+        ctx.save();
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = '#ffff00';
+        ctx.font = 'bold 24px Outfit';
+        ctx.textAlign = 'center';
+        ctx.fillText(p.text, p.x, p.y);
+        p.y -= dt;
+        p.life -= 0.02 * dt;
+        ctx.restore();
+    });
+}
+
 // Action Handlers
 usernameInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
@@ -430,6 +740,7 @@ usernameInput.addEventListener('keypress', (e) => {
 
 hostBtn.onclick = () => {
     console.log('Host button clicked');
+    playMusic();
     const name = usernameInput.value.trim();
     if (!name) {
         alert('PLEASE ENTER A CALLSIGN!');
@@ -442,6 +753,7 @@ hostBtn.onclick = () => {
 };
 
 joinBtn.onclick = () => {
+    playMusic();
     const name = usernameInput.value.trim();
     if (!name) {
         alert('PLEASE ENTER A CALLSIGN!');
@@ -456,19 +768,5 @@ startGameBtn.onclick = () => {
     socket.emit('start-game');
 };
 
-class Particle {
-    constructor(x, y, color) {
-        this.x = x; this.y = y; this.color = color;
-        this.vx = (Math.random() - 0.5) * 10;
-        this.vy = (Math.random() - 0.5) * 10;
-        this.alpha = 1;
-        this.life = 0.02 + Math.random() * 0.03;
-    }
-    draw() {
-        ctx.save(); ctx.globalAlpha = this.alpha; ctx.fillStyle = this.color;
-        ctx.beginPath(); ctx.arc(this.x, this.y, 2, 0, Math.PI * 2); ctx.fill(); ctx.restore();
-    }
-    update() { this.x += this.vx; this.y += this.vy; this.alpha -= this.life; }
-}
 
 init();

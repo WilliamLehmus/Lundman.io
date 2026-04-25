@@ -79,10 +79,11 @@
                 <div class="hp-bar-container"><div id="p1-hp" class="hp-bar"></div></div>
                 <div class="label">SCRAP: <span id="p1-scrap">0</span></div>
                 <div class="weapon-selector">
-                    <div class="weapon-icon active" data-player="1" data-type="1">1</div>
+                    <div class="weapon-icon active" data-player="1" data-type="1">GUN</div>
                     <div class="weapon-icon" data-player="1" data-type="2">2</div>
                     <div class="weapon-icon" data-player="1" data-type="3">3</div>
                 </div>
+                <div id="weapon-name" class="weapon-name-label">MAIN GUN</div>
                 <div class="cooldown-container"><div id="p1-cooldown" class="cooldown-bar"></div></div>
             </div>
             <div class="p2-stats stats-panel glass-panel">
@@ -106,6 +107,26 @@
     <canvas id="gameCanvas"></canvas>
 
     <link rel="icon" href="data:,">
+    <!-- Options Menu -->
+    <div id="options-menu" class="overlay" style="display: none;">
+        <div class="menu-content">
+            <h1>OPTIONS</h1>
+            <div class="option-group">
+                <label>MUSIC VOLUME</label>
+                <input type="range" id="music-volume" min="0" max="1" step="0.1" value="0.5">
+            </div>
+            <div class="option-group">
+                <label>SFX VOLUME</label>
+                <input type="range" id="sfx-volume" min="0" max="1" step="0.1" value="0.7">
+            </div>
+            <button id="close-options" class="btn">BACK TO GAME</button>
+        </div>
+    </div>
+
+    <div id="ui-hint" style="position: absolute; bottom: 20px; left: 20px; color: rgba(255,255,255,0.5); font-family: 'Outfit'; font-size: 12px; pointer-events: none;">
+        ESC FOR OPTIONS
+    </div>
+
     <script type="module" src="game.js"></script>
 </body>
 </html>
