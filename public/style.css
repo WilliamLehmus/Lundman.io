@@ -1,0 +1,198 @@
+:root {
+    --p1-color: #00f2ff;
+    --p2-color: #ff00ff;
+    --bg-color: #0a0a12;
+    --glass-bg: rgba(255, 255, 255, 0.05);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --text-color: #ffffff;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Outfit', sans-serif;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    overflow: hidden;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+canvas {
+    display: block;
+    background: radial-gradient(circle at center, #1a1a2e 0%, #0a0a12 100%);
+}
+
+#ui-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+}
+
+.glass-panel {
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    padding: 2rem;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    pointer-events: auto;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+h1 {
+    font-size: 4rem;
+    font-weight: 700;
+    letter-spacing: 0.5rem;
+    background: linear-gradient(45deg, var(--p1-color), var(--p2-color));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 1rem;
+    text-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+}
+
+.controls-guide {
+    display: flex;
+    gap: 3rem;
+    margin: 2rem 0;
+}
+
+.player-guide h3 {
+    margin-bottom: 0.5rem;
+}
+
+.player-guide:first-child h3 { color: var(--p1-color); }
+.player-guide:last-child h3 { color: var(--p2-color); }
+
+button {
+    background: linear-gradient(45deg, var(--p1-color), var(--p2-color));
+    border: none;
+    padding: 1rem 3rem;
+    color: white;
+    font-weight: 700;
+    font-size: 1.2rem;
+    border-radius: 50px;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    text-transform: uppercase;
+    letter-spacing: 0.1rem;
+}
+
+button:hover {
+    transform: translateY(-3px) scale(1.05);
+    box-shadow: 0 10px 20px rgba(0, 242, 255, 0.3);
+}
+
+button:active {
+    transform: translateY(1px);
+}
+
+#game-hud {
+    position: absolute;
+    top: 2rem;
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 4rem;
+    pointer-events: none;
+}
+
+.stats-panel {
+    padding: 1rem;
+    width: 250px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.1rem;
+    text-align: left;
+}
+
+.hp-bar-container, .cooldown-container {
+    height: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.hp-bar, .cooldown-bar {
+    height: 100%;
+    width: 100%;
+    transition: width 0.1s linear;
+}
+
+.p1-stats .hp-bar { background: var(--p1-color); box-shadow: 0 0 10px var(--p1-color); }
+.p2-stats .hp-bar { background: var(--p2-color); box-shadow: 0 0 10px var(--p2-color); }
+
+.cooldown-bar {
+    width: 0%;
+    background: #ffffff;
+    opacity: 0.5;
+}
+
+.weapon-selector {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.weapon-icon {
+    width: 30px;
+    height: 30px;
+    border: 1px solid var(--glass-border);
+    border-radius: 5px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.5);
+    transition: all 0.2s;
+}
+
+.weapon-icon.active {
+    border-color: #fff;
+    color: #fff;
+    background: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+}
+
+.hidden {
+    display: none !important;
+    opacity: 0;
+}
+
+#game-over h2 {
+    font-size: 3rem;
+    margin-bottom: 2rem;
+}
+
+/* Animations */
+@keyframes float {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+    100% { transform: translateY(0px); }
+}
+
+#start-screen h1 {
+    animation: float 4s ease-in-out infinite;
+}

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tanks.io | Local Combat</title>
+    <meta name="description" content="A premium 2-player local tank combat game with smooth animations and neon aesthetics.">
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="ui-layer">
+        <div id="start-screen" class="glass-panel">
+            <h1>TANKS.IO</h1>
+            <p>Local 2-Player Combat</p>
+            <div class="controls-guide">
+                <div class="player-guide">
+                    <h3>Player 1 (Blue)</h3>
+                    <p>WASD to Move</p>
+                    <p>SPACE to Shoot</p>
+                    <p>1, 2, 3 to Switch Weapons</p>
+                </div>
+                <div class="player-guide">
+                    <h3>Player 2 (Pink)</h3>
+                    <p>ARROWS to Move</p>
+                    <p>ENTER to Shoot</p>
+                    <p>7, 8, 9 to Switch Weapons</p>
+                </div>
+            </div>
+            <button id="start-btn">START BATTLE</button>
+        </div>
+
+        <div id="game-hud" class="hidden">
+            <div class="p1-stats stats-panel glass-panel">
+                <span class="label">PLAYER 1</span>
+                <div class="hp-bar-container"><div id="p1-hp" class="hp-bar"></div></div>
+                <div class="weapon-selector">
+                    <div class="weapon-icon active" data-player="1" data-type="1">1</div>
+                    <div class="weapon-icon" data-player="1" data-type="2">2</div>
+                    <div class="weapon-icon" data-player="1" data-type="3">3</div>
+                </div>
+                <div class="cooldown-container"><div id="p1-cooldown" class="cooldown-bar"></div></div>
+            </div>
+            <div class="p2-stats stats-panel glass-panel">
+                <span class="label">PLAYER 2</span>
+                <div class="hp-bar-container"><div id="p2-hp" class="hp-bar"></div></div>
+                <div class="weapon-selector">
+                    <div class="weapon-icon active" data-player="2" data-type="1">7</div>
+                    <div class="weapon-icon" data-player="2" data-type="2">8</div>
+                    <div class="weapon-icon" data-player="2" data-type="3">9</div>
+                </div>
+                <div class="cooldown-container"><div id="p2-cooldown" class="cooldown-bar"></div></div>
+            </div>
+        </div>
+
+        <div id="game-over" class="glass-panel hidden">
+            <h2 id="winner-text">PLAYER 1 WINS!</h2>
+            <button id="restart-btn">REMATCH</button>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script src="game.js"></script>
+</body>
+</html>
