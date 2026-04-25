@@ -13,6 +13,10 @@ const p2HpBar = document.getElementById('p2-hp');
 const p1CooldownBar = document.getElementById('p1-cooldown');
 const p2CooldownBar = document.getElementById('p2-cooldown');
 
+const splashScreen = document.getElementById('splash-screen');
+const enterBtn = document.getElementById('enter-btn');
+const loadingProgress = document.getElementById('loading-progress');
+
 // Game State
 let gameActive = false;
 let particles = [];
@@ -256,6 +260,20 @@ const keys = {};
 
 function init() {
     resize();
+    
+    // Splash screen loading simulation
+    let progress = 0;
+    const interval = setInterval(() => {
+        progress += Math.random() * 15;
+        if (progress >= 100) {
+            progress = 100;
+            clearInterval(interval);
+            enterBtn.style.opacity = '1';
+            enterBtn.style.pointerEvents = 'auto';
+        }
+        loadingProgress.style.width = `${progress}%`;
+    }, 150);
+
     p1 = new Tank(100, canvas.height / 2, '#00f2ff', { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', shoot: 'Space' }, 1);
     p2 = new Tank(canvas.width - 100, canvas.height / 2, '#ff00ff', { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', shoot: 'Enter' }, 2);
     
@@ -265,6 +283,15 @@ function init() {
 
     requestAnimationFrame(gameLoop);
 }
+
+enterBtn.onclick = () => {
+    splashScreen.style.opacity = '0';
+    splashScreen.style.transform = 'scale(1.1)';
+    setTimeout(() => {
+        splashScreen.classList.add('hidden');
+        startScreen.classList.remove('hidden');
+    }, 1000);
+};
 
 function resize() {
     canvas.width = window.innerWidth;

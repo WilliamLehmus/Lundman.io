@@ -43,6 +43,110 @@ canvas {
     z-index: 10;
 }
 
+#splash-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: url('splash.png') no-repeat center center;
+    background-size: cover;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+    transition: opacity 1s ease-out, transform 1s ease-out;
+}
+
+#splash-screen::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle, rgba(10, 10, 18, 0.4) 0%, rgba(10, 10, 18, 0.9) 100%);
+}
+
+.splash-content {
+    position: relative;
+    z-index: 1;
+    text-align: center;
+}
+
+.tagline {
+    font-size: 1.2rem;
+    letter-spacing: 0.8rem;
+    color: rgba(255, 255, 255, 0.6);
+    margin-bottom: 3rem;
+    margin-top: -1rem;
+}
+
+.loading-bar-container {
+    width: 300px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    margin: 2rem auto;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+#loading-progress {
+    width: 0%;
+    height: 100%;
+    background: linear-gradient(90deg, var(--p1-color), var(--p2-color));
+    transition: width 0.5s ease;
+}
+
+/* Glitch Effect */
+.glitch {
+    font-size: 6rem;
+    font-weight: 900;
+    position: relative;
+    color: white;
+}
+
+.glitch::before, .glitch::after {
+    content: attr(data-text);
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.glitch::before {
+    left: 2px;
+    text-shadow: -2px 0 var(--p1-color);
+    clip: rect(44px, 450px, 56px, 0);
+    animation: glitch-anim 5s infinite linear alternate-reverse;
+}
+
+.glitch::after {
+    left: -2px;
+    text-shadow: -2px 0 var(--p2-color);
+    clip: rect(44px, 450px, 56px, 0);
+    animation: glitch-anim2 5s infinite linear alternate-reverse;
+}
+
+@keyframes glitch-anim {
+    0% { clip: rect(10px, 9999px, 50px, 0); }
+    20% { clip: rect(80px, 9999px, 90px, 0); }
+    40% { clip: rect(30px, 9999px, 40px, 0); }
+    60% { clip: rect(70px, 9999px, 80px, 0); }
+    80% { clip: rect(10px, 9999px, 20px, 0); }
+    100% { clip: rect(50px, 9999px, 60px, 0); }
+}
+
+@keyframes glitch-anim2 {
+    0% { clip: rect(60px, 9999px, 70px, 0); }
+    20% { clip: rect(20px, 9999px, 30px, 0); }
+    40% { clip: rect(80px, 9999px, 90px, 0); }
+    60% { clip: rect(40px, 9999px, 50px, 0); }
+    80% { clip: rect(90px, 9999px, 100px, 0); }
+    100% { clip: rect(10px, 9999px, 20px, 0); }
+}
+
 .glass-panel {
     background: var(--glass-bg);
     backdrop-filter: blur(12px);
@@ -88,9 +192,14 @@ button {
     font-size: 1.2rem;
     border-radius: 50px;
     cursor: pointer;
-    transition: transform 0.2s, box-shadow 0.2s;
+    transition: transform 0.2s, box-shadow 0.2s, opacity 0.5s ease;
     text-transform: uppercase;
     letter-spacing: 0.1rem;
+}
+
+#enter-btn {
+    opacity: 0;
+    pointer-events: none;
 }
 
 button:hover {
