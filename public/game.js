@@ -33,7 +33,9 @@ const p1CooldownBar = document.getElementById('p1-cooldown');
 const p2CooldownBar = document.getElementById('p2-cooldown');
 
 // Game State
-let gameState = { players: [], bullets: [], worldSize: 4000 };
+let gameState = { players: [], bullets: [], elements: [], zones: [] };
+let lastScrap = 0;
+let popups = []; // { x, y, text, life }
 let myId = null;
 let gameActive = false;
 let particles = [];
@@ -42,6 +44,20 @@ const keys = { up: false, down: false, left: false, right: false, shoot: false }
 
 // Constants
 const TANK_SIZE = 45;
+const MATERIALS = {
+    METAL: 'metal',
+    FIRE: 'fire',
+    WATER: 'water',
+    OIL: 'oil',
+    ELECTRIC: 'electric',
+    ICE: 'ice',
+    DIRT: 'dirt',
+    ACID: 'acid',
+    GAS: 'gas',
+    STEAM: 'steam',
+    SCRAP: 'scrap',
+    BUILDING: 'building'
+};
 
 function init() {
     resize();
@@ -152,10 +168,26 @@ function updateHUD() {
         p1HpBar.style.width = `${(me.hp / me.maxHp) * 100}%`;
         if (p1Scrap) p1Scrap.innerText = me.scrap;
         
-        const icons = document.querySelectorAll(`.weapon-icon[data-player="1"]`);
-        icons.forEach((icon, index) => {
-            icon.classList.toggle('active', index === me.currentSlot);
-        });
+        const selector = document.querySelector(`.p1-stats .weapon-selector`);
+        if (selector) {
+            // Only rebuild if slot count changed or icons are missing
+            if (selector.children.length !== me.slots.length) {
+                selector.innerHTML = '';
+                me.slots.forEach((slot, index) => {
+                    const icon = document.createElement('div');
+                    icon.className = `weapon-icon ${index === me.currentSlot ? 'active' : ''}`;
+                    icon.dataset.player = "1";
+                    icon.dataset.type = index + 1;
+                    icon.innerText = index + 1;
+                    selector.appendChild(icon);
+                });
+            } else {
+                const icons = selector.querySelectorAll('.weapon-icon');
+                icons.forEach((icon, index) => {
+                    icon.classList.toggle('active', index === me.currentSlot);
+                });
+            }
+        }
     }
 }
 
@@ -168,11 +200,18 @@ function renderLoop() {
         if (me) {
             camera.x = me.x - canvas.width / 2;
             camera.y = me.y - canvas.height / 2;
+            
+            // HUD & Popups Logic
+            if (me.scrap > lastScrap) {
+                popups.push({ x: me.x, y: me.y - 40, text: `+${me.scrap - lastScrap} SCRAP`, life: 1.0 });
+            }
+            lastScrap = me.scrap;
         }
 
         ctx.save();
         ctx.translate(-camera.x, -camera.y);
 
+        drawZones();
         drawGrid();
 
         // Draw World Boundary
@@ -184,16 +223,33 @@ function renderLoop() {
         if (gameState.elements) {
             gameState.elements.forEach(e => {
                 ctx.save();
-                ctx.fillStyle = e.color;
-                ctx.shadowBlur = e.type === 'fire' ? 15 : 5;
-                ctx.shadowColor = e.color;
-                ctx.beginPath();
-                if (e.type === 'dirt') {
-                    ctx.roundRect(e.x - e.radius, e.y - e.radius, e.radius * 2, e.radius * 2, 5);
+                if (e.type === MATERIALS.BUILDING) {
+                    ctx.fillStyle = '#222';
+                    ctx.strokeStyle = 'rgba(0, 242, 255, 0.4)';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.roundRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h, 4);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    ctx.fillStyle = 'rgba(0, 242, 255, 0.1)';
+                    for(let i = 0; i < 2; i++) {
+                        for(let j = 0; j < 2; j++) {
+                            ctx.fillRect(e.x - e.w/3 + i*e.w/3, e.y - e.h/3 + j*e.h/3, 10, 10);
+                        }
+                    }
                 } else {
-                    ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = e.color;
+                    ctx.shadowBlur = e.type === 'fire' ? 15 : 5;
+                    ctx.shadowColor = e.color;
+                    ctx.beginPath();
+                    if (e.type === 'dirt') {
+                        ctx.roundRect(e.x - e.radius, e.y - e.radius, e.radius * 2, e.radius * 2, 5);
+                    } else {
+                        ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+                    }
+                    ctx.fill();
                 }
-                ctx.fill();
                 ctx.restore();
             });
         }
@@ -215,13 +271,22 @@ function renderLoop() {
             drawTank(p);
         });
 
-        particles.forEach((p, i) => {
-            p.update();
-            p.draw();
-            if (p.alpha <= 0) particles.splice(i, 1);
+        // Draw Popups
+        popups = popups.filter(p => p.life > 0);
+        popups.forEach(p => {
+            ctx.save();
+            ctx.globalAlpha = p.life;
+            ctx.fillStyle = '#ffff00';
+            ctx.font = 'bold 24px Outfit';
+            ctx.textAlign = 'center';
+            ctx.fillText(p.text, p.x, p.y);
+            p.y -= 1;
+            p.life -= 0.02;
+            ctx.restore();
         });
 
         ctx.restore();
+        updateHUD();
     } else {
         drawGrid();
     }
@@ -274,11 +339,29 @@ function drawTank(p) {
     ctx.restore();
 }
 
+function drawZones() {
+    if (!gameState.zones) return;
+    gameState.zones.forEach(z => {
+        // Draw Zone Color
+        ctx.fillStyle = z.color;
+        ctx.fillRect(z.x, z.y, z.w, z.h);
+
+        // Draw Label
+        ctx.save();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.font = '900 120px Outfit';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(z.type, z.x + z.w / 2, z.y + z.h / 2);
+        ctx.restore();
+    });
+}
+
 function drawGrid() {
     const gridSize = 60;
     const worldSize = gameState.worldSize || 4000;
     
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)'; // Made more transparent
     ctx.lineWidth = 1;
 
     // Only draw grid visible to camera

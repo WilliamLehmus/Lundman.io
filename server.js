@@ -3,6 +3,21 @@ const http = require('http');
 const { Server } = require('socket.io');
 const Matter = require('matter-js');
 const path = require('path');
+const fs = require('fs');
+
+const DATA_PATH = path.join(__dirname, 'players.json');
+let playerData = {};
+try {
+    if (fs.existsSync(DATA_PATH)) {
+        playerData = JSON.parse(fs.readFileSync(DATA_PATH, 'utf8'));
+    }
+} catch (e) { console.error('Error loading players:', e); }
+
+function savePlayers() {
+    try {
+        fs.writeFileSync(DATA_PATH, JSON.stringify(playerData, null, 2));
+    } catch (e) { console.error('Error saving players:', e); }
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -22,11 +37,11 @@ const { Engine, Bodies, Body, Composite, Vector, Events } = Matter;
 
 // Game Constants
 const TICK_RATE = 60;
-const STATE_RATE = 20; // Send state 20 times per second
 const TANK_SIZE = 45;
 const WORLD_SIZE = 4000; // 4000x4000 world
+const MIN_PLAYERS = 1; // Allow testing alone
 
-const { MATERIALS, CHASSIS, WEAPON_MODULES } = require('./gameConfig');
+const { MATERIALS, BIOMES, CHASSIS, WEAPON_MODULES } = require('./gameConfig');
 
 // Global State
 let lobbies = {}; // roomId -> lobbyData
@@ -39,9 +54,22 @@ class Lobby {
         this.engine = Engine.create({ gravity: { x: 0, y: 0 } });
         this.bullets = {}; // bulletId -> bulletBody
         this.elements = {}; // elementId -> { body, type, hp, expiresAt }
+        this.zones = []; // Map regions/biomes
         this.lastBulletId = 0;
         this.lastElementId = 0;
         
+        this.generateMap();
+        
+        // Add World Borders
+        const wallThickness = 100;
+        const walls = [
+            Bodies.rectangle(WORLD_SIZE/2, -wallThickness/2, WORLD_SIZE, wallThickness, { isStatic: true }),
+            Bodies.rectangle(WORLD_SIZE/2, WORLD_SIZE + wallThickness/2, WORLD_SIZE, wallThickness, { isStatic: true }),
+            Bodies.rectangle(-wallThickness/2, WORLD_SIZE/2, wallThickness, WORLD_SIZE, { isStatic: true }),
+            Bodies.rectangle(WORLD_SIZE + wallThickness/2, WORLD_SIZE/2, wallThickness, WORLD_SIZE, { isStatic: true })
+        ];
+        Composite.add(this.engine.world, walls);
+
         // Start Physics Loop
         this.physicsInterval = setInterval(() => {
             Engine.update(this.engine, 1000 / TICK_RATE);
@@ -52,7 +80,7 @@ class Lobby {
         // Start State Sync Loop
         this.syncInterval = setInterval(() => {
             this.broadcastState();
-        }, 1000 / STATE_RATE);
+        }, 1000 / 20); // 20Hz sync
     }
 
     addPlayer(socket, username, chassisType = 'SCOUT') {
@@ -93,21 +121,61 @@ class Lobby {
         }
     }
 
+    generateMap() {
+        const size = WORLD_SIZE / 2;
+        // 4 Quadrants
+        this.zones.push({ x: 0, y: 0, w: size, h: size, type: 'URBAN' });
+        this.zones.push({ x: size, y: 0, w: size, h: size, type: 'ICE' });
+        this.zones.push({ x: 0, y: size, w: size, h: size, type: 'SWAMP' });
+        this.zones.push({ x: size, y: size, w: size, h: size, type: 'DESERT' });
+
+        // Spawn Urban Buildings
+        for (let i = 0; i < 40; i++) {
+            const pos = {
+                x: Math.random() * (size - 100) + 50,
+                y: Math.random() * (size - 100) + 50
+            };
+            const w = 60 + Math.random() * 100;
+            const h = 60 + Math.random() * 100;
+            this.spawnBuilding(pos, w, h);
+        }
+    }
+
+    spawnBuilding(pos, w, h) {
+        const id = ++this.lastElementId;
+        const body = Bodies.rectangle(pos.x, pos.y, w, h, {
+            label: 'element',
+            isStatic: true,
+            isSensor: false
+        });
+        body.elementId = id;
+        
+        this.elements[id] = {
+            id,
+            body,
+            type: MATERIALS.BUILDING,
+            hp: 200,
+            w, h
+        };
+        Composite.add(this.engine.world, body);
+    }
+
     handleCollisions() {
+        Events.on(this.engine, 'collisionActive', (event) => {
+            event.pairs.forEach((pair) => {
+                this.processElementInteraction(pair.bodyA, pair.bodyB);
+            });
+        });
+
         Events.on(this.engine, 'collisionStart', (event) => {
             event.pairs.forEach((pair) => {
-                const { bodyA, bodyB } = pair;
+                const bodyA = pair.bodyA;
+                const bodyB = pair.bodyB;
                 
-                // Bullet Logic
                 if (bodyA.label === 'bullet' || bodyB.label === 'bullet') {
                     const bullet = bodyA.label === 'bullet' ? bodyA : bodyB;
                     const target = bodyA.label === 'bullet' ? bodyB : bodyA;
                     this.processBulletCollision(bullet, target);
-                }
-
-                // Elemental Interaction Logic
-                if (bodyA.label === 'element' || bodyB.label === 'element') {
-                    this.processElementInteraction(bodyA, bodyB);
                 }
             });
         });
@@ -142,12 +210,22 @@ class Lobby {
             }
         }
         
-        // Hit Element (e.g. Dirt Mound)
+        // Hit Element (e.g. Dirt Mound, Building)
         if (target.label === 'element') {
             const element = this.elements[target.elementId];
             if (element && element.hp !== undefined) {
                 element.hp -= bulletData.damage;
-                if (element.hp <= 0) this.destroyElement(target.elementId);
+                if (element.hp <= 0) {
+                    if (element.type === MATERIALS.BUILDING) {
+                        for (let i = 0; i < 10; i++) {
+                            this.spawnElement({
+                                x: element.body.position.x + (Math.random() - 0.5) * element.w,
+                                y: element.body.position.y + (Math.random() - 0.5) * element.h
+                            }, MATERIALS.SCRAP, 30000);
+                        }
+                    }
+                    this.destroyElement(target.elementId);
+                }
                 this.destroyBullet(bullet.id);
             }
         }
@@ -289,23 +367,35 @@ class Lobby {
 
             p.hidden = false; // Reset hidden state
 
-            // Handle Slippery Ground (Ice)
-            const friction = now < statusEffects.slip ? 0.01 : config.speed > 0.005 ? 0.1 : 0.2;
+            // Determine Biome
+            const zone = this.zones.find(z => 
+                body.position.x >= z.x && body.position.x <= z.x + z.w &&
+                body.position.y >= z.y && body.position.y <= z.y + z.h
+            ) || { type: 'URBAN' };
+            const biome = BIOMES[zone.type];
+
+            // Handle Slippery Ground (Ice or Biome)
+            const isIce = now < statusEffects.slip || zone.type === 'ICE';
+            const baseFriction = isIce ? 0.01 : biome.friction;
+            const friction = config.speed > 0.005 ? baseFriction : baseFriction * 2;
+            
             if (body.frictionAir !== friction) body.frictionAir = friction;
+
+            const moveSpeed = config.speed * biome.speedMult;
 
             if (inputs.left) Body.setAngularVelocity(body, -config.turnSpeed);
             if (inputs.right) Body.setAngularVelocity(body, config.turnSpeed);
             
             if (inputs.up) {
                 Body.applyForce(body, body.position, {
-                    x: Math.cos(body.angle) * config.speed,
-                    y: Math.sin(body.angle) * config.speed
+                    x: Math.cos(body.angle) * moveSpeed,
+                    y: Math.sin(body.angle) * moveSpeed
                 });
             }
             if (inputs.down) {
                 Body.applyForce(body, body.position, {
-                    x: -Math.cos(body.angle) * config.speed,
-                    y: -Math.sin(body.angle) * config.speed
+                    x: -Math.cos(body.angle) * moveSpeed,
+                    y: -Math.sin(body.angle) * moveSpeed
                 });
             }
 
@@ -379,6 +469,7 @@ class Lobby {
         this.update();
         const state = {
             worldSize: WORLD_SIZE,
+            zones: this.zones.map(z => ({ ...z, color: BIOMES[z.type].color })),
             players: Object.values(this.players).map(p => ({
                 id: p.id,
                 username: p.username,
@@ -390,6 +481,7 @@ class Lobby {
                 maxHp: p.maxHp,
                 weapon: p.slots[p.currentSlot],
                 currentSlot: p.currentSlot,
+                slots: p.slots,
                 scrap: p.scrap,
                 hidden: p.hidden
             })),
@@ -406,7 +498,16 @@ class Lobby {
                 y: e.body.position.y,
                 type: e.type,
                 radius: e.body.circleRadius,
-                color: this.getElementColor(e.type)
+                w: e.w,
+                h: e.h,
+                color: e.type === MATERIALS.SCRAP ? '#ffff00' : 
+                       e.type === MATERIALS.OIL ? '#333' : 
+                       e.type === MATERIALS.FIRE ? '#ff4400' : 
+                       e.type === MATERIALS.WATER ? '#0088ff' : 
+                       e.type === MATERIALS.ELECTRIC ? '#00f2ff' : 
+                       e.type === MATERIALS.ICE ? '#aaddff' : 
+                       e.type === MATERIALS.DIRT ? '#8b4513' : 
+                       e.type === MATERIALS.STEAM ? 'rgba(200, 200, 200, 0.4)' : '#fff'
             }))
         };
         io.to(this.id).emit('state', state);
@@ -443,8 +544,11 @@ io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
     socket.on('join-game', ({ username, chassisType }) => {
-        // Matchmaking: Find lobby with most players that isn't full and hasn't started
-        let bestLobby = Object.values(lobbies).find(l => !l.active && Object.keys(l.players).length < 10);
+        // Matchmaking: Find lobby with most players that isn't full
+        let lobbyList = Object.values(lobbies).filter(l => Object.keys(l.players).length < 10);
+        lobbyList.sort((a, b) => Object.keys(b.players).length - Object.keys(a.players).length);
+        
+        let bestLobby = lobbyList[0];
         
         if (!bestLobby) {
             const id = Math.random().toString(36).substring(7);
@@ -455,6 +559,11 @@ io.on('connection', (socket) => {
         bestLobby.addPlayer(socket, username, chassisType);
         socket.join(bestLobby.id);
         socket.lobbyId = bestLobby.id;
+
+        // If game is already running, tell the new player
+        if (bestLobby.active) {
+            socket.emit('game-started');
+        }
 
         io.to(bestLobby.id).emit('lobby-update', {
             id: bestLobby.id,
@@ -495,7 +604,7 @@ io.on('connection', (socket) => {
 
     socket.on('start-game', () => {
         const lobby = lobbies[socket.lobbyId];
-        if (lobby && Object.keys(lobby.players).length >= 2) {
+        if (lobby && Object.keys(lobby.players).length >= MIN_PLAYERS) {
             lobby.active = true;
             io.to(lobby.id).emit('game-started');
         }
