@@ -171,8 +171,13 @@ socket.on('state', (state) => {
 function updateHUD() {
     const me = gameState.players.find(p => p.id === myId);
     if (me) {
-        p1HpBar.style.width = `${(me.hp / me.maxHp) * 100}%`;
-        if (p1Scrap) p1Scrap.innerText = me.scrap;
+        if (p1HpBar.dataset.val !== me.hp.toString()) {
+            p1HpBar.style.width = `${(me.hp / me.maxHp) * 100}%`;
+            p1HpBar.dataset.val = me.hp;
+        }
+        if (p1Scrap && p1Scrap.innerText !== me.scrap.toString()) {
+            p1Scrap.innerText = me.scrap;
+        }
         
         const selector = document.querySelector(`.p1-stats .weapon-selector`);
         if (selector) {
@@ -187,17 +192,30 @@ function updateHUD() {
                     icon.innerText = index + 1;
                     selector.appendChild(icon);
                 });
+                selector.dataset.currentSlot = me.currentSlot;
             } else {
-                const icons = selector.querySelectorAll('.weapon-icon');
-                icons.forEach((icon, index) => {
-                    icon.classList.toggle('active', index === me.currentSlot);
-                });
+                if (selector.dataset.currentSlot !== me.currentSlot.toString()) {
+                    const icons = selector.querySelectorAll('.weapon-icon');
+                    icons.forEach((icon, index) => {
+                        icon.classList.toggle('active', index === me.currentSlot);
+                    });
+                    selector.dataset.currentSlot = me.currentSlot;
+                }
             }
         }
     }
 }
 
-function renderLoop() {
+let fpsInterval = 1000 / 60;
+let then = performance.now();
+
+function renderLoop(now) {
+    requestAnimationFrame(renderLoop);
+
+    const elapsed = now - then;
+    if (elapsed < fpsInterval) return;
+    then = now - (elapsed % fpsInterval);
+
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (gameActive) {
@@ -292,12 +310,10 @@ function renderLoop() {
         });
 
         ctx.restore();
-        updateHUD();
+        // Removed updateHUD() here to save FPS. It runs in socket.on('state') instead.
     } else {
         drawGrid();
     }
-
-    requestAnimationFrame(renderLoop);
 }
 
 function drawTank(p) {
@@ -391,14 +407,28 @@ function drawGrid() {
 }
 
 // Action Handlers
+usernameInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        joinBtn.click();
+    }
+});
+
 hostBtn.onclick = () => {
-    const name = usernameInput.value.trim() || 'RECRUIT';
+    const name = usernameInput.value.trim();
+    if (!name) {
+        alert('PLEASE ENTER A CALLSIGN!');
+        return;
+    }
     const chassis = document.getElementById('chassis-select').value;
     socket.emit('host-game', { username: name, chassisType: chassis });
 };
 
 joinBtn.onclick = () => {
-    const name = usernameInput.value.trim() || 'RECRUIT';
+    const name = usernameInput.value.trim();
+    if (!name) {
+        alert('PLEASE ENTER A CALLSIGN!');
+        return;
+    }
     const chassis = document.getElementById('chassis-select').value;
     socket.emit('join-game', { username: name, chassisType: chassis });
 };

@@ -90,7 +90,7 @@ class Lobby {
         // Start State Sync Loop
         this.syncInterval = setInterval(() => {
             this.broadcastState();
-        }, 1000 / 20); // 20Hz sync
+        }, 1000 / 60); // 60Hz sync
     }
 
     addPlayer(socket, username, chassisType = 'SCOUT') {
@@ -461,10 +461,13 @@ class Lobby {
         });
 
         // Recoil
-        Body.applyForce(p.body, p.body.position, {
-            x: -Math.cos(p.body.angle) * weapon.recoil,
-            y: -Math.sin(p.body.angle) * weapon.recoil
-        });
+        const recoil = weapon.recoil || 0;
+        if (recoil > 0) {
+            Body.applyForce(p.body, p.body.position, {
+                x: -Math.cos(p.body.angle) * recoil,
+                y: -Math.sin(p.body.angle) * recoil
+            });
+        }
 
         this.bullets[id] = bullet;
         Composite.add(this.engine.world, bullet);
@@ -553,7 +556,12 @@ class Lobby {
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
-    socket.on('join-game', ({ username, chassisType }) => {
+    socket.on('join-game', (data) => {
+        if (!data || typeof data.username !== 'string' || data.username.trim() === '') return;
+        let { username, chassisType } = data;
+        username = username.trim().substring(0, 12);
+        if (!['SCOUT', 'BRAWLER', 'ARTILLERY'].includes(chassisType)) chassisType = 'SCOUT';
+
         // Matchmaking: Find lobby with most players that isn't full
         let lobbyList = Object.values(lobbies).filter(l => Object.keys(l.players).length < 10);
         lobbyList.sort((a, b) => Object.keys(b.players).length - Object.keys(a.players).length);
@@ -581,7 +589,12 @@ io.on('connection', (socket) => {
         });
     });
 
-    socket.on('host-game', ({ username, chassisType }) => {
+    socket.on('host-game', (data) => {
+        if (!data || typeof data.username !== 'string' || data.username.trim() === '') return;
+        let { username, chassisType } = data;
+        username = username.trim().substring(0, 12);
+        if (!['SCOUT', 'BRAWLER', 'ARTILLERY'].includes(chassisType)) chassisType = 'SCOUT';
+
         const id = Math.random().toString(36).substring(7);
         const lobby = new Lobby(id);
         lobbies[id] = lobby;
