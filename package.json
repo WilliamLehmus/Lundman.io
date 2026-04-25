@@ -18,5 +18,17 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.14"
+  },
+  "nodemonConfig": {
+    "watch": [
+      "server.js",
+      "gameConfig.js",
+      "public/"
+    ],
+    "ignore": [
+      "players.json",
+      "node_modules/"
+    ],
+    "ext": "js,html,css,json"
   }
 }

@@ -124,6 +124,11 @@ socket.on('connect', () => {
     myId = socket.id;
 });
 
+socket.on('dev-reload', () => {
+    console.log('Backend changed, reloading...');
+    location.reload();
+});
+
 socket.on('lobby-update', ({ id, players }) => {
     splashScreen.classList.add('hidden');
     lobbyScreen.classList.remove('hidden');

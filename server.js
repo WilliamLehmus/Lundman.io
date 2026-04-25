@@ -27,6 +27,16 @@ const io = require('socket.io')(server, {
         methods: ["GET", "POST"]
     }
 });
+
+// Dev Hot-Reload Signal
+const startTime = Date.now();
+io.on('connection', (socket) => {
+    // If a client connects immediately after a restart, tell them to reload
+    if (Date.now() - startTime < 2000) {
+        socket.emit('dev-reload');
+    }
+});
+
 const PORT = process.env.PORT || 3000;
 
 app.get('/health', (req, res) => res.send('Server is live!'));
