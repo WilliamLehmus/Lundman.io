@@ -1,4 +1,4 @@
-const MATERIALS = {
+export const MATERIALS = {
     METAL: 'metal',
     FIRE: 'fire',
     WATER: 'water',
@@ -13,14 +13,14 @@ const MATERIALS = {
     BUILDING: 'building'
 };
 
-const BIOMES = {
+export const BIOMES = {
     ICE: { color: '#aaddff33', friction: 0.005, speedMult: 1.2 },
     SWAMP: { color: '#2d3e2d33', friction: 0.3, speedMult: 0.6 },
     DESERT: { color: '#edc9af33', friction: 0.1, speedMult: 0.9 },
     URBAN: { color: 'rgba(0,0,0,0)', friction: 0.1, speedMult: 1.0 }
 };
 
-const CHASSIS = {
+export const CHASSIS = {
     SCOUT: {
         name: 'Scout',
         hp: 80,
@@ -47,7 +47,7 @@ const CHASSIS = {
     }
 };
 
-const WEAPON_MODULES = {
+export const WEAPON_MODULES = {
     STANDARD: {
         name: 'Main Gun',
         type: MATERIALS.METAL,
@@ -109,11 +109,4 @@ const WEAPON_MODULES = {
         impact: 0.005,
         recoil: 0.002
     }
-};
-
-module.exports = {
-    MATERIALS,
-    BIOMES,
-    CHASSIS,
-    WEAPON_MODULES
 };

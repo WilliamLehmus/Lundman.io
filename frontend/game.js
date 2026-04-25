@@ -1,9 +1,18 @@
-const socket = io(window.location.origin, {
+import { io } from "socket.io-client";
+import Matter from "matter-js";
+
+// Connect directly to the backend port in development to avoid proxy timeouts
+const socket = io('http://localhost:3000', {
     transports: ['websocket', 'polling']
 });
 
+socket.on('connect', () => {
+    console.log('Socket connected successfully:', socket.id);
+    myId = socket.id;
+});
+
 socket.on('connect_error', (err) => {
-    console.error('Connection Error:', err.message);
+    console.error('Socket Connection Error:', err.message, err.description);
 });
 
 const canvas = document.getElementById('gameCanvas');
@@ -60,7 +69,12 @@ const MATERIALS = {
 };
 
 function init() {
+    console.log('Game Initializing...');
     resize();
+    
+    // Load username from local storage
+    const savedName = localStorage.getItem('tanks_username');
+    if (savedName) usernameInput.value = savedName;
     
     // Loading animation
     let progress = 0;
@@ -121,6 +135,7 @@ function handleInput(code, isPressed) {
 
 // Socket Events
 socket.on('connect', () => {
+    console.log('Socket connected:', socket.id);
     myId = socket.id;
 });
 
@@ -264,8 +279,6 @@ function renderLoop(now) {
                     }
                 } else {
                     ctx.fillStyle = e.color;
-                    ctx.shadowBlur = e.type === 'fire' ? 15 : 5;
-                    ctx.shadowColor = e.color;
                     ctx.beginPath();
                     if (e.type === 'dirt') {
                         ctx.roundRect(e.x - e.radius, e.y - e.radius, e.radius * 2, e.radius * 2, 5);
@@ -281,8 +294,6 @@ function renderLoop(now) {
         // Draw Bullets
         gameState.bullets.forEach(b => {
             ctx.save();
-            ctx.shadowBlur = 10;
-            ctx.shadowColor = b.color;
             ctx.fillStyle = b.color;
             ctx.beginPath();
             ctx.arc(b.x, b.y, 4, 0, Math.PI * 2);
@@ -325,9 +336,6 @@ function drawTank(p) {
     
     ctx.translate(p.x, p.y);
     ctx.rotate(p.angle);
-
-    ctx.shadowBlur = 15;
-    ctx.shadowColor = color;
 
     // Body
     ctx.fillStyle = '#1a1a2e';
@@ -380,30 +388,27 @@ function drawZones() {
 }
 
 function drawGrid() {
-    const gridSize = 60;
+    const gridSize = 100;
     const worldSize = gameState.worldSize || 4000;
     
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)'; // Made more transparent
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)'; 
     ctx.lineWidth = 1;
 
-    // Only draw grid visible to camera
     const startX = Math.max(0, Math.floor(camera.x / gridSize) * gridSize);
     const endX = Math.min(worldSize, Math.ceil((camera.x + canvas.width) / gridSize) * gridSize);
     const startY = Math.max(0, Math.floor(camera.y / gridSize) * gridSize);
     const endY = Math.min(worldSize, Math.ceil((camera.y + canvas.height) / gridSize) * gridSize);
 
+    ctx.beginPath();
     for (let x = startX; x <= endX; x += gridSize) {
-        ctx.beginPath();
         ctx.moveTo(x, startY);
         ctx.lineTo(x, endY);
-        ctx.stroke();
     }
     for (let y = startY; y <= endY; y += gridSize) {
-        ctx.beginPath();
         ctx.moveTo(startX, y);
         ctx.lineTo(endX, y);
-        ctx.stroke();
     }
+    ctx.stroke();
 }
 
 // Action Handlers
@@ -414,12 +419,15 @@ usernameInput.addEventListener('keypress', (e) => {
 });
 
 hostBtn.onclick = () => {
+    console.log('Host button clicked');
     const name = usernameInput.value.trim();
     if (!name) {
         alert('PLEASE ENTER A CALLSIGN!');
         return;
     }
+    localStorage.setItem('tanks_username', name);
     const chassis = document.getElementById('chassis-select').value;
+    console.log('Emitting host-game:', { name, chassis });
     socket.emit('host-game', { username: name, chassisType: chassis });
 };
 
@@ -429,6 +437,7 @@ joinBtn.onclick = () => {
         alert('PLEASE ENTER A CALLSIGN!');
         return;
     }
+    localStorage.setItem('tanks_username', name);
     const chassis = document.getElementById('chassis-select').value;
     socket.emit('join-game', { username: name, chassisType: chassis });
 };
