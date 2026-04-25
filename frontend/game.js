@@ -231,7 +231,7 @@ function renderLoop(now) {
     requestAnimationFrame(renderLoop);
 
     const elapsed = now - then;
-    if (elapsed < fpsInterval) return;
+    if (elapsed < fpsInterval - 2) return; // 2ms tolerance for browser variance
     then = now - (elapsed % fpsInterval);
 
     framesThisSecond++;
