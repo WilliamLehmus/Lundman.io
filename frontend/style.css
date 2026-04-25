@@ -373,6 +373,17 @@ button:active {
     box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
 }
 
+.weapon-name-label {
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.12rem;
+    color: #00f2ff;
+    text-align: left;
+    text-transform: uppercase;
+    text-shadow: 0 0 8px rgba(0, 242, 255, 0.6);
+    margin-top: 0.1rem;
+}
+
 .hidden {
     display: none !important;
     opacity: 0;
@@ -420,4 +431,58 @@ button:active {
 .premium-select option {
     background: #1a1a2e;
     color: white;
+}
+
+/* Options Menu Styles */
+.option-group {
+    margin-bottom: 25px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+}
+
+.option-group label {
+    font-size: 14px;
+    letter-spacing: 2px;
+    margin-bottom: 10px;
+    color: var(--p1-color);
+}
+
+input[type="range"] {
+    width: 80%;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 5px;
+    outline: none;
+    -webkit-appearance: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    background: var(--p1-color);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 0 10px var(--p1-color);
+}
+
+.menu-content {
+    background: rgba(10, 10, 20, 0.95);
+    padding: 40px;
+    border-radius: 20px;
+    border: 1px solid var(--p1-color);
+    box-shadow: 0 0 40px rgba(0, 242, 255, 0.2);
+    text-align: center;
+    min-width: 300px;
+    pointer-events: auto;
+}
+
+#options-menu h1 {
+    font-size: 2rem;
+    margin-bottom: 30px;
+    letter-spacing: 5px;
+    color: #fff;
+    text-shadow: 0 0 10px var(--p1-color);
 }

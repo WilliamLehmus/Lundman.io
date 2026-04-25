@@ -454,7 +454,8 @@ class Lobby {
             })),
             bullets: Object.values(this.bullets).map(b => ({
                 id: b.id, x: b.position.x, y: b.position.y,
-                type: b.customData.type, color: this.getElementColor(b.customData.type)
+                type: b.customData.type, color: this.getElementColor(b.customData.type),
+                angle: Math.atan2(b.velocity.y, b.velocity.x)
             })),
             elements: Object.values(this.elements).map(e => ({
                 id: e.id, x: e.body.position.x, y: e.body.position.y,

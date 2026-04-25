@@ -109,6 +109,30 @@ To ensure a healthy competitive environment, every elemental combo has a direct 
 
 ## 📈 Evolution & In-Game Upgrades
 
+### 1. The Scrap Economy
+Scrap is the lifeblood of a match. It is obtained by:
+- **Demolishing Buildings**: Static structures drop high-density scrap.
+- **Player Eliminations**: Defeated enemies drop a percentage of their held scrap.
+- **Strategic Harvesting**: High-value scrap zones are placed in the center of biomes.
+
+### 2. Physical Buffs (Automated)
+Instead of complex menu systems, Scrap provides **linear automated scaling**:
+- **Damage Scaling**: Each 100 Scrap increases projectile damage by 100% (Buff Factor = 1 + Scrap/100).
+- **Reload Acceleration**: Each 200 Scrap reduces reload time by 50% (Reload Factor = 1 / (1 + Scrap/200)).
+
+### 3. Elemental Counter Mastery (Implementation Status)
+The "No Unstoppable Tank" philosophy is enforced by the physics engine:
+- **Water vs Fire**: Implemented via collision triggers that spawn STEAM and destroy FIRE elements.
+- **Tesla vs Water**: Implemented via electrifying water elements, creating stun zones.
+- **Dirt vs Electricity**: DIRT barricades are non-conductive and block TESLA projectiles.
+
+---
+
+## 🛠️ Roadmap: Future Alchemy
+- **Phase 1 (Active)**: Core 6 elements and basic interactions.
+- **Phase 2 (Proposed)**: Acid melting buildings; Gas clouds that can be ignited by Fire.
+- **Phase 3 (Proposed)**: AI Drones that guard high-value scrap zones.
+
 ### 1. Temporary "Field Upgrades"
 Unlike permanent account unlocks, **Field Upgrades** are earned and lost within a single match. Collecting "Scrap" from fallen enemies allows you to invest in temporary weapon buffs:
 - **Range+:** Increase projectile velocity and max travel distance.
