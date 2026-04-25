@@ -142,9 +142,10 @@ socket.on('lobby-update', ({ id, players }) => {
     });
 
     const count = players.length;
-    lobbyStatus.innerText = `PLAYERS: ${count}/10 ${count < 2 ? '(MIN 2 TO START)' : ''}`;
+    lobbyStatus.innerText = `PLAYERS: ${count}/10`;
     
-    if (count >= 2) {
+    // Allow start with 1 player for testing
+    if (count >= 1) {
         startGameBtn.classList.remove('hidden');
     } else {
         startGameBtn.classList.add('hidden');
