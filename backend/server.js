@@ -189,11 +189,12 @@ class Lobby {
             kills: 0,
             deaths: 0,
             statusEffects: { stun: 0, slip: 0 },
-            inputs: { up: false, down: false, left: false, right: false, shoot: false }
+            inputs: { up: false, down: false, left: false, right: false, shoot: false },
+            lastBuffLevel: 0
         };
     }
 
-    addBot(difficulty = 'NORMAL', pos = null, isActive = true, forcedTeam = null) {
+    addBot(difficulty = 'NORMAL', pos = null, isActive = true, forcedTeam = null, forcedChassis = 'RANDOM') {
         const botNames = [
             'Ironclad', 'Panzer', 'Steel Rain', 'Blitz', 'Vanguard', 
             'Sentinel', 'Titan', 'Reaper', 'Havoc', 'Goliath',
@@ -207,7 +208,11 @@ class Lobby {
             `Bot-${Math.random().toString(36).substring(7, 10).toUpperCase()}`;
 
         const id = 'bot-' + Math.random().toString(36).substring(7);
-        const chassisType = 'SCOUT'; 
+        let chassisType = forcedChassis;
+        if (!chassisType || chassisType === 'RANDOM') {
+            const types = ['SCOUT', 'BRAWLER', 'ARTILLERY'];
+            chassisType = types[Math.floor(Math.random() * types.length)];
+        }
         const team = forcedTeam || (Object.keys(this.players).length % 2 === 0 ? 'blue' : 'pink');
         
         const startPos = this.getRandomSpawn(team);
@@ -255,7 +260,8 @@ class Lobby {
             },
             role: Math.random() > 0.6 ? 'FLANKER' : 'ASSAULT',
             strafeDir: Math.random() > 0.5 ? 1 : -1,
-            lastRoleSwitch: Date.now()
+            lastRoleSwitch: Date.now(),
+            lastBuffLevel: 0
         };
     }
 
@@ -642,6 +648,18 @@ class Lobby {
 
             this.processBots(now);
             Object.values(this.players).forEach(p => {
+                // Scrap Buff Feedback
+                const buffLevel = Math.floor(p.scrap / 100);
+                if (buffLevel > p.lastBuffLevel && buffLevel <= 5) {
+                    p.lastBuffLevel = buffLevel;
+                    if (p.id.startsWith('bot-')) {
+                        // Bots don't need popups, but maybe in future
+                    } else {
+                        const socket = io.sockets.sockets.get(p.id);
+                        if (socket) socket.emit('scrap-buff', { text: 'COMBAT BUFF: DMG & RELOAD UP!' });
+                    }
+                }
+
                 const { inputs, body, chassis, statusEffects } = p;
                 const config = CHASSIS[chassis];
                 if (now < statusEffects.stun) return;
@@ -1131,7 +1149,7 @@ io.on('connection', (socket) => {
     socket.on('add-bot', (data) => {
         const lobby = lobbies[socket.lobbyId];
         if (lobby && Object.keys(lobby.players).length < 10) {
-            lobby.addBot(data.difficulty);
+            lobby.addBot(data.difficulty, null, true, null, data.chassisType);
             io.to(lobby.id).emit('lobby-update', {
                 id: lobby.id,
                 players: Object.values(lobby.players).map(p => ({ username: p.username, team: p.team, id: p.id, chassis: p.chassis }))

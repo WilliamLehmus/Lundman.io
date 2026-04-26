@@ -28,39 +28,45 @@ The core of the game engine lives on the **Node.js server**.
 
 ### 1. Physics Engine (Matter.js)
 - **Rigid Body Dynamics**: Tanks have mass, friction, and inertia.
-- **World Borders**: Static physical boundaries at 4000x4000 pixels.
+- **World Borders**: Dynamic world size scaling (1800px to 4000px) based on player count.
 - **Recoil & Impact**: Every shot applies recoil to the shooter and kinetic impact to the target.
 
-### 2. Elemental Interactions (Alchemy)
+### 2. Procedural World Generation (Biomes)
+Matches feature unique, randomly generated maps based on four biomes:
+- **URBAN**: Dense city grid with buildings and narrow streets.
+- **WASTELAND**: Open terrain with oil pools and high scrap yield.
+- **INDUSTRIAL**: Concrete surfaces with electric hazards and factory blocks.
+- **WETLAND**: Marshland with water pools and reduced movement speed.
+
+### 3. Elemental Interactions (Alchemy)
 The environment is reactive:
 - **Fire**: Melts ICE, ignites OIL, extinguished by WATER.
 - **Water**: Extinguishes FIRE, creates STEAM when hitting FIRE, can be electrified by TESLA.
 - **Steam**: Provides temporary stealth (hides tanks within).
 - **Ice**: Reduces friction significantly, created by FROST_GUN or freezing WATER.
+- **Electric**: Stuns tanks, spreads through WATER pools.
 - **Dirt**: Creates physical barriers (insulators against electricity).
 
-### 3. Arsenal & Modules
-- **Chassis Types**:
-    - **Scout**: High speed, low HP, 2 weapon slots.
-    - **Brawler**: Balanced, 1 high-power slot.
-    - **Artillery**: Slow, low HP, 4 weapon slots.
-- **Weapons**:
-    - **Standard**: Kinetic damage and knockback.
-    - **Flamethrower**: Spawns FIRE elements, persistent damage.
-    - **Tesla Coil**: Stuns targets and electrifies WATER pools.
-    - **Frost Gun**: Slows targets and creates ICE patches.
-    - **Dirt Gun**: Spawns defensive DIRT barricades.
-
-### 4. Progression & Scrap
-- **Scrap Collection**: Destroying buildings or players drops SCRAP elements.
-- **Dynamic Buffs**: Scrap automatically increases your **Damage** and **Reload Speed** (buffs displayed in real-time).
-- **Popups**: Visual "+10 SCRAP" indicators for immediate feedback.
+### 4. Progression & Stats
+- **Scrap Bonus**: Collecting scrap permanently buffs your tank for the duration of the match.
+    - +20% Damage per 100 scrap (Max 2x).
+    - +10% Fire Rate per 100 scrap (Max 1.5x).
+- **Match Stats**: Full breakdown of Kills, Deaths, and Scrap presented at match end.
 
 ### 5. HUD & UI Experience
-- **Adaptive HUD**: The Player 2 stats panel is hidden by default in single-player or online sessions to maximize visibility.
-- **Kill Feed**: Real-time event log in the top-right corner showing localized weapon names (e.g., "Main Gun" instead of "STANDARD").
-- **Minimap**: High-contrast overview showing buildings, world borders, and scrap locations (gold markers).
-- **Spawn Protection**: Visual feedback (shield/glitch effect) for 3 seconds after respawn, indicating invulnerability.
+- **Adaptive HUD**: Player 2 stats panel is hidden in online sessions to maximize visibility.
+- **Kill Feed**: Real-time event log with localized weapon names.
+- **Minimap**: High-contrast overview showing buildings, borders, and scrap (gold markers).
+- **Spawn Protection**: 3 seconds of invulnerability after respawn with visual feedback.
+
+---
+
+## 🛠️ Technical Details
+
+### Lobby & Match Management
+- **Lobby Gate**: The server gates all gameplay logic (movement, shooting, AI) until the host sends the `start-game` signal.
+- **Sync Rate**: Server physics runs at 60Hz, while state is broadcasted at 60Hz for maximum smoothness.
+- **Error Handling**: The physics loop is wrapped in safety buffers to prevent server crashes from isolated lobby errors.
 
 ---
 

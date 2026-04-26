@@ -40,18 +40,7 @@ const lobbyStatus = document.getElementById('lobby-status');
 const addBotBtn = document.getElementById('add-bot-btn');
 const removeBotBtn = document.getElementById('remove-bot-btn');
 const botDifficulty = document.getElementById('bot-difficulty');
-
-if (addBotBtn) {
-    addBotBtn.onclick = () => {
-        socket.emit('add-bot', { difficulty: botDifficulty.value });
-    };
-}
-
-if (removeBotBtn) {
-    removeBotBtn.onclick = () => {
-        socket.emit('remove-bot');
-    };
-}
+// (Bot button handlers moved to bottom for consistency)
 
 const p1HpBar = document.getElementById('p1-hp');
 const p1Scrap = document.getElementById('p1-scrap');
@@ -137,6 +126,12 @@ function playWeaponSound(weaponType, x, y) {
     
     sfx.play();
 }
+
+if (musicSlider) musicSlider.oninput = (e) => {
+    musicVolume = e.target.value;
+    musicTracks.forEach(t => t.volume = musicVolume);
+    localStorage.setItem('tanks_music_vol', musicVolume);
+};
 
 if (sfxSlider) sfxSlider.oninput = (e) => {
     sfxVolume = e.target.value;
@@ -316,6 +311,19 @@ socket.on('game-started', () => {
     gameOverScreen.classList.add('hidden');
     hud.classList.remove('hidden');
     gameActive = true;
+});
+
+socket.on('scrap-buff', ({ text }) => {
+    const me = serverState?.players?.find(p => p.id === myId);
+    if (me) {
+        popups.push({
+            text: text,
+            x: me.x,
+            y: me.y - 40,
+            life: 1.5,
+            color: '#ffff00'
+        });
+    }
 });
 
 socket.on('match-ended', ({ winner, scores, stats }) => {
@@ -1150,7 +1158,18 @@ startGameBtn.onclick = () => {
 
 if (addBotBtn) {
     addBotBtn.onclick = () => {
-        socket.emit('add-bot', { difficulty: botDifficulty ? botDifficulty.value : 'NORMAL' });
+        const difficulty = document.getElementById('bot-difficulty').value;
+        const chassis = document.getElementById('bot-chassis-select').value;
+        socket.emit('add-bot', { 
+            difficulty: difficulty,
+            chassisType: chassis
+        });
+    };
+}
+
+if (removeBotBtn) {
+    removeBotBtn.onclick = () => {
+        socket.emit('remove-bot');
     };
 }
 
