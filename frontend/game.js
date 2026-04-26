@@ -63,6 +63,7 @@ const TANK_SIZE = 45;
 // Audio setup
 const optionsMenu = document.getElementById('options-menu');
 const musicSlider = document.getElementById('music-volume');
+const miniMusicSlider = document.getElementById('mini-music-volume');
 const sfxSlider = document.getElementById('sfx-volume');
 const closeOptionsBtn = document.getElementById('close-options');
 
@@ -103,6 +104,14 @@ function playShot() {
 if (musicSlider) musicSlider.oninput = (e) => {
     musicVolume = e.target.value;
     musicTracks.forEach(t => t.volume = musicVolume);
+    if (miniMusicSlider) miniMusicSlider.value = musicVolume;
+    localStorage.setItem('tanks_music_vol', musicVolume);
+};
+
+if (miniMusicSlider) miniMusicSlider.oninput = (e) => {
+    musicVolume = e.target.value;
+    musicTracks.forEach(t => t.volume = musicVolume);
+    if (musicSlider) musicSlider.value = musicVolume;
     localStorage.setItem('tanks_music_vol', musicVolume);
 };
 
@@ -155,8 +164,9 @@ function init() {
     if (versionEl) versionEl.innerText = `v${versionData.version}`;
     
     // Set initial slider values
-    musicSlider.value = musicVolume;
-    sfxSlider.value = sfxVolume;
+    if (musicSlider) musicSlider.value = musicVolume;
+    if (miniMusicSlider) miniMusicSlider.value = musicVolume;
+    if (sfxSlider) sfxSlider.value = sfxVolume;
     
     // Load username from local storage
     const savedName = localStorage.getItem('tanks_username');

@@ -56,7 +56,8 @@ export const WEAPON_MODULES = {
         speed: 14,
         radius: 5,
         impact: 0.01,
-        recoil: 0.006
+        recoil: 0.006,
+        ttl: 1500
     },
     FLAMETHROWER: {
         name: 'Flamethrower',
@@ -67,7 +68,8 @@ export const WEAPON_MODULES = {
         radius: 12,
         impact: 0.001,
         recoil: 0.001,
-        duration: 3000 
+        duration: 3000,
+        ttl: 350
     },
     WATER_CANNON: {
         name: 'Water Cannon',
@@ -77,7 +79,8 @@ export const WEAPON_MODULES = {
         speed: 10,
         radius: 15,
         impact: 0.02,
-        recoil: 0.004
+        recoil: 0.004,
+        ttl: 800
     },
     DIRT_GUN: {
         name: 'Dirt Gun',
@@ -87,7 +90,8 @@ export const WEAPON_MODULES = {
         speed: 6,
         radius: 20,
         impact: 0,
-        hp: 50
+        hp: 50,
+        ttl: 1000
     },
     TESLA: {
         name: 'Tesla Coil',
@@ -97,7 +101,8 @@ export const WEAPON_MODULES = {
         speed: 20,
         radius: 5,
         impact: 0,
-        stunDuration: 1500
+        stunDuration: 1500,
+        ttl: 1000
     },
     FROST_GUN: {
         name: 'Frost Gun',
@@ -107,6 +112,7 @@ export const WEAPON_MODULES = {
         speed: 12,
         radius: 8,
         impact: 0.005,
-        recoil: 0.002
+        recoil: 0.002,
+        ttl: 1200
     }
 };

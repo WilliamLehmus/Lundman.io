@@ -73,10 +73,10 @@ class Lobby {
         
         const wallThickness = 100;
         const walls = [
-            Bodies.rectangle(WORLD_SIZE/2, -wallThickness/2, WORLD_SIZE, wallThickness, { isStatic: true }),
-            Bodies.rectangle(WORLD_SIZE/2, WORLD_SIZE + wallThickness/2, WORLD_SIZE, wallThickness, { isStatic: true }),
-            Bodies.rectangle(-wallThickness/2, WORLD_SIZE/2, wallThickness, WORLD_SIZE, { isStatic: true }),
-            Bodies.rectangle(WORLD_SIZE + wallThickness/2, WORLD_SIZE/2, wallThickness, WORLD_SIZE, { isStatic: true })
+            Bodies.rectangle(WORLD_SIZE/2, -wallThickness/2, WORLD_SIZE, wallThickness, { isStatic: true, label: 'wall' }),
+            Bodies.rectangle(WORLD_SIZE/2, WORLD_SIZE + wallThickness/2, WORLD_SIZE, wallThickness, { isStatic: true, label: 'wall' }),
+            Bodies.rectangle(-wallThickness/2, WORLD_SIZE/2, wallThickness, WORLD_SIZE, { isStatic: true, label: 'wall' }),
+            Bodies.rectangle(WORLD_SIZE + wallThickness/2, WORLD_SIZE/2, wallThickness, WORLD_SIZE, { isStatic: true, label: 'wall' })
         ];
         Composite.add(this.engine.world, walls);
 
@@ -230,6 +230,10 @@ class Lobby {
                 this.destroyBullet(bullet.id);
             }
         }
+        
+        if (target.label === 'wall') {
+            this.destroyBullet(bullet.id);
+        }
     }
 
     processElementInteraction(bodyA, bodyB) {
@@ -330,6 +334,13 @@ class Lobby {
                 this.destroyElement(id);
             }
         });
+        
+        Object.keys(this.bullets).forEach(id => {
+            const b = this.bullets[id];
+            if (b.customData.expiresAt && now > b.customData.expiresAt) {
+                this.destroyBullet(id);
+            }
+        });
     }
 
     respawn(player) {
@@ -416,7 +427,8 @@ class Lobby {
             ownerId: p.id, 
             damage: weapon.damage, 
             impact: weapon.impact,
-            type: weapon.type 
+            type: weapon.type,
+            expiresAt: Date.now() + (weapon.ttl || 2000)
         };
         Body.setVelocity(bullet, {
             x: Math.cos(p.body.angle) * weapon.speed,
