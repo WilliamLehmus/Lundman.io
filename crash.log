@@ -1,5 +1,11 @@
-Error: listen EADDRINUSE: address already in use 0.0.0.0:3000
-    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
-    at listenInCluster (node:net:2065:12)
-    at node:net:2274:7
-    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+ReferenceError: now is not defined
+    at Lobby.addBot (file:///C:/Users/lundm/Desktop/TANK/Lundman.io/backend/server.js:205:29)
+    at Lobby.removePlayer (file:///C:/Users/lundm/Desktop/TANK/Lundman.io/backend/server.js:219:22)
+    at Socket.<anonymous> (file:///C:/Users/lundm/Desktop/TANK/Lundman.io/backend/server.js:1038:19)
+    at Socket.emit (node:events:509:28)
+    at Socket.emitReserved (C:\Users\lundm\Desktop\TANK\Lundman.io\node_modules\socket.io\dist\typed-events.js:56:22)
+    at Socket._onclose (C:\Users\lundm\Desktop\TANK\Lundman.io\node_modules\socket.io\dist\socket.js:554:14)
+    at Client.onclose (C:\Users\lundm\Desktop\TANK\Lundman.io\node_modules\socket.io\dist\client.js:253:20)
+    at Socket.emit (node:events:521:24)
+    at Socket.onClose (C:\Users\lundm\Desktop\TANK\Lundman.io\node_modules\engine.io\build\socket.js:320:18)
+    at Object.onceWrapper (node:events:630:28)

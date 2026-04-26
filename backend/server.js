@@ -68,24 +68,17 @@ class Lobby {
         this.zones = [];
         this.lastBulletId = 0;
         this.lastElementId = 0;
-        
+            
         this.matchTimer = 300;
         this.scoreCap = 20;
         this.scores = { blue: 0, pink: 0 };
         this.gameOver = false;
         this.lastTimeTick = Date.now();
+        this.worldSize = 2500; // Default until match starts
+        this.walls = [];
 
-        this.generateMap();
+        this.setupWorld(2); // Initial small lobby map
         
-        const wallThickness = 100;
-        const walls = [
-            Bodies.rectangle(WORLD_SIZE/2, -wallThickness/2, WORLD_SIZE, wallThickness, { isStatic: true, label: 'wall' }),
-            Bodies.rectangle(WORLD_SIZE/2, WORLD_SIZE + wallThickness/2, WORLD_SIZE, wallThickness, { isStatic: true, label: 'wall' }),
-            Bodies.rectangle(-wallThickness/2, WORLD_SIZE/2, wallThickness, WORLD_SIZE, { isStatic: true, label: 'wall' }),
-            Bodies.rectangle(WORLD_SIZE + wallThickness/2, WORLD_SIZE/2, wallThickness, WORLD_SIZE, { isStatic: true, label: 'wall' })
-        ];
-        Composite.add(this.engine.world, walls);
-
         this.handleCollisions();
         this.physicsInterval = setInterval(() => {
             this.update();
@@ -98,6 +91,53 @@ class Lobby {
         }, 1000 / 60); // 60Hz sync
     }
 
+    setupWorld(playerCount) {
+        // Clear existing
+        Object.values(this.elements).forEach(e => Composite.remove(this.engine.world, e.body));
+        this.elements = {};
+        this.zones = [];
+        this.walls.forEach(w => Composite.remove(this.engine.world, w));
+        this.walls = [];
+
+        // Calculate size
+        if (playerCount <= 2) this.worldSize = 1800;
+        else if (playerCount <= 4) this.worldSize = 2400;
+        else if (playerCount <= 6) this.worldSize = 3000;
+        else if (playerCount <= 8) this.worldSize = 3500;
+        else this.worldSize = 4000;
+
+        // Walls
+        const wallThickness = 100;
+        const walls = [
+            Bodies.rectangle(this.worldSize/2, -wallThickness/2, this.worldSize, wallThickness, { isStatic: true, label: 'wall' }),
+            Bodies.rectangle(this.worldSize/2, this.worldSize + wallThickness/2, this.worldSize, wallThickness, { isStatic: true, label: 'wall' }),
+            Bodies.rectangle(-wallThickness/2, this.worldSize/2, wallThickness, this.worldSize, { isStatic: true, label: 'wall' }),
+            Bodies.rectangle(this.worldSize + wallThickness/2, this.worldSize/2, wallThickness, this.worldSize, { isStatic: true, label: 'wall' })
+        ];
+        this.walls = walls;
+        Composite.add(this.engine.world, walls);
+
+        this.generateMap();
+    }
+
+    getRandomSpawn(team) {
+        let pos;
+        let attempts = 0;
+        const xBase = team === 'blue' ? 300 : this.worldSize - 300;
+        
+        while (attempts < 10) {
+            pos = {
+                x: xBase + (Math.random() - 0.5) * 400,
+                y: (this.worldSize / 2) + (Math.random() - 0.5) * (this.worldSize * 0.6)
+            };
+            
+            const bodies = Query.point(Object.values(this.elements).map(e => e.body), pos);
+            if (bodies.length === 0) break;
+            attempts++;
+        }
+        return pos;
+    }
+
     addPlayer(socket, username, chassisType = 'SCOUT') {
         const team = Object.values(this.players).filter(p => p.team === 'blue').length <= 
                      Object.values(this.players).filter(p => p.team === 'pink').length ? 'blue' : 'pink';
@@ -108,7 +148,7 @@ class Lobby {
             this.removePlayer(botOnTeam.id);
         }
 
-        const startPos = team === 'blue' ? { x: 400, y: WORLD_SIZE/2 } : { x: WORLD_SIZE - 400, y: WORLD_SIZE/2 };
+        const startPos = this.getRandomSpawn(team);
         const config = CHASSIS[chassisType];
         
         const body = Bodies.rectangle(startPos.x, startPos.y, TANK_SIZE, TANK_SIZE, {
@@ -144,12 +184,7 @@ class Lobby {
         const chassisType = 'SCOUT'; 
         const team = forcedTeam || (Object.keys(this.players).length % 2 === 0 ? 'blue' : 'pink');
         
-        let startPos;
-        if (pos) {
-            startPos = pos;
-        } else {
-            startPos = team === 'blue' ? { x: 400, y: WORLD_SIZE/2 } : { x: WORLD_SIZE - 400, y: WORLD_SIZE/2 };
-        }
+        const startPos = this.getRandomSpawn(team);
         
         const config = CHASSIS[chassisType];
         
@@ -182,7 +217,14 @@ class Lobby {
             nextWeaponSwap: 0,
             stuckTicks: 0,
             evadeUntil: 0,
-            evadeDir: 1
+            evadeDir: 1,
+            targetOffset: {
+                x: (Math.random() - 0.5) * 150,
+                y: (Math.random() - 0.5) * 150
+            },
+            role: Math.random() > 0.6 ? 'FLANKER' : 'ASSAULT',
+            strafeDir: Math.random() > 0.5 ? 1 : -1,
+            lastRoleSwitch: Date.now()
         };
     }
 
@@ -202,19 +244,18 @@ class Lobby {
     }
 
     generateMap() {
-        const size = WORLD_SIZE / 2;
-        this.zones.push({ x: 0, y: 0, w: size, h: size, type: 'URBAN' });
-        this.zones.push({ x: size, y: 0, w: size, h: size, type: 'ICE' });
-        this.zones.push({ x: 0, y: size, w: size, h: size, type: 'SWAMP' });
-        this.zones.push({ x: size, y: size, w: size, h: size, type: 'DESERT' });
+        // Whole map is now Urban
+        this.zones.push({ x: 0, y: 0, w: this.worldSize, h: this.worldSize, type: 'URBAN' });
 
-        for (let i = 0; i < 40; i++) {
+        // Spread buildings based on world size
+        const buildingCount = Math.floor((this.worldSize / 4000) * 160);
+        for (let i = 0; i < buildingCount; i++) {
             const pos = {
-                x: Math.random() * (size - 100) + 50,
-                y: Math.random() * (size - 100) + 50
+                x: 600 + Math.random() * (this.worldSize - 1200),
+                y: 100 + Math.random() * (this.worldSize - 200)
             };
-            const w = 60 + Math.random() * 100;
-            const h = 60 + Math.random() * 100;
+            const w = 70 + Math.random() * 160;
+            const h = 70 + Math.random() * 160;
             this.spawnBuilding(pos, w, h);
         }
     }
@@ -448,7 +489,7 @@ class Lobby {
         }
         player.hp = CHASSIS[player.chassis].hp;
         player.scrap = Math.floor(player.scrap / 2);
-        const pos = player.team === 'blue' ? { x: 400, y: WORLD_SIZE/2 } : { x: WORLD_SIZE - 400, y: WORLD_SIZE/2 };
+        const pos = this.getRandomSpawn(player.team);
         Body.setPosition(player.body, pos);
         Body.setVelocity(player.body, { x: 0, y: 0 });
     }
@@ -521,6 +562,8 @@ class Lobby {
                 bot.inputs = { up: false, down: false, left: false, right: false, shoot: false };
                 return;
             }
+            let avoidX = 0;
+            let avoidY = 0;
             let closestEnemy = null;
             let minDist = Infinity;
             Object.values(this.players).filter(p => p.team !== bot.team && p.hp > 0).forEach(enemy => {
@@ -553,9 +596,27 @@ class Lobby {
                 // Break out of local minima: ignore the player and just drive forward to escape the trap
                 targetAngle = bot.body.angle; 
             } else {
-                const dx = targetPos.x - bot.body.position.x;
-                const dy = targetPos.y - bot.body.position.y;
-                targetAngle = Math.atan2(dy, dx);
+                let tx = targetPos.x + bot.targetOffset.x;
+                let ty = targetPos.y + bot.targetOffset.y;
+
+                // 3. Tactical Flanking
+                if (bot.role === 'FLANKER') {
+                    const distToPlayer = Vector.magnitude(Vector.sub(targetPos, bot.body.position));
+                    if (distToPlayer > 500) {
+                        // Aim for a point to the side of the player
+                        const angleToPlayer = Math.atan2(ty - bot.body.position.y, tx - bot.body.position.x);
+                        const flankAngle = angleToPlayer + (Math.PI / 2.5) * bot.strafeDir;
+                        tx = bot.body.position.x + Math.cos(flankAngle) * 600;
+                        ty = bot.body.position.y + Math.sin(flankAngle) * 600;
+                    }
+                }
+
+                targetAngle = Math.atan2(ty - bot.body.position.y, tx - bot.body.position.x);
+
+                // 4. Strafing (Sideways movement while engaging)
+                const strafeAngle = targetAngle + (Math.PI / 2) * bot.strafeDir;
+                avoidX += Math.cos(strafeAngle) * 1.5;
+                avoidY += Math.sin(strafeAngle) * 1.5;
             }
 
             // --- Stuck Detection (Fallback) ---
@@ -583,7 +644,22 @@ class Lobby {
             }
             // ---------------------------------
 
-            // --- Potential Field Obstacle Avoidance ---
+            // 1. Separation Force (Don't clump up)
+            Object.values(this.players).forEach(other => {
+                if (other.id === bot.id) return;
+                const dx = bot.body.position.x - other.body.position.x;
+                const dy = bot.body.position.y - other.body.position.y;
+                const distSq = dx*dx + dy*dy;
+                const minClearance = 250; // Increased clearance
+                if (distSq < minClearance * minClearance) {
+                    const dist = Math.sqrt(distSq) || 1;
+                    const force = (minClearance - dist) / minClearance;
+                    avoidX += (dx / dist) * force * 10.0; // Stronger push
+                    avoidY += (dy / dist) * force * 10.0;
+                }
+            });
+
+            // 2. Obstacle Avoidance (Whiskers)
             const lookAhead = 120; // Shortened slightly to avoid triggering on distant corners
             const obstacles = Composite.allBodies(this.engine.world).filter(b => 
                 b !== bot.body && !b.isSensor && b.label !== 'bullet' && !b.label.startsWith('tank-')
@@ -592,8 +668,6 @@ class Lobby {
             // Narrower spread (-23, -11, 0, 11, 23 degrees) so it matches the tank's actual physical width
             // This allows it to "thread the needle" through gaps without being repulsed by the edges.
             const angles = [-0.4, -0.2, 0, 0.2, 0.4];
-            let avoidX = 0;
-            let avoidY = 0;
             let hitCount = 0;
 
             for (const offset of angles) {
@@ -729,7 +803,7 @@ class Lobby {
 
     broadcastState() {
         const state = {
-            worldSize: WORLD_SIZE,
+            worldSize: this.worldSize,
             timer: this.matchTimer,
             scores: this.scores,
             gameOver: this.gameOver,
@@ -760,8 +834,8 @@ class Lobby {
         };
         io.to(this.id).emit('state', state);
         Object.values(this.bullets).forEach(b => {
-            if (b.position.x < -100 || b.position.x > WORLD_SIZE + 100 || 
-                b.position.y < -100 || b.position.y > WORLD_SIZE + 100) {
+            if (b.position.x < -100 || b.position.x > this.worldSize + 100 || 
+                b.position.y < -100 || b.position.y > this.worldSize + 100) {
                 this.destroyBullet(b.id);
             }
         });
@@ -778,6 +852,27 @@ class Lobby {
             case MATERIALS.ICE: return '#aaddff';
             default: return '#ffffff';
         }
+    }
+
+    startGame() {
+        if (this.active) return;
+        
+        const playerCount = Object.keys(this.players).length;
+        this.setupWorld(playerCount);
+
+        this.active = true;
+        this.matchTimer = 300;
+        this.scores = { blue: 0, pink: 0 };
+        this.gameOver = false;
+        this.lastTimeTick = Date.now();
+        
+        Object.values(this.players).forEach(p => {
+            p.hp = p.maxHp;
+            p.scrap = 0;
+            const spawn = this.getRandomSpawn(p.team);
+            Body.setPosition(p.body, spawn);
+            Body.setVelocity(p.body, { x: 0, y: 0 });
+        });
     }
 
     checkMatchEnd() {
@@ -922,7 +1017,7 @@ io.on('connection', (socket) => {
     socket.on('start-game', () => {
         const lobby = lobbies[socket.lobbyId];
         if (lobby && Object.keys(lobby.players).length >= MIN_PLAYERS) {
-            lobby.active = true;
+            lobby.startGame();
             io.to(lobby.id).emit('game-started');
         }
     });
