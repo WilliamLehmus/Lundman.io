@@ -72,17 +72,26 @@ The environment is reactive:
 The game features a server-side AI system that scales with player count:
 - **Replacement Logic**: Bots automatically fill empty slots in lobbies to maintain a 5v5 balance. When a human player joins, a bot is removed.
 - **Behavior States**:
-    - **Combat**: Bots prioritize the closest enemy, leading shots based on target velocity (Difficulty-dependent).
-    - **Scavenging**: If no enemies are in range, bots hunt for SCRAP to gain buffs.
-    - **Avoidance**: Bots use multi-directional raycasting to avoid walls, buildings, and other tanks.
-    - **Stealth Awareness**: Bots cannot target players who are hidden (e.g., inside STEAM clouds).
+### 6. Environmental Physics & Alchemy
+- **Alchemy Matrix**:
+    - **Fire + Water**: Evaporates into `STEAM` (Small puddles only).
+    - **Fire + Oil**: Large Oil puddles ignite into massive `FIRE` zones.
+    - **Ice + Water**: Freezes into `ICE` for 5 seconds, then melts back to water.
+    - **Electric + Water**: Electrifies the puddle for 2 seconds. Reverts to water after stunning one target or timeout.
+- **Electric Puddles**:
+    - **Small**: Single-use stun (2s), then disappears/reverts.
+    - **Large**: Permanent. Stuns (2s), provides a 5s grace period, then re-stuns if still inside.
 
----
+### 7. Status Effects
+- **⚡ STUNNED**: Cannot move or shoot (Electric/Tesla).
+- **❄️ SLOWED**: 50% Speed reduction, 40% Turn speed reduction (Ice).
+- **🔥 BURNING**: Constant minor HP loss for 0.5s (Fire/Flamethrower).
+- **💧 WET**: Lasts 4s. Being hit by Tesla while wet triggers the 2.5s "Electrified" stun.
 
-## 🛠️ Technical Details
-
-### Lobby & Match Management
-- **Lobby Gate**: The server gates all gameplay logic (movement, shooting, AI) until the host sends the `start-game` signal.
+### 8. AI Bot Behavior
+- **Hazard Avoidance**: Bots now intelligently avoid `FIRE` and `ELECTRIC` puddles using their raycasting system.
+- **Leading Shots**: Hard bots lead their targets based on velocity and distance.
+- **Combat Logic**: Bots prioritize enemies over scrap, and teammates are ignored (no friendly fire).
 - **Sync Rate**: Server physics runs at 60Hz, while state is broadcasted at 60Hz for maximum smoothness.
 - **Error Handling**: The physics loop is wrapped in safety buffers to prevent server crashes from isolated lobby errors.
 

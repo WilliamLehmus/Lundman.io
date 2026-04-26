@@ -492,8 +492,11 @@ class Lobby {
 
                 if (isFireVSOil) {
                     const pos = { x: element.body.position.x, y: element.body.position.y };
+                    const ew = element.w;
+                    const eh = element.h;
                     this.destroyElement(element.id);
-                    this.spawnElement(pos, MATERIALS.FIRE, 5000, 100, bulletData.ownerId);
+                    // Spawn fire with the SAME size as the oil puddle
+                    this.spawnElement(pos, MATERIALS.FIRE, 5000, 100, bulletData.ownerId, ew, eh);
                     this.destroyBullet(bullet.id);
                     return;
                 }
@@ -942,9 +945,20 @@ class Lobby {
             }
 
             const lookAhead = 250;
-            const obstacles = Composite.allBodies(this.engine.world).filter(b => 
-                b !== bot.body && !b.isSensor && b.label !== 'bullet' && !b.label.startsWith('tank-')
-            );
+            const obstacles = Composite.allBodies(this.engine.world).filter(b => {
+                if (b === bot.body || b.label === 'bullet' || b.label.startsWith('tank-')) return false;
+                
+                // Always avoid solid objects (Buildings, Walls)
+                if (!b.isSensor) return true;
+                
+                // Avoid dangerous sensors (Fire, Electric Puddles)
+                if (b.label === 'element') {
+                    const e = this.elements[b.elementId];
+                    if (e && (e.type === MATERIALS.FIRE || e.type === MATERIALS.ELECTRIC)) return true;
+                }
+                
+                return false;
+            });
             
             const angles = [-0.6, -0.3, 0, 0.3, 0.6];
             let hitCount = 0;

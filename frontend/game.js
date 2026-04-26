@@ -640,6 +640,12 @@ function drawTank(p) {
     ctx.save();
     if (p.hidden && p.id === myId) ctx.globalAlpha = 0.5;
     
+    // Burning Glow Effect
+    if (p.burning) {
+        ctx.shadowBlur = 15 + Math.sin(Date.now() * 0.01) * 5;
+        ctx.shadowColor = '#ff4400';
+    }
+
     ctx.translate(p.x, p.y);
     ctx.save();
     ctx.rotate(p.angle);
