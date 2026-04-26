@@ -469,14 +469,22 @@ class Lobby {
                 }
 
                 if (isFireVSWater) {
-                    this.spawnElement(bullet.position, MATERIALS.STEAM, 4000);
-                    this.destroyElement(element.id);
+                    // Only small water puddles (w < 150) can become steam
+                    if (element.w < 150) {
+                        this.spawnElement(bullet.position, MATERIALS.STEAM, 4000);
+                        this.destroyElement(element.id);
+                    } else {
+                        // Large puddles just create a puff of steam but stay water
+                        this.spawnElement(bullet.position, MATERIALS.STEAM, 1500);
+                    }
                     this.destroyBullet(bullet.id);
                     return;
                 }
 
                 if (isIceVSWater) {
                     element.type = MATERIALS.ICE;
+                    element.originalType = MATERIALS.WATER;
+                    element.expiresAt = Date.now() + 5000; // Frozen for 5 seconds
                     this.destroyBullet(bullet.id);
                     return;
                 }
@@ -626,7 +634,14 @@ class Lobby {
         Object.keys(this.elements).forEach(id => {
             const e = this.elements[id];
             if (e.expiresAt && now > e.expiresAt) {
-                this.destroyElement(id);
+                if (e.originalType) {
+                    // Revert to original state instead of destroying
+                    e.type = e.originalType;
+                    e.originalType = null;
+                    e.expiresAt = null; 
+                } else {
+                    this.destroyElement(id);
+                }
             }
         });
         
