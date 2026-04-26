@@ -11,7 +11,8 @@
     "install:frontend": "cd frontend && npm install",
     "build:frontend": "cd frontend && npm run build",
     "build": "npm run install:frontend && npm run build:frontend",
-    "postinstall": "npm run build"
+    "postinstall": "npm run build",
+    "setup-hooks": "node scripts/install-hooks.js"
   },
   "dependencies": {
     "dotenv": "^16.6.1",

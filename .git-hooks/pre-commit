@@ -1,0 +1,9 @@
+#!/bin/sh
+# Navigate to the root directory
+cd "$(dirname "$0")/../../"
+
+# Run the Node script to sync the version based on commit count
+node scripts/bump-version.js
+
+# Add the modified version file to the current commit
+git add frontend/version.json
