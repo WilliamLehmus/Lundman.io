@@ -80,9 +80,9 @@ class Lobby {
         ];
         Composite.add(this.engine.world, walls);
 
+        this.handleCollisions();
         this.physicsInterval = setInterval(() => {
             Engine.update(this.engine, 1000 / TICK_RATE);
-            this.handleCollisions();
             this.cleanupElements();
         }, 1000 / TICK_RATE);
 
@@ -119,6 +119,44 @@ class Lobby {
             scrap: 0,
             statusEffects: { stun: 0, slip: 0 },
             inputs: { up: false, down: false, left: false, right: false, shoot: false }
+        };
+    }
+
+    addBot(difficulty = 'NORMAL') {
+        const id = 'bot-' + Math.random().toString(36).substr(2, 6);
+        const botNumber = Object.values(this.players).filter(p => p.isBot).length + 1;
+        const username = `BOT_MK${botNumber}_${difficulty}`;
+        const chassisType = 'SCOUT'; // Default chassis
+        const team = Object.keys(this.players).length % 2 === 0 ? 'blue' : 'pink';
+        const startPos = team === 'blue' ? { x: 400, y: WORLD_SIZE/2 } : { x: WORLD_SIZE - 400, y: WORLD_SIZE/2 };
+        const config = CHASSIS[chassisType];
+        
+        const body = Bodies.rectangle(startPos.x, startPos.y, TANK_SIZE, TANK_SIZE, {
+            frictionAir: config.speed > 0.005 ? 0.1 : 0.2,
+            mass: config.mass,
+            label: `tank-${id}`
+        });
+        
+        if (team === 'pink') Body.setAngle(body, Math.PI);
+        Composite.add(this.engine.world, body);
+
+        this.players[id] = {
+            id,
+            username,
+            team,
+            chassis: chassisType,
+            hp: config.hp,
+            maxHp: config.hp,
+            body,
+            slots: ['STANDARD', 'FLAMETHROWER', 'WATER_CANNON', 'TESLA', 'FROST_GUN', 'DIRT_GUN'],
+            currentSlot: 0,
+            lastShot: 0,
+            scrap: 0,
+            statusEffects: { stun: 0, slip: 0 },
+            inputs: { up: false, down: false, left: false, right: false, shoot: false },
+            isBot: true,
+            botDifficulty: difficulty,
+            nextWeaponSwap: 0
         };
     }
 
@@ -244,7 +282,7 @@ class Lobby {
 
         if ((elementA?.type === MATERIALS.OIL && bullet?.customData.type === MATERIALS.FIRE) ||
             (elementB?.type === MATERIALS.OIL && bullet?.customData.type === MATERIALS.FIRE)) {
-            this.spawnElement(pos, MATERIALS.FIRE, 3000);
+            this.spawnElement(pos, MATERIALS.FIRE, 3000, undefined, bullet?.customData.ownerId);
             if (elementA?.type === MATERIALS.OIL) this.destroyElement(elementA.id);
             if (elementB?.type === MATERIALS.OIL) this.destroyElement(elementB.id);
         }
@@ -277,17 +315,18 @@ class Lobby {
             if (p) {
                 if (element.type === MATERIALS.ELECTRIC) p.statusEffects.stun = Date.now() + 500;
                 if (element.type === MATERIALS.ICE) p.statusEffects.slip = Date.now() + 1000;
-                if (element.type === MATERIALS.FIRE) p.hp -= 0.5;
+                if (element.type === MATERIALS.FIRE && element.ownerId !== p.id) p.hp -= 0.5;
                 if (element.type === MATERIALS.STEAM) p.hidden = true;
                 if (element.type === MATERIALS.SCRAP) {
                     p.scrap += 10;
                     this.destroyElement(element.id);
                 }
+                if (p.hp <= 0) this.respawn(p);
             }
         }
     }
 
-    spawnElement(pos, type, duration, hp) {
+    spawnElement(pos, type, duration, hp, ownerId = null) {
         const id = ++this.lastElementId;
         const radius = type === MATERIALS.SCRAP ? 10 : 
                       (type === MATERIALS.OIL || type === MATERIALS.FIRE) ? 20 : 
@@ -305,6 +344,7 @@ class Lobby {
             body,
             type,
             hp,
+            ownerId,
             expiresAt: duration ? Date.now() + duration : null
         };
         Composite.add(this.engine.world, body);
@@ -359,6 +399,7 @@ class Lobby {
 
     update() {
         const now = Date.now();
+        this.processBots(now);
         Object.values(this.players).forEach(p => {
             const { inputs, body, chassis, statusEffects } = p;
             const config = CHASSIS[chassis];
@@ -409,6 +450,94 @@ class Lobby {
         }
     }
 
+    processBots(now) {
+        Object.values(this.players).filter(p => p.isBot && p.hp > 0).forEach(bot => {
+            let closestEnemy = null;
+            let minDist = Infinity;
+            Object.values(this.players).filter(p => p.team !== bot.team && p.hp > 0).forEach(enemy => {
+                const dist = Vector.magnitude(Vector.sub(enemy.body.position, bot.body.position));
+                if (dist < minDist) {
+                    minDist = dist;
+                    closestEnemy = enemy;
+                }
+            });
+
+            if (!closestEnemy) {
+                bot.inputs = { up: false, down: false, left: false, right: false, shoot: false };
+                return;
+            }
+
+            let targetPos = closestEnemy.body.position;
+
+            // HARD: Target Leading
+            if (bot.botDifficulty === 'HARD') {
+                const weapon = WEAPON_MODULES[bot.slots[bot.currentSlot]];
+                const timeToTarget = minDist / (weapon.speed || 10);
+                targetPos = {
+                    x: targetPos.x + closestEnemy.body.velocity.x * timeToTarget,
+                    y: targetPos.y + closestEnemy.body.velocity.y * timeToTarget
+                };
+            }
+
+            const dx = targetPos.x - bot.body.position.x;
+            const dy = targetPos.y - bot.body.position.y;
+            let targetAngle = Math.atan2(dy, dx);
+
+            // EASY: Aim Error
+            if (bot.botDifficulty === 'EASY') {
+                const error = Math.sin(now / 500 + bot.body.id) * 0.5;
+                targetAngle += error;
+            }
+
+            let angleDiff = targetAngle - bot.body.angle;
+            if (!Number.isFinite(angleDiff)) angleDiff = 0;
+            angleDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff));
+
+            const turnThreshold = bot.botDifficulty === 'HARD' ? 0.05 : 0.1;
+
+            if (angleDiff > turnThreshold) {
+                bot.inputs.right = true; bot.inputs.left = false;
+            } else if (angleDiff < -turnThreshold) {
+                bot.inputs.left = true; bot.inputs.right = false;
+            } else {
+                bot.inputs.left = false; bot.inputs.right = false;
+            }
+
+            const currentWeapon = WEAPON_MODULES[bot.slots[bot.currentSlot]];
+            const idealRange = currentWeapon.type === MATERIALS.FIRE ? 150 : 400;
+
+            if (minDist > idealRange) {
+                bot.inputs.up = true; bot.inputs.down = false;
+            } else if (minDist < idealRange * 0.5 && bot.botDifficulty !== 'EASY') {
+                bot.inputs.down = true; bot.inputs.up = false;
+            } else {
+                bot.inputs.up = false; bot.inputs.down = false;
+            }
+
+            const aimTolerance = bot.botDifficulty === 'HARD' ? 0.1 : (bot.botDifficulty === 'NORMAL' ? 0.3 : 0.5);
+            if (Math.abs(angleDiff) < aimTolerance && minDist < idealRange * 1.5) {
+                bot.inputs.shoot = bot.botDifficulty === 'EASY' ? Math.random() > 0.5 : true;
+            } else {
+                bot.inputs.shoot = false;
+            }
+
+            if (now > bot.nextWeaponSwap) {
+                if (bot.botDifficulty === 'NORMAL' && Math.random() > 0.5) {
+                    bot.currentSlot = Math.floor(Math.random() * bot.slots.length);
+                } else if (bot.botDifficulty === 'HARD') {
+                    if (minDist < 200) {
+                        bot.currentSlot = Math.max(0, bot.slots.indexOf('FLAMETHROWER'));
+                    } else if (minDist > 500) {
+                        bot.currentSlot = Math.max(0, bot.slots.indexOf('STANDARD'));
+                    } else {
+                        bot.currentSlot = Math.floor(Math.random() * bot.slots.length);
+                    }
+                }
+                bot.nextWeaponSwap = now + 3000 + Math.random() * 2000;
+            }
+        });
+    }
+
     fire(p, weapon) {
         const id = ++this.lastBulletId;
         const fireDist = weapon.type === MATERIALS.DIRT ? 80 : 45;
@@ -449,7 +578,7 @@ class Lobby {
             this.spawnElement(pos, MATERIALS.DIRT, 10000, weapon.hp);
         }
         if (weapon.type === MATERIALS.FIRE) {
-            this.spawnElement(pos, MATERIALS.FIRE, 2000);
+            this.spawnElement(pos, MATERIALS.FIRE, 2000, undefined, p.id);
         }
     }
 
@@ -557,6 +686,17 @@ io.on('connection', (socket) => {
         });
     });
 
+    socket.on('add-bot', (data) => {
+        const lobby = lobbies[socket.lobbyId];
+        if (lobby && Object.keys(lobby.players).length < 10) {
+            lobby.addBot(data.difficulty);
+            io.to(lobby.id).emit('lobby-update', {
+                id: lobby.id,
+                players: Object.values(lobby.players).map(p => ({ username: p.username, team: p.team, id: p.id, chassis: p.chassis }))
+            });
+        }
+    });
+
     socket.on('input', (inputs) => {
         const lobby = lobbies[socket.lobbyId];
         if (lobby && lobby.players[socket.id]) lobby.players[socket.id].inputs = inputs;
@@ -582,7 +722,7 @@ io.on('connection', (socket) => {
         const lobby = lobbies[socket.lobbyId];
         if (lobby) {
             lobby.removePlayer(socket.id);
-            if (Object.keys(lobby.players).length === 0) {
+            if (Object.values(lobby.players).filter(p => !p.isBot).length === 0) {
                 lobby.destroy();
                 delete lobbies[socket.lobbyId];
             } else {
@@ -595,4 +735,5 @@ io.on('connection', (socket) => {
     });
 });
 
+process.on('uncaughtException', e => fs.writeFileSync('crash.log', e.stack));
 server.listen(PORT, '0.0.0.0', () => console.log(`Server on ${PORT}`));

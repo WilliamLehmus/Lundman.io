@@ -36,6 +36,9 @@ const pinkTeamList = document.getElementById('pink-team-list');
 const lobbyIdSpan = document.getElementById('lobby-id');
 const lobbyStatus = document.getElementById('lobby-status');
 
+const addBotBtn = document.getElementById('add-bot-btn');
+const botDifficulty = document.getElementById('bot-difficulty');
+
 const p1HpBar = document.getElementById('p1-hp');
 const p1Scrap = document.getElementById('p1-scrap');
 const p2HpBar = document.getElementById('p2-hp');
@@ -783,5 +786,10 @@ startGameBtn.onclick = () => {
     socket.emit('start-game');
 };
 
+if (addBotBtn) {
+    addBotBtn.onclick = () => {
+        socket.emit('add-bot', { difficulty: botDifficulty ? botDifficulty.value : 'NORMAL' });
+    };
+}
 
 init();
