@@ -727,7 +727,7 @@ class Lobby {
             let avoidY = 0;
             let closestEnemy = null;
             let minDist = Infinity;
-            Object.values(this.players).filter(p => p.team !== bot.team && p.hp > 0 && (!p.invulnerableUntil || now > p.invulnerableUntil)).forEach(enemy => {
+            Object.values(this.players).filter(p => p.team !== bot.team && p.hp > 0 && !p.hidden && (!p.invulnerableUntil || now > p.invulnerableUntil)).forEach(enemy => {
                 const dist = Vector.magnitude(Vector.sub(enemy.body.position, bot.body.position));
                 if (dist < minDist) {
                     minDist = dist;

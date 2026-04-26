@@ -672,3 +672,104 @@ input[type="range"]::-webkit-slider-thumb {
     color: rgba(255, 255, 255, 0.4);
     margin-top: 5px;
 }
+
+/* Mobile Controls */
+#mobile-controls {
+    position: fixed;
+    bottom: 40px;
+    left: 40px;
+    right: 40px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    pointer-events: auto;
+    z-index: 1000;
+}
+
+#joystick-container {
+    width: 150px;
+    height: 150px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    touch-action: none;
+}
+
+#joystick-handle {
+    width: 60px;
+    height: 60px;
+    background: var(--p1-color);
+    border-radius: 50%;
+    box-shadow: 0 0 20px var(--p1-color);
+    transition: transform 0.1s ease-out;
+}
+
+.mobile-btns {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+#mobile-fire-btn {
+    width: 100px;
+    height: 100px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid var(--p1-color);
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: 700;
+    color: var(--p1-color);
+    box-shadow: 0 0 20px rgba(0, 242, 255, 0.2);
+    touch-action: none;
+}
+
+#mobile-weapon-btn {
+    padding: 10px 20px;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 20px;
+    font-size: 0.8rem;
+    color: #fff;
+    text-align: center;
+}
+
+@media (max-width: 1024px) {
+    #game-hud {
+        padding: 0 1rem;
+    }
+    .stats-panel {
+        width: 180px;
+    }
+}
+
+@media (max-width: 768px) {
+    #mobile-controls {
+        display: flex !important;
+    }
+    #ui-hint, #fps-counter, #version-number {
+        display: none;
+    }
+    .glitch {
+        font-size: 3.5rem;
+    }
+    .tagline {
+        font-size: 0.8rem;
+        letter-spacing: 0.4rem;
+    }
+    #lobby-screen {
+        width: 95vw;
+        padding: 1rem;
+    }
+    .lobby-columns {
+        flex-direction: column;
+        gap: 1rem;
+    }
+    .player-list {
+        min-height: 100px;
+    }
+}

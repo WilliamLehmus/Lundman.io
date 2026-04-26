@@ -22,6 +22,15 @@ The core of the game engine lives on the **Node.js server**.
 - **Frontend**: `/frontend/` (Vite 6 + Vanilla JS)
 - **Shared**: `/backend/gameConfig.js` contains the source of truth for weapon and chassis data.
 
+### 4. Multiplayer & Synchronization
+- **Client-Side Prediction**: Currently, the game does **not** implement client-side prediction for the local player. The local client snaps to the server's authoritative position every state update.
+- **Latency Sensitivity**: Due to the lack of prediction, high-latency connections may result in visible jitter or "snapping" for the local player. This is a known architectural state and is not currently prioritized for refactoring.
+
+### 5. Persistence & Data
+- **Player Stats**: Basic player statistics (Kills, Deaths, Scrap) are persisted in a local `players.json` file on the server.
+- **Authentication**: There is currently no authentication or password system. Usernames are treated as unique identifiers, but any client can claim any username.
+- **Session Data**: HUD settings and volume preferences are persisted in the browser's `localStorage`.
+
 ---
 
 ## 🎮 Gameplay Features
@@ -58,6 +67,15 @@ The environment is reactive:
 - **Kill Feed**: Real-time event log with localized weapon names.
 - **Minimap**: High-contrast overview showing buildings, borders, and scrap (gold markers).
 - **Spawn Protection**: 3 seconds of invulnerability after respawn with visual feedback.
+
+### 6. Bot AI System
+The game features a server-side AI system that scales with player count:
+- **Replacement Logic**: Bots automatically fill empty slots in lobbies to maintain a 5v5 balance. When a human player joins, a bot is removed.
+- **Behavior States**:
+    - **Combat**: Bots prioritize the closest enemy, leading shots based on target velocity (Difficulty-dependent).
+    - **Scavenging**: If no enemies are in range, bots hunt for SCRAP to gain buffs.
+    - **Avoidance**: Bots use multi-directional raycasting to avoid walls, buildings, and other tanks.
+    - **Stealth Awareness**: Bots cannot target players who are hidden (e.g., inside STEAM clouds).
 
 ---
 

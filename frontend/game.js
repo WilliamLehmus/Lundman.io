@@ -62,6 +62,7 @@ socket.on('kill-feed', (data) => {
 });
 let gameActive = false;
 let camera = { x: 0, y: 0 };
+let shake = { x: 0, y: 0, intensity: 0 };
 const keys = { up: false, down: false, left: false, right: false, shoot: false };
 
 // Rendering
@@ -310,6 +311,9 @@ socket.on('game-started', () => {
     lobbyScreen.classList.add('hidden');
     gameOverScreen.classList.add('hidden');
     hud.classList.remove('hidden');
+    if ('ontouchstart' in window) {
+        document.getElementById('mobile-controls').classList.remove('hidden');
+    }
     gameActive = true;
 });
 
@@ -431,6 +435,8 @@ function updateHUD() {
     const me = serverState.players.find(p => p.id === myId);
     if (me) {
         if (p1HpBar.dataset.val !== me.hp.toString()) {
+            const oldHp = parseFloat(p1HpBar.dataset.val || me.maxHp);
+            if (me.hp < oldHp) shake.intensity = 15;
             p1HpBar.style.width = `${(me.hp / me.maxHp) * 100}%`;
             p1HpBar.dataset.val = me.hp;
         }
@@ -529,8 +535,18 @@ function renderLoop(now) {
             camera.y = me.y - canvas.height / 2;
         }
 
+        if (shake.intensity > 0) {
+            shake.x = (Math.random() - 0.5) * shake.intensity;
+            shake.y = (Math.random() - 0.5) * shake.intensity;
+            shake.intensity *= 0.9;
+            if (shake.intensity < 0.5) shake.intensity = 0;
+        } else {
+            shake.x = 0;
+            shake.y = 0;
+        }
+
         ctx.save();
-        ctx.translate(-camera.x, -camera.y);
+        ctx.translate(-camera.x + shake.x, -camera.y + shake.y);
 
         drawZones();
         drawGrid();
@@ -1228,4 +1244,74 @@ canvas.addEventListener('mousedown', (e) => {
     }
 });
 
+
+// Mobile Control Implementation
+const joystickContainer = document.getElementById('joystick-container');
+const joystickHandle = document.getElementById('joystick-handle');
+const mobileFireBtn = document.getElementById('mobile-fire-btn');
+const mobileWeaponBtn = document.getElementById('mobile-weapon-btn');
+
+if (joystickContainer) {
+    let joystickActive = false;
+    let joystickCenter = { x: 0, y: 0 };
+
+    joystickContainer.addEventListener('touchstart', e => {
+        joystickActive = true;
+        const rect = joystickContainer.getBoundingClientRect();
+        joystickCenter = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+        handleJoystick(e.touches[0]);
+    });
+
+    window.addEventListener('touchmove', e => {
+        if (!joystickActive) return;
+        handleJoystick(e.touches[0]);
+    }, { passive: false });
+
+    window.addEventListener('touchend', () => {
+        joystickActive = false;
+        joystickHandle.style.transform = 'translate(0, 0)';
+        keys.up = false; keys.down = false; keys.left = false; keys.right = false;
+        socket.emit('input', keys);
+    });
+
+    function handleJoystick(touch) {
+        const dx = touch.clientX - joystickCenter.x;
+        const dy = touch.clientY - joystickCenter.y;
+        const dist = Math.min(Math.hypot(dx, dy), 60);
+        const angle = Math.atan2(dy, dx);
+        
+        joystickHandle.style.transform = `translate(${Math.cos(angle) * dist}px, ${Math.sin(angle) * dist}px)`;
+        
+        // Thresholds for movement
+        keys.up = dy < -30;
+        keys.down = dy > 30;
+        keys.left = dx < -30;
+        keys.right = dx > 30;
+        
+        socket.emit('input', keys);
+    }
+}
+
+if (mobileFireBtn) {
+    mobileFireBtn.addEventListener('touchstart', () => {
+        keys.shoot = true;
+        socket.emit('input', keys);
+    });
+    mobileFireBtn.addEventListener('touchend', () => {
+        keys.shoot = false;
+        socket.emit('input', keys);
+    });
+}
+
+if (mobileWeaponBtn) {
+    mobileWeaponBtn.addEventListener('touchstart', () => {
+        const me = serverState.players.find(p => p.id === myId);
+        if (me) {
+            const nextSlot = (me.currentSlot + 1) % me.slots.length;
+            socket.emit('switch-weapon', nextSlot);
+        }
+    });
+}
+
 init();
+
