@@ -1,7 +1,9 @@
-TypeError: Cannot read properties of undefined (reading 'color')
-    at file:///C:/Users/lundm/Desktop/TANK/Lundman.io/backend/server.js:952:71
-    at Array.map (<anonymous>)
-    at Lobby.broadcastState (file:///C:/Users/lundm/Desktop/TANK/Lundman.io/backend/server.js:952:31)
-    at Timeout._onTimeout (file:///C:/Users/lundm/Desktop/TANK/Lundman.io/backend/server.js:92:18)
-    at listOnTimeout (node:internal/timers:605:17)
-    at process.processTimers (node:internal/timers:541:7)
+ReferenceError: by is not defined
+    at Lobby.generateMap (file:///C:/Users/lundm/Desktop/TANK/Lundman.io/backend/server.js:315:89)
+    at Lobby.setupWorld (file:///C:/Users/lundm/Desktop/TANK/Lundman.io/backend/server.js:126:14)
+    at Lobby.startGame (file:///C:/Users/lundm/Desktop/TANK/Lundman.io/backend/server.js:1136:14)
+    at Socket.<anonymous> (file:///C:/Users/lundm/Desktop/TANK/Lundman.io/backend/server.js:1300:19)
+    at Socket.emit (node:events:509:28)
+    at Socket.emitUntyped (C:\Users\lundm\Desktop\TANK\Lundman.io\node_modules\socket.io\dist\typed-events.js:69:22)
+    at C:\Users\lundm\Desktop\TANK\Lundman.io\node_modules\socket.io\dist\socket.js:697:39
+    at process.processTicksAndRejections (node:internal/process/task_queues:85:11)

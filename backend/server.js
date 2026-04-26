@@ -193,7 +193,7 @@ class Lobby {
             scrap: 0,
             kills: 0,
             deaths: 0,
-            statusEffects: { stun: 0, slip: 0, slow: 0, burn: 0, wet: 0 },
+            statusEffects: { stun: 0, slip: 0, slow: 0, burn: 0, wet: 0, stunImmunity: 0 },
             inputs: { up: false, down: false, left: false, right: false, shoot: false, aimAngle: 0 },
             lastBuffLevel: 0
         };
@@ -309,7 +309,6 @@ class Lobby {
                 }
                 else if (mapType === 'INDUSTRIAL') {
                     if (rand < 0.7) this.generateCityBlock(x, y, blockSize);
-                    if (Math.random() > 0.5) this.spawnElement({ x: x + blockSize, y: y + blockSize }, MATERIALS.ELECTRIC, 60000, null, null, 150, 150);
                 }
                 else if (mapType === 'WETLAND') {
                     if (rand < 0.3) this.generateCityBlock(x, y, blockSize);
@@ -320,13 +319,42 @@ class Lobby {
         }
 
         // Random scatters based on biome
+        if (mapType === 'INDUSTRIAL') {
+            // Balanced Electric Puddles for Industrial
+            const puddleCount = Math.floor(this.worldSize / 300); 
+            for (let i = 0; i < puddleCount; i++) {
+                const pos = { 
+                    x: 200 + Math.random() * (this.worldSize - 400), 
+                    y: 200 + Math.random() * (this.worldSize - 400) 
+                };
+                
+                // Distance check: Keep electric puddles at least 450px apart
+                const tooClose = Object.values(this.elements).some(e => 
+                    e.type === MATERIALS.ELECTRIC && 
+                    Vector.magnitude(Vector.sub(e.body.position, pos)) < 450
+                );
+                
+                if (!tooClose) {
+                    const isLarge = Math.random() > 0.4;
+                    const size = isLarge ? 250 : 100;
+                    this.spawnElement(pos, MATERIALS.ELECTRIC, null, null, null, size, size);
+                }
+            }
+        }
+
         const scatterCount = mapType === 'WASTELAND' ? 40 : 20;
         for (let i = 0; i < scatterCount; i++) {
             const pos = { 
                 x: 150 + Math.random() * (this.worldSize - 300), 
                 y: 150 + Math.random() * (this.worldSize - 300) 
             };
-            const type = mapType === 'WETLAND' ? MATERIALS.WATER : (mapType === 'WASTELAND' ? MATERIALS.OIL : MATERIALS.DIRT);
+            
+            let type;
+            if (mapType === 'WETLAND') type = MATERIALS.WATER;
+            else if (mapType === 'WASTELAND') type = MATERIALS.OIL;
+            else if (mapType === 'INDUSTRIAL') type = MATERIALS.DIRT;
+            else type = MATERIALS.DIRT;
+
             this.spawnElement(pos, type, 120000);
         }
     }
@@ -557,12 +585,24 @@ class Lobby {
                 const isInvulnerable = p.invulnerableUntil && now < p.invulnerableUntil;
 
                 if (element.type === MATERIALS.ELECTRIC && !isInvulnerable) {
-                    p.statusEffects.stun = now + 2000;
-                    if (element.originalType) {
-                        element.type = element.originalType;
-                        delete element.originalType;
-                    } else {
-                        this.destroyElement(element.id);
+                    const isLarge = element.w >= 150;
+                    const canStun = now > p.statusEffects.stun && now > p.statusEffects.stunImmunity;
+
+                    if (canStun) {
+                        p.statusEffects.stun = now + 2000;
+                        if (isLarge) {
+                            // Large puddles stay but give 5s grace period AFTER stun wears off
+                            p.statusEffects.stunImmunity = now + 2000 + 5000;
+                        } else {
+                            // Small puddles disappear/revert after one stun
+                            if (element.originalType) {
+                                element.type = element.originalType;
+                                delete element.originalType;
+                                delete element.expiresAt;
+                            } else {
+                                this.destroyElement(element.id);
+                            }
+                        }
                     }
                 }
                 if (element.type === MATERIALS.ICE) p.statusEffects.slip = now + 1000;
