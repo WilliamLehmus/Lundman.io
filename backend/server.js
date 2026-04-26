@@ -459,7 +459,11 @@ class Lobby {
     }
 
     processBots(now) {
-        Object.values(this.players).filter(p => p.isBot && p.hp > 0 && p.isActive !== false).forEach(bot => {
+        Object.values(this.players).filter(p => p.isBot).forEach(bot => {
+            if (bot.hp <= 0 || bot.isActive === false) {
+                bot.inputs = { up: false, down: false, left: false, right: false, shoot: false };
+                return;
+            }
             let closestEnemy = null;
             let minDist = Infinity;
             Object.values(this.players).filter(p => p.team !== bot.team && p.hp > 0).forEach(enemy => {
@@ -736,10 +740,6 @@ io.on('connection', (socket) => {
         const lobby = lobbies[socket.lobbyId];
         if (lobby) {
             lobby.addBot(data.difficulty || 'NORMAL', data.pos, data.isActive);
-            io.to(lobby.id).emit('lobby-update', {
-                id: lobby.id,
-                players: Object.values(lobby.players).map(p => ({ username: p.username, team: p.team, id: p.id, chassis: p.chassis }))
-            });
         }
     });
 

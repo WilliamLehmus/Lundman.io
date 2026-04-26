@@ -567,8 +567,8 @@ input[type="range"]::-webkit-slider-thumb {
 /* Debug Menu */
 #debug-menu {
     position: fixed;
-    top: 80px;
-    left: 20px;
+    top: 320px;
+    left: 40px;
     background: rgba(0, 0, 0, 0.8);
     border: 1px solid #ff00ff;
     padding: 15px;
