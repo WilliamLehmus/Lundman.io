@@ -625,7 +625,7 @@ function drawMinimap() {
     const padding = 25;
     const x = canvas.width - size - padding;
     const y = canvas.height - size - padding;
-    const worldSize = gameState.worldSize || 4000;
+    const worldSize = serverState.worldSize || 4000;
     const scale = size / worldSize;
 
     ctx.save();

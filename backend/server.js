@@ -426,7 +426,15 @@ class Lobby {
         if (target.label === 'element') {
             const element = this.elements[target.elementId];
             if (element) {
-                if (bulletData.type === MATERIALS.FIRE && element.type === MATERIALS.OIL) {
+                // Bidirectional Alchemy
+                const isFireVSWater = (bulletData.type === MATERIALS.FIRE && element.type === MATERIALS.WATER) || 
+                                     (bulletData.type === MATERIALS.WATER && element.type === MATERIALS.FIRE);
+                const isFireVSOil = (bulletData.type === MATERIALS.FIRE && element.type === MATERIALS.OIL);
+                const isIceVSWater = (bulletData.type === MATERIALS.ICE && element.type === MATERIALS.WATER) ||
+                                    (bulletData.type === MATERIALS.WATER && element.type === MATERIALS.ICE);
+                const isElectricVSWater = (bulletData.type === MATERIALS.ELECTRIC && element.type === MATERIALS.WATER);
+
+                if (isFireVSOil) {
                     const pos = { x: element.body.position.x, y: element.body.position.y };
                     this.destroyElement(element.id);
                     this.spawnElement(pos, MATERIALS.FIRE, 5000, 100, bulletData.ownerId);
@@ -434,21 +442,21 @@ class Lobby {
                     return;
                 }
 
-                if (bulletData.type === MATERIALS.ELECTRIC && element.type === MATERIALS.WATER) {
+                if (isElectricVSWater) {
                     element.type = MATERIALS.ELECTRIC;
                     element.expiresAt = Date.now() + 2000;
                     this.destroyBullet(bullet.id);
                     return;
                 }
 
-                if (bulletData.type === MATERIALS.FIRE && element.type === MATERIALS.WATER) {
+                if (isFireVSWater) {
                     this.spawnElement(bullet.position, MATERIALS.STEAM, 4000);
                     this.destroyElement(element.id);
                     this.destroyBullet(bullet.id);
                     return;
                 }
 
-                if (bulletData.type === MATERIALS.ICE && element.type === MATERIALS.WATER) {
+                if (isIceVSWater) {
                     element.type = MATERIALS.ICE;
                     this.destroyBullet(bullet.id);
                     return;
