@@ -6,7 +6,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
-import { MATERIALS, BIOMES, CHASSIS, WEAPON_MODULES, ALL_WEAPONS } from './gameConfig.js';
+import { MATERIALS, MATERIAL_PROPERTIES, BIOMES, CHASSIS, WEAPON_MODULES, ALL_WEAPONS } from './gameConfig.js';
 
 // 1. Load Env from Root
 dotenv.config();
@@ -69,7 +69,7 @@ class Lobby {
         this.lastBulletId = 0;
         this.lastElementId = 0;
             
-        this.matchTimer = 300;
+        this.matchTimer = 600; // 10 minutes match duration
         this.scoreCap = 20;
         this.scores = { blue: 0, pink: 0 };
         this.gameOver = false;
@@ -151,10 +151,13 @@ class Lobby {
         const startPos = this.getRandomSpawn(team);
         const config = CHASSIS[chassisType];
         
-        const body = Bodies.rectangle(startPos.x, startPos.y, TANK_SIZE, TANK_SIZE, {
+        const body = Bodies.rectangle(startPos.x, startPos.y, TANK_SIZE - 2, TANK_SIZE - 2, {
             frictionAir: config.speed > 0.005 ? 0.1 : 0.2,
             mass: config.mass,
-            label: `tank-${socket.id}`
+            label: `tank-${socket.id}`,
+            chamfer: { radius: 12 }, // Rounded corners prevent sticking and overlapping
+            friction: 0.1,
+            restitution: 0.2
         });
         
         if (team === 'pink') Body.setAngle(body, Math.PI);
@@ -188,10 +191,13 @@ class Lobby {
         
         const config = CHASSIS[chassisType];
         
-        const body = Bodies.rectangle(startPos.x, startPos.y, TANK_SIZE, TANK_SIZE, {
+        const body = Bodies.rectangle(startPos.x, startPos.y, TANK_SIZE - 2, TANK_SIZE - 2, {
             frictionAir: config.speed > 0.005 ? 0.1 : 0.2,
             mass: config.mass,
-            label: `tank-${id}`
+            label: `tank-${id}`,
+            chamfer: { radius: 12 },
+            friction: 0.1,
+            restitution: 0.2
         });
         
         if (team === 'pink' && !pos) Body.setAngle(body, Math.PI);
@@ -244,19 +250,53 @@ class Lobby {
     }
 
     generateMap() {
-        // Whole map is now Urban
         this.zones.push({ x: 0, y: 0, w: this.worldSize, h: this.worldSize, type: 'URBAN' });
 
-        // Spread buildings based on world size
-        const buildingCount = Math.floor((this.worldSize / 4000) * 160);
-        for (let i = 0; i < buildingCount; i++) {
-            const pos = {
-                x: 600 + Math.random() * (this.worldSize - 1200),
-                y: 100 + Math.random() * (this.worldSize - 200)
-            };
-            const w = 70 + Math.random() * 160;
-            const h = 70 + Math.random() * 160;
-            this.spawnBuilding(pos, w, h);
+        const blockSize = 500; // Size of a city block
+        const streetWidth = 180; // Width of the "roads"
+        const padding = 100;
+
+        // Iterate through the grid to create blocks
+        for (let x = padding; x < this.worldSize - padding; x += blockSize + streetWidth) {
+            for (let y = padding; y < this.worldSize - padding; y += blockSize + streetWidth) {
+                // 85% chance to create a block (leaves some open plazas)
+                if (Math.random() < 0.85) {
+                    this.generateCityBlock(x, y, blockSize);
+                } else {
+                    // Create a "park" or "plaza" in the empty space
+                    if (Math.random() > 0.5) {
+                        this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.WATER, null, null, null, 250, 250);
+                    }
+                }
+            }
+        }
+
+        // Add some random small details like oil puddles on streets
+        for (let i = 0; i < 20; i++) {
+            this.spawnElement({
+                x: Math.random() * this.worldSize,
+                y: Math.random() * this.worldSize
+            }, MATERIALS.OIL, 60000);
+        }
+    }
+
+    generateCityBlock(bx, by, size) {
+        const type = Math.random();
+        
+        if (type < 0.3) {
+            // One big building (e.g. factory or skyscraper)
+            this.spawnBuilding({ x: bx + size/2, y: by + size/2 }, size * 0.8, size * 0.8);
+        } else if (type < 0.7) {
+            // L-shaped block or two vertical buildings
+            this.spawnBuilding({ x: bx + size/4, y: by + size/2 }, size * 0.4, size * 0.9);
+            this.spawnBuilding({ x: bx + size * 0.75, y: by + size/2 }, size * 0.4, size * 0.9);
+        } else {
+            // Four small corner buildings
+            const s = size * 0.35;
+            this.spawnBuilding({ x: bx + s, y: by + s }, s*1.8, s*1.8);
+            this.spawnBuilding({ x: bx + size - s, y: by + s }, s*1.8, s*1.8);
+            this.spawnBuilding({ x: bx + s, y: by + size - s }, s*1.8, s*1.8);
+            this.spawnBuilding({ x: bx + size - s, y: by + size - s }, s*1.8, s*1.8);
         }
     }
 
@@ -312,7 +352,8 @@ class Lobby {
                     Body.applyForce(target, target.position, Vector.mult(forceDir, bulletData.impact));
                     
                     if (bulletData.type === MATERIALS.ELECTRIC) {
-                        victim.statusEffects.stun = Date.now() + 1000;
+                        const inWater = Object.values(this.elements).some(e => e.type === MATERIALS.WATER && Query.point([e.body], victim.body.position).length > 0);
+                        victim.statusEffects.stun = Date.now() + (inWater ? 2500 : 1000);
                     }
 
                     if (victim.hp < victim.maxHp * 0.5) {
@@ -320,14 +361,22 @@ class Lobby {
                     }
 
                     this.destroyBullet(bullet.id);
-                    if (victim.hp <= 0) this.respawn(victim);
+                    if (victim.hp <= 0) this.respawn(victim, bulletData.ownerId, bulletData.type);
                 }
             }
         }
         
         if (target.label === 'element') {
             const element = this.elements[target.elementId];
-            if (element && element.hp !== undefined) {
+            if (element) {
+                if (bulletData.type === MATERIALS.FIRE && element.type === MATERIALS.OIL) {
+                    const pos = { x: element.body.position.x, y: element.body.position.y };
+                    this.destroyElement(element.id);
+                    this.spawnElement(pos, MATERIALS.FIRE, 5000, 100, bulletData.ownerId);
+                    this.destroyBullet(bullet.id);
+                    return;
+                }
+                if (element.hp !== undefined) {
                 element.hp -= bulletData.damage;
                 if (element.hp <= 0) {
                     if (element.type === MATERIALS.BUILDING) {
@@ -348,6 +397,7 @@ class Lobby {
             this.destroyBullet(bullet.id);
         }
     }
+}
 
     processElementInteraction(bodyA, bodyB) {
         const elementA = bodyA.label === 'element' ? this.elements[bodyA.elementId] : null;
@@ -416,26 +466,27 @@ class Lobby {
         }
     }
 
-    spawnElement(pos, type, duration, hp, ownerId = null) {
+    spawnElement(pos, type, duration = null, hp = null, ownerId = null, customW = null, customH = null) {
         const id = ++this.lastElementId;
-        const radius = type === MATERIALS.SCRAP ? 10 : 
-                      (type === MATERIALS.OIL || type === MATERIALS.FIRE) ? 20 : 
-                      (type === MATERIALS.STEAM ? 40 : 30);
-        
-        const body = Bodies.circle(pos.x, pos.y, radius, {
+        const config = MATERIAL_PROPERTIES[type] || { w: 30, h: 30 };
+        const w = customW || config.w;
+        const h = customH || config.h;
+
+        const body = Bodies.rectangle(pos.x, pos.y, w, h, {
             label: 'element',
-            isSensor: type !== MATERIALS.DIRT,
-            friction: type === MATERIALS.ICE ? 0.001 : 0.5
+            isStatic: true,
+            isSensor: true
         });
         body.elementId = id;
-        
+
         this.elements[id] = {
             id,
             body,
             type,
             hp,
             ownerId,
-            expiresAt: duration ? Date.now() + duration : null
+            expiresAt: duration ? Date.now() + duration : null,
+            w, h, x: pos.x, y: pos.y
         };
         Composite.add(this.engine.world, body);
     }
@@ -473,13 +524,28 @@ class Lobby {
         });
     }
 
-    respawn(player) {
+    respawn(player, killerId = null, weaponType = null) {
         // Point to the other team
         const otherTeam = player.team === 'blue' ? 'pink' : 'blue';
         if (!this.gameOver) {
             this.scores[otherTeam]++;
             this.checkMatchEnd();
         }
+
+        if (killerId && killerId !== player.id) {
+            const killer = this.players[killerId];
+            if (killer) {
+                io.to(this.id).emit('kill-feed', {
+                    killer: killer.username,
+                    victim: player.username,
+                    weapon: weaponType,
+                    killerTeam: killer.team,
+                    victimTeam: player.team
+                });
+            }
+        }
+
+        player.invulnerableUntil = Date.now() + 3000;
 
         for (let i = 0; i < 5; i++) {
             this.spawnElement({
@@ -566,7 +632,7 @@ class Lobby {
             let avoidY = 0;
             let closestEnemy = null;
             let minDist = Infinity;
-            Object.values(this.players).filter(p => p.team !== bot.team && p.hp > 0).forEach(enemy => {
+            Object.values(this.players).filter(p => p.team !== bot.team && p.hp > 0 && (!p.invulnerableUntil || now > p.invulnerableUntil)).forEach(enemy => {
                 const dist = Vector.magnitude(Vector.sub(enemy.body.position, bot.body.position));
                 if (dist < minDist) {
                     minDist = dist;
@@ -574,15 +640,73 @@ class Lobby {
                 }
             });
 
-            if (!closestEnemy) {
+            let targetPos = null;
+            if (closestEnemy) {
+                targetPos = closestEnemy.body.position;
+            } else {
+                let closestScrap = null;
+                let minScrapDist = 800; 
+                Object.values(this.elements).forEach(e => {
+                    if (e.type === MATERIALS.SCRAP) {
+                        const dist = Vector.magnitude(Vector.sub(e.body.position, bot.body.position));
+                        if (dist < minScrapDist) {
+                            minScrapDist = dist;
+                            closestScrap = e;
+                        }
+                    }
+                });
+                if (closestScrap) {
+                    targetPos = closestScrap.body.position;
+                    minDist = minScrapDist;
+                }
+            }
+
+            if (!targetPos) {
                 bot.inputs = { up: false, down: false, left: false, right: false, shoot: false };
                 return;
             }
 
-            let targetPos = closestEnemy.body.position;
+            const targetPull = 2.5;
+            let targetAngle = Math.atan2(targetPos.y - bot.body.position.y, targetPos.x - bot.body.position.x);
+
+            // 1. Stuck Detection
+            const distMoved = Vector.magnitude(Vector.sub(bot.body.position, bot.lastPos || bot.body.position));
+            bot.lastPos = { x: bot.body.position.x, y: bot.body.position.y };
+            
+            if (distMoved < 0.5 && bot.inputs.up) {
+                bot.stuckTicks = (bot.stuckTicks || 0) + 1;
+            } else {
+                bot.stuckTicks = 0;
+            }
+
+            if (bot.stuckTicks > 60) {
+                bot.reverseUntil = now + 1500;
+                bot.stuckTicks = 0;
+            }
+
+            if (now < bot.reverseUntil) {
+                bot.inputs = { up: false, down: true, left: Math.random() > 0.5, right: Math.random() < 0.5, shoot: true };
+                return;
+            }
+
+            // 2. Separation Force
+            Object.values(this.players).forEach(other => {
+                if (other.id === bot.id) return;
+                const dx = bot.body.position.x - other.body.position.x;
+                const dy = bot.body.position.y - other.body.position.y;
+                const distSq = dx*dx + dy*dy;
+                const minClearance = 200; 
+                if (distSq < minClearance * minClearance) {
+                    const dist = Math.sqrt(distSq) || 1;
+                    const force = (minClearance - dist) / minClearance;
+                    const strength = force * force * 15.0; 
+                    avoidX += (dx / dist) * strength;
+                    avoidY += (dy / dist) * strength;
+                }
+            });
 
             // HARD: Target Leading
-            if (bot.botDifficulty === 'HARD') {
+            if (bot.botDifficulty === 'HARD' && closestEnemy) {
                 const weapon = WEAPON_MODULES[bot.slots[bot.currentSlot]];
                 const timeToTarget = minDist / (weapon.speed || 10);
                 targetPos = {
@@ -591,19 +715,15 @@ class Lobby {
                 };
             }
 
-            let targetAngle;
             if (bot.ignoreTargetUntil && now < bot.ignoreTargetUntil) {
-                // Break out of local minima: ignore the player and just drive forward to escape the trap
                 targetAngle = bot.body.angle; 
             } else {
                 let tx = targetPos.x + bot.targetOffset.x;
                 let ty = targetPos.y + bot.targetOffset.y;
 
-                // 3. Tactical Flanking
                 if (bot.role === 'FLANKER') {
                     const distToPlayer = Vector.magnitude(Vector.sub(targetPos, bot.body.position));
                     if (distToPlayer > 500) {
-                        // Aim for a point to the side of the player
                         const angleToPlayer = Math.atan2(ty - bot.body.position.y, tx - bot.body.position.x);
                         const flankAngle = angleToPlayer + (Math.PI / 2.5) * bot.strafeDir;
                         tx = bot.body.position.x + Math.cos(flankAngle) * 600;
@@ -613,61 +733,17 @@ class Lobby {
 
                 targetAngle = Math.atan2(ty - bot.body.position.y, tx - bot.body.position.x);
 
-                // 4. Strafing (Sideways movement while engaging)
                 const strafeAngle = targetAngle + (Math.PI / 2) * bot.strafeDir;
                 avoidX += Math.cos(strafeAngle) * 1.5;
                 avoidY += Math.sin(strafeAngle) * 1.5;
             }
 
-            // --- Stuck Detection (Fallback) ---
-            if (now < bot.evadeUntil) {
-                bot.inputs.up = false;
-                bot.inputs.down = true; // Backup
-                bot.inputs.left = bot.evadeDir === -1;
-                bot.inputs.right = bot.evadeDir === 1;
-                bot.inputs.shoot = false;
-                return;
-            }
-
-            const speed = Vector.magnitude(bot.body.velocity);
-            if (bot.inputs.up && speed < 1) {
-                bot.stuckTicks = (bot.stuckTicks || 0) + 1;
-            } else {
-                bot.stuckTicks = 0;
-            }
-
-            if (bot.stuckTicks > 30) {
-                bot.evadeUntil = now + 1000 + Math.random() * 500;
-                bot.evadeDir = Math.random() > 0.5 ? 1 : -1;
-                bot.ignoreTargetUntil = bot.evadeUntil + 2000; // Wander away for 2s after evading
-                bot.stuckTicks = 0;
-            }
-            // ---------------------------------
-
-            // 1. Separation Force (Don't clump up)
-            Object.values(this.players).forEach(other => {
-                if (other.id === bot.id) return;
-                const dx = bot.body.position.x - other.body.position.x;
-                const dy = bot.body.position.y - other.body.position.y;
-                const distSq = dx*dx + dy*dy;
-                const minClearance = 250; // Increased clearance
-                if (distSq < minClearance * minClearance) {
-                    const dist = Math.sqrt(distSq) || 1;
-                    const force = (minClearance - dist) / minClearance;
-                    avoidX += (dx / dist) * force * 10.0; // Stronger push
-                    avoidY += (dy / dist) * force * 10.0;
-                }
-            });
-
-            // 2. Obstacle Avoidance (Whiskers)
-            const lookAhead = 120; // Shortened slightly to avoid triggering on distant corners
+            const lookAhead = 250;
             const obstacles = Composite.allBodies(this.engine.world).filter(b => 
                 b !== bot.body && !b.isSensor && b.label !== 'bullet' && !b.label.startsWith('tank-')
             );
             
-            // Narrower spread (-23, -11, 0, 11, 23 degrees) so it matches the tank's actual physical width
-            // This allows it to "thread the needle" through gaps without being repulsed by the edges.
-            const angles = [-0.4, -0.2, 0, 0.2, 0.4];
+            const angles = [-0.6, -0.3, 0, 0.3, 0.6];
             let hitCount = 0;
 
             for (const offset of angles) {
@@ -678,7 +754,6 @@ class Lobby {
                 };
                 const hits = Query.ray(obstacles, bot.body.position, rayEnd);
                 if (hits.length > 0) {
-                    // Center rays have stronger repulsion
                     const weight = Math.abs(offset) < 0.1 ? 4.0 : 2.0;
                     avoidX -= Math.cos(rayAngle) * weight;
                     avoidY -= Math.sin(rayAngle) * weight;
@@ -693,16 +768,12 @@ class Lobby {
                     avoidY = Math.sin(forceAngle) * 4.0;
                 }
                 
-                // Pure vector addition for perfectly smooth steering
-                const targetPull = 2.0;
                 const finalX = Math.cos(targetAngle) * targetPull + avoidX;
                 const finalY = Math.sin(targetAngle) * targetPull + avoidY;
                 
                 targetAngle = Math.atan2(finalY, finalX);
             }
-            // -----------------------------------------
 
-            // EASY: Aim Error
             if (bot.botDifficulty === 'EASY') {
                 const error = Math.sin(now / 500 + bot.body.id) * 0.5;
                 targetAngle += error;
@@ -768,7 +839,7 @@ class Lobby {
             label: 'bullet',
             frictionAir: 0,
             mass: 0.1,
-            isSensor: weapon.type === MATERIALS.DIRT // Dirt bullets shouldn't collide
+            isSensor: weapon.type === MATERIALS.DIRT 
         });
         bullet.id = id;
         bullet.customData = { 
@@ -782,7 +853,6 @@ class Lobby {
             x: Math.cos(p.body.angle) * weapon.speed,
             y: Math.sin(p.body.angle) * weapon.speed
         });
-        // Recoil
         const recoil = weapon.recoil || 0;
         if (recoil > 0) {
             Body.applyForce(p.body, p.body.position, {
@@ -812,7 +882,8 @@ class Lobby {
                 id: p.id, username: p.username, team: p.team,
                 x: p.body.position.x, y: p.body.position.y, angle: p.body.angle,
                 hp: p.hp, maxHp: p.maxHp, weapon: p.slots[p.currentSlot],
-                currentSlot: p.currentSlot, slots: p.slots, scrap: p.scrap, hidden: p.hidden
+                currentSlot: p.currentSlot, slots: p.slots, scrap: p.scrap, hidden: p.hidden,
+                invulnerable: p.invulnerableUntil && Date.now() < p.invulnerableUntil
             })),
             bullets: Object.values(this.bullets).map(b => ({
                 id: b.id, x: b.position.x, y: b.position.y,
@@ -903,11 +974,9 @@ class Lobby {
         this.scores = { blue: 0, pink: 0 };
         this.lastTimeTick = Date.now();
 
-        // Clear bullets and elements
         Object.keys(this.bullets).forEach(id => this.destroyBullet(id));
         Object.keys(this.elements).forEach(id => this.destroyElement(id));
         
-        // Respawn everyone
         Object.values(this.players).forEach(p => this.respawn(p));
         
         this.generateMap();
@@ -937,7 +1006,6 @@ io.on('connection', (socket) => {
         if (!['SCOUT', 'BRAWLER', 'ARTILLERY'].includes(chassisType)) chassisType = 'SCOUT';
 
         console.log('Join Game request from:', username, 'chassis:', chassisType);
-        // Matchmaking: Find lobby with most players that isn't full
         let lobbyList = Object.values(lobbies).filter(l => Object.keys(l.players).length < 10);
         lobbyList.sort((a, b) => Object.keys(b.players).length - Object.keys(a.players).length);
         let bestLobby = lobbyList[0];
@@ -1027,7 +1095,6 @@ io.on('connection', (socket) => {
         if (lobby) lobby.resetLobby();
     });
 
-    // Debug Listeners
     socket.on('debug-spawn-bot', (data) => {
         if (process.env.ENVIRONMENT !== 'development') return;
         const lobby = lobbies[socket.lobbyId];

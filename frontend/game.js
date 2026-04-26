@@ -1,5 +1,6 @@
 import { io } from "socket.io-client";
 import versionData from './version.json';
+import { MATERIALS, MATERIAL_PROPERTIES } from '../backend/gameConfig.js';
 
 // Connect directly to the backend port in development to avoid proxy timeouts
 const socket = io('http://localhost:3000', {
@@ -63,7 +64,13 @@ let serverState = { players: [], bullets: [], elements: [], zones: [] };
 let gameState   = { players: [], bullets: [], elements: [], zones: [] };
 let lastScrap = 0;
 let popups = []; // { x, y, text, life }
+let killFeed = []; // { killer, victim, weapon, killerTeam, victimTeam, time }
 let myId = null;
+
+socket.on('kill-feed', (data) => {
+    killFeed.push({ ...data, time: Date.now() });
+    if (killFeed.length > 8) killFeed.shift();
+});
 let gameActive = false;
 let camera = { x: 0, y: 0 };
 const keys = { up: false, down: false, left: false, right: false, shoot: false };
@@ -144,11 +151,7 @@ function toggleMenu() {
 
 if (closeOptionsBtn) closeOptionsBtn.onclick = toggleMenu;
 
-const MATERIALS = {
-    METAL: 'metal', FIRE: 'fire', WATER: 'water', OIL: 'oil',
-    ELECTRIC: 'electric', ICE: 'ice', DIRT: 'dirt', ACID: 'acid',
-    GAS: 'gas', STEAM: 'steam', SCRAP: 'scrap', BUILDING: 'building'
-};
+// MATERIALS is now imported from gameConfig.js
 
 const WEAPON_NAMES = {
     STANDARD: 'Main Gun', FLAMETHROWER: 'Flamethrower', WATER_CANNON: 'Water Cannon',
@@ -498,6 +501,9 @@ function renderLoop(now) {
         drawPopups(dt);
 
         ctx.restore();
+
+        drawMinimap();
+        drawKillFeed();
     } else {
         drawGrid();
     }
@@ -541,7 +547,128 @@ function drawTank(p) {
     ctx.fillStyle = 'white';
     ctx.font = '700 12px Outfit';
     ctx.textAlign = 'center';
-    ctx.fillText(p.username.toUpperCase(), 0, -TANK_SIZE);
+    const labelY = -TANK_SIZE - 5 - (p.labelYOffset || 0);
+    ctx.fillText(p.username.toUpperCase(), 0, labelY);
+    ctx.restore();
+
+    // Shield / Invulnerability
+    if (p.invulnerable) {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([8, 4]);
+        ctx.lineDashOffset = -renderTime * 0.15;
+        ctx.beginPath();
+        ctx.arc(0, 0, TANK_SIZE * 0.85, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Inner glow
+        ctx.globalAlpha = 0.2 + Math.sin(renderTime * 0.01) * 0.1;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(0, 0, TANK_SIZE * 0.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+function drawMinimap() {
+    const size = 180;
+    const padding = 25;
+    const x = canvas.width - size - padding;
+    const y = canvas.height - size - padding;
+    const worldSize = gameState.worldSize || 4000;
+    const scale = size / worldSize;
+
+    ctx.save();
+    ctx.translate(x, y);
+
+    // Background
+    ctx.fillStyle = 'rgba(10, 10, 25, 0.85)';
+    ctx.beginPath();
+    ctx.roundRect(0, 0, size, size, 15);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0, 242, 255, 0.3)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Buildings
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+    gameState.elements.forEach(e => {
+        if (e.type === 'BUILDING') {
+            ctx.fillRect(e.x * scale, e.y * scale, (e.w || 30) * scale, (e.h || 30) * scale);
+        }
+    });
+
+    // Players
+    gameState.players.forEach(p => {
+        if (p.hidden && p.id !== myId) return;
+        const color = p.team === 'blue' ? '#00f2ff' : '#ff00ff';
+        ctx.fillStyle = color;
+        const px = p.x * scale;
+        const py = p.y * scale;
+        
+        if (p.id === myId) {
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = color;
+            ctx.beginPath();
+            ctx.arc(px, py, 4.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+        } else {
+            ctx.beginPath();
+            ctx.arc(px, py, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    });
+
+    ctx.restore();
+}
+
+function drawKillFeed() {
+    const now = Date.now();
+    const padding = 25;
+    const x = canvas.width - padding;
+    let y = padding + 90;
+
+    ctx.save();
+    ctx.textAlign = 'right';
+    ctx.font = '700 15px Outfit';
+    ctx.textBaseline = 'middle';
+
+    killFeed = killFeed.filter(f => now - f.time < 6000);
+
+    killFeed.forEach(f => {
+        const age = now - f.time;
+        const alpha = age > 5000 ? 1 - (age - 5000) / 1000 : 1;
+        ctx.globalAlpha = alpha;
+
+        const killerColor = f.killerTeam === 'blue' ? '#00f2ff' : '#ff00ff';
+        const victimColor = f.victimTeam === 'blue' ? '#00f2ff' : '#ff00ff';
+
+        const victimWidth = ctx.measureText(f.victim).width;
+        const weaponText = ` [${f.weapon.toUpperCase()}] `;
+        const weaponWidth = ctx.measureText(weaponText).width;
+        const killerWidth = ctx.measureText(f.killer).width;
+
+        // Victim
+        ctx.fillStyle = victimColor;
+        ctx.fillText(f.victim, x, y);
+        
+        // Weapon
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.fillText(weaponText, x - victimWidth, y);
+        
+        // Killer
+        ctx.fillStyle = killerColor;
+        ctx.fillText(f.killer, x - victimWidth - weaponWidth, y);
+
+        y += 28;
+    });
+
     ctx.restore();
 }
 
@@ -606,12 +733,29 @@ function interpolateState(dt) {
             angle: lerpAngle(gp.angle, sp.angle, P)
         };
     });
+
+    // Label Avoidance Pre-pass (STRICTER)
+    const sorted = [...gameState.players].sort((a, b) => a.y - b.y);
+    sorted.forEach((p, i) => {
+        p.labelYOffset = 0;
+        for (let j = 0; j < i; j++) {
+            const other = sorted[j];
+            const dx = Math.abs(p.x - other.x);
+            const dy = Math.abs(p.y - other.y);
+            // Stricter overlap detection
+            if (dx < 100 && dy < 50) {
+                p.labelYOffset = Math.max(p.labelYOffset, (other.labelYOffset || 0) + 22);
+            }
+        }
+    });
 }
 
 function drawElements() {
     if (!gameState.elements) return;
     gameState.elements.forEach(e => {
         ctx.save();
+        const config = MATERIAL_PROPERTIES[e.type] || { color: '#fff' };
+        
         if (e.type === MATERIALS.BUILDING) {
             ctx.fillStyle = '#222';
             ctx.strokeStyle = 'rgba(0, 242, 255, 0.4)';
@@ -624,13 +768,30 @@ function drawElements() {
             for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) {
                 ctx.fillRect(e.x - e.w/3 + i*e.w/3, e.y - e.h/3 + j*e.h/3, 10, 10);
             }
-        } else {
-            ctx.fillStyle = e.color;
+        } else if (e.type === MATERIALS.SCRAP) {
+            // Draw Scrap as a rotating gold gear/nut
+            ctx.translate(e.x, e.y);
+            ctx.rotate(Date.now() / 1000);
+            ctx.fillStyle = config.color;
             ctx.beginPath();
-            if (e.type === 'dirt') {
-                ctx.roundRect(e.x - e.radius, e.y - e.radius, e.radius * 2, e.radius * 2, 5);
+            for (let i = 0; i < 6; i++) {
+                const angle = (i / 6) * Math.PI * 2;
+                const r = i % 2 === 0 ? 12 : 8;
+                ctx.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
+            }
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        } else {
+            ctx.fillStyle = config.color;
+            ctx.beginPath();
+            if (e.type === MATERIALS.DIRT) {
+                ctx.roundRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h, 5);
             } else {
-                ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+                // Draw puddles as blobs
+                ctx.arc(e.x, e.y, e.w/2, 0, Math.PI * 2);
             }
             ctx.fill();
         }

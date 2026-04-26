@@ -13,6 +13,17 @@ export const MATERIALS = {
     BUILDING: 'building'
 };
 
+export const MATERIAL_PROPERTIES = {
+    [MATERIALS.WATER]: { w: 100, h: 100, color: 'rgba(0, 100, 255, 0.4)' },
+    [MATERIALS.OIL]: { w: 80, h: 80, color: 'rgba(40, 40, 40, 0.8)' },
+    [MATERIALS.FIRE]: { w: 40, h: 40, color: 'rgba(255, 100, 0, 0.8)' },
+    [MATERIALS.ICE]: { w: 60, h: 60, color: 'rgba(200, 240, 255, 0.6)' },
+    [MATERIALS.STEAM]: { w: 120, h: 120, color: 'rgba(255, 255, 255, 0.2)' },
+    [MATERIALS.SCRAP]: { w: 20, h: 20, color: '#ffd700' },
+    [MATERIALS.BUILDING]: { w: 100, h: 100, color: '#333' },
+    [MATERIALS.DIRT]: { w: 40, h: 40, color: '#554433' }
+};
+
 export const BIOMES = {
     ICE: { color: '#aaddff33', friction: 0.005, speedMult: 1.2 },
     SWAMP: { color: '#2d3e2d33', friction: 0.3, speedMult: 0.6 },
