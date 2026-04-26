@@ -86,6 +86,16 @@ The game features a server-side AI system that scales with player count:
 - **Sync Rate**: Server physics runs at 60Hz, while state is broadcasted at 60Hz for maximum smoothness.
 - **Error Handling**: The physics loop is wrapped in safety buffers to prevent server crashes from isolated lobby errors.
 
+### 7. Audio System
+- **Implementation**: Managed on the frontend using the Web Audio API (standard `Audio` objects).
+- **Spatial Audio**: Sound effects (like gunshots) are attenuated based on the distance between the camera (local player) and the source of the sound.
+- **Pitch Shifting**: Different weapon types use the same base samples but with varying `playbackRate` to create unique sound profiles (e.g., deeper boom for Artillery, higher snap for Tesla).
+
+### 8. Navigation & Pathfinding
+- **Authority**: All pathfinding calculations occur on the **server**. 
+- **Method**: Bots use a combination of local raycasting for immediate obstacle avoidance and a server-side navigation mesh/grid (planned) to navigate the procedurally generated biomes.
+- **Dynamic Awareness**: Because the server handles the map generation and bot logic, it can adapt bot paths in real-time as buildings are destroyed or elements (like fire or oil) are spawned.
+
 ---
 
 ## 🛠️ Technology Stack

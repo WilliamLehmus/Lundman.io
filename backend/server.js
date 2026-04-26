@@ -444,6 +444,7 @@ class Lobby {
 
                 if (isElectricVSWater) {
                     element.type = MATERIALS.ELECTRIC;
+                    element.originalType = MATERIALS.WATER; // Track for reversion
                     element.expiresAt = Date.now() + 2000;
                     this.destroyBullet(bullet.id);
                     return;
@@ -521,7 +522,12 @@ class Lobby {
 
                 if (element.type === MATERIALS.ELECTRIC && !isInvulnerable) {
                     p.statusEffects.stun = now + 2000;
-                    this.destroyElement(element.id);
+                    if (element.originalType) {
+                        element.type = element.originalType;
+                        delete element.originalType;
+                    } else {
+                        this.destroyElement(element.id);
+                    }
                 }
                 if (element.type === MATERIALS.ICE) p.statusEffects.slip = now + 1000;
                 if (element.type === MATERIALS.FIRE && element.ownerId !== p.id && !isInvulnerable) p.hp -= 0.5;
@@ -988,6 +994,7 @@ class Lobby {
                 x: p.body.position.x, y: p.body.position.y, angle: p.body.angle,
                 hp: p.hp, maxHp: p.maxHp, weapon: p.slots[p.currentSlot],
                 currentSlot: p.currentSlot, slots: p.slots, scrap: p.scrap, hidden: p.hidden,
+                stunned: p.statusEffects.stun > Date.now(),
                 invulnerable: p.invulnerableUntil && Date.now() < p.invulnerableUntil
             })),
             bullets: Object.values(this.bullets).map(b => ({
@@ -1132,6 +1139,7 @@ io.on('connection', (socket) => {
         socket.join(bestLobby.id);
         socket.lobbyId = bestLobby.id;
         if (bestLobby.active) socket.emit('game-started');
+        io.to(bestLobby.id).emit('player-event', { text: `${username.toUpperCase()} JOINED THE BATTLE`, color: '#00f2ff' });
         io.to(bestLobby.id).emit('lobby-update', {
             id: bestLobby.id,
             players: Object.values(bestLobby.players).map(p => ({ username: p.username, team: p.team, id: p.id, chassis: p.chassis }))
@@ -1258,11 +1266,14 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => {
         const lobby = lobbies[socket.lobbyId];
         if (lobby) {
+            const p = lobby.players[socket.id];
+            const username = p ? p.username : 'PLAYER';
             lobby.removePlayer(socket.id);
             if (Object.values(lobby.players).filter(p => !p.isBot).length === 0) {
                 lobby.destroy();
                 delete lobbies[socket.lobbyId];
             } else {
+                io.to(lobby.id).emit('player-event', { text: `${username.toUpperCase()} LEFT THE BATTLE`, color: '#ff3333' });
                 io.to(lobby.id).emit('lobby-update', {
                     id: lobby.id,
                     players: Object.values(lobby.players).map(p => ({ username: p.username, team: p.team, id: p.id }))

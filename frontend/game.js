@@ -56,13 +56,23 @@ let popups = []; // { x, y, text, life }
 let killFeed = []; // { killer, victim, weapon, killerTeam, victimTeam, time }
 let myId = null;
 
-socket.on('kill-feed', (data) => {
-    killFeed.push({ ...data, time: Date.now() });
-    if (killFeed.length > 8) killFeed.shift();
-});
 let gameActive = false;
 let camera = { x: 0, y: 0 };
 let shake = { x: 0, y: 0, intensity: 0 };
+let particles = []; // { x, y, vx, vy, life, color, size }
+let playerEvents = []; // { text, color, time }
+
+
+socket.on('kill-feed', (data) => {
+    killFeed.push({ ...data, time: Date.now() });
+    if (killFeed.length > 8) killFeed.shift();
+    
+    // VFX for kill
+    const victim = gameState.players.find(p => p.username === data.victim);
+    if (victim) {
+        spawnExplosion(victim.x, victim.y, victim.team === 'blue' ? '#00f2ff' : '#ff00ff');
+    }
+});
 const keys = { up: false, down: false, left: false, right: false, shoot: false };
 
 // Rendering
@@ -400,6 +410,11 @@ if (lobbyChassisSelect) {
 }
 
 const knownBulletIds = new Set();
+socket.on('player-event', (data) => {
+    playerEvents.push({ ...data, time: Date.now() });
+    if (playerEvents.length > 5) playerEvents.shift();
+});
+
 socket.on('state', (state) => {
     serverState = state;
     
@@ -409,7 +424,10 @@ socket.on('state', (state) => {
             if (!knownBulletIds.has(b.id)) {
                 playWeaponSound(b.weapon, b.x, b.y);
                 knownBulletIds.add(b.id);
-                // Clean up old IDs to prevent memory leak
+                
+                // Muzzle Flash / Spawn particles
+                spawnParticles(b.x, b.y, b.color, 5);
+                
                 if (knownBulletIds.size > 200) {
                     const first = knownBulletIds.values().next().value;
                     knownBulletIds.delete(first);
@@ -436,7 +454,10 @@ function updateHUD() {
     if (me) {
         if (p1HpBar.dataset.val !== me.hp.toString()) {
             const oldHp = parseFloat(p1HpBar.dataset.val || me.maxHp);
-            if (me.hp < oldHp) shake.intensity = 15;
+            if (me.hp < oldHp) {
+                shake.intensity = 15;
+                spawnParticles(me.x, me.y, '#fff', 10);
+            }
             p1HpBar.style.width = `${(me.hp / me.maxHp) * 100}%`;
             p1HpBar.dataset.val = me.hp;
         }
@@ -561,12 +582,15 @@ function renderLoop(now) {
         drawBullets();
 
         gameState.players.forEach(p => drawTank(p));
+        updateParticles(dt);
+        drawParticles();
         drawPopups(dt);
 
         ctx.restore();
 
         drawMinimap();
         drawKillFeed();
+        drawPlayerEvents();
     } else {
         drawGrid();
     }
@@ -632,6 +656,22 @@ function drawTank(p) {
         ctx.beginPath();
         ctx.arc(0, 0, TANK_SIZE * 0.8, 0, Math.PI * 2);
         ctx.fill();
+        ctx.restore();
+    }
+
+    // Status Icons
+    if (p.stunned || p.scrap >= 500) {
+        ctx.save();
+        ctx.translate(p.x, p.y - TANK_SIZE - 25);
+        if (p.stunned) {
+            ctx.fillStyle = '#ffff00';
+            ctx.font = '700 16px Outfit';
+            ctx.fillText('⚡ STUNNED', 0, 0);
+        } else if (p.scrap >= 500) {
+            ctx.fillStyle = '#ffcc00';
+            ctx.font = '900 16px Outfit';
+            ctx.fillText('⭐ MAX BUFF', 0, 0);
+        }
         ctx.restore();
     }
 }
@@ -1118,6 +1158,65 @@ function drawIceBullet(b) {
     ctx.beginPath();
     ctx.arc(8, -1, 2.5, 0, Math.PI * 2);
     ctx.fill();
+}
+
+function drawPlayerEvents() {
+    const now = Date.now();
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.font = '700 20px Outfit';
+    
+    playerEvents = playerEvents.filter(e => now - e.time < 4000);
+    let y = canvas.height / 2 - 150;
+
+    playerEvents.forEach(e => {
+        const age = now - e.time;
+        const alpha = age > 3000 ? 1 - (age - 3000) / 1000 : 1;
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = e.color;
+        ctx.fillText(e.text, canvas.width / 2, y);
+        y += 30;
+    });
+    ctx.restore();
+}
+
+function spawnParticles(x, y, color, count = 10) {
+    for (let i = 0; i < count; i++) {
+        particles.push({
+            x, y,
+            vx: (Math.random() - 0.5) * 8,
+            vy: (Math.random() - 0.5) * 8,
+            life: 1.0,
+            color,
+            size: Math.random() * 4 + 2
+        });
+    }
+}
+
+function spawnExplosion(x, y, color) {
+    spawnParticles(x, y, color, 30);
+    spawnParticles(x, y, '#fff', 15);
+}
+
+function updateParticles(dt) {
+    particles.forEach(p => {
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.life -= 0.02 * dt;
+    });
+    particles = particles.filter(p => p.life > 0);
+}
+
+function drawParticles() {
+    ctx.save();
+    particles.forEach(p => {
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    ctx.restore();
 }
 
 function drawPopups(dt) {
