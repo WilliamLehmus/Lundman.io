@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { MATERIALS, MATERIAL_PROPERTIES, BIOMES, CHASSIS, WEAPON_MODULES, ALL_WEAPONS } from './gameConfig.js';
 
-dotenv.config();
+dotenv.config(); // Force restart triggered by Antigravity
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const ENVIRONMENT = process.env.ENVIRONMENT || process.env.NODE_ENV || 'development';
@@ -187,7 +187,7 @@ class Lobby {
             hp: config.hp,
             maxHp: config.hp,
             body,
-            slots: ALL_WEAPONS.slice(0, config.slots),
+            slots: config.weapons,
             currentSlot: 0,
             lastShot: 0,
             scrap: 0,
@@ -244,7 +244,7 @@ class Lobby {
             hp: config.hp,
             maxHp: config.hp,
             body,
-            slots: ALL_WEAPONS.slice(0, config.slots),
+            slots: config.weapons,
             currentSlot: 0,
             lastShot: 0,
             scrap: 0,
@@ -1279,11 +1279,11 @@ io.on('connection', (socket) => {
         if (lobby && lobby.players[socket.id] && !lobby.active) {
             const p = lobby.players[socket.id];
             if (CHASSIS[chassisType]) {
+                const config = CHASSIS[chassisType];
                 p.chassis = chassisType;
-                p.hp = CHASSIS[chassisType].hp;
+                p.hp = config.hp;
                 p.maxHp = p.hp;
-                const availableWeapons = ALL_WEAPONS.slice(0, CHASSIS[chassisType].slots);
-                p.slots = availableWeapons;
+                p.slots = config.weapons;
                 p.currentSlot = 0;
                 
                 io.to(lobby.id).emit('lobby-update', {

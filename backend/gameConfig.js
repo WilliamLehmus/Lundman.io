@@ -38,30 +38,41 @@ export const CHASSIS = {
     SCOUT: {
         name: 'Scout',
         hp: 80,
-        speed: 0.007,
+        speed: 0.008, // Increased from 0.007
         turnSpeed: 0.08,
         mass: 3,
-        slots: 2
+        weapons: ['STANDARD', 'FLAMETHROWER']
     },
     BRAWLER: {
         name: 'Brawler',
         hp: 200,
-        speed: 0.004,
+        speed: 0.005, // Increased from 0.004
         turnSpeed: 0.04,
         mass: 10,
-        slots: 1
+        weapons: ['HEAVY_GUN']
     },
     ARTILLERY: {
         name: 'Artillery',
         hp: 60,
-        speed: 0.003,
-        turnSpeed: 0.03,
+        speed: 0.004, // Speed increased from 0.003
+        turnSpeed: 0.04, // Turn speed increased from 0.03
         mass: 15,
-        slots: 4
+        weapons: ['STANDARD', 'TESLA', 'WATER_CANNON', 'FROST_GUN']
     }
 };
 
 export const WEAPON_MODULES = {
+    HEAVY_GUN: {
+        name: 'Heavy Gun',
+        type: MATERIALS.METAL,
+        reload: 1200,
+        damage: 45,
+        speed: 10,
+        radius: 12,
+        impact: 0.05,
+        recoil: 0.03,
+        ttl: 2000
+    },
     STANDARD: {
         name: 'Main Gun',
         type: MATERIALS.METAL,
@@ -131,5 +142,5 @@ export const WEAPON_MODULES = {
     }
 };
 
-export const ALL_WEAPONS = ['STANDARD', 'FLAMETHROWER', 'WATER_CANNON', 'TESLA', 'FROST_GUN', 'DIRT_GUN'];
+export const ALL_WEAPONS = ['HEAVY_GUN', 'STANDARD', 'FLAMETHROWER', 'WATER_CANNON', 'TESLA', 'FROST_GUN', 'DIRT_GUN'];
 
