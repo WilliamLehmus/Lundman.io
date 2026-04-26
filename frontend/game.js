@@ -847,17 +847,22 @@ function drawBullets() {
 }
 
 function drawBulletBody(b) {
+    // ULTIMATE FIRE CHECK: If it's fire or looks like it, draw it as fire
+    if (b.type === 'fire' || b.weapon === 'FLAMETHROWER') {
+        drawFireBullet(b);
+        return;
+    }
+    
     switch (b.type) {
         case 'metal':    drawMetalBullet(b);    break;
-        case 'fire':     drawFireBullet(b);     break;
         case 'water':    drawWaterBullet(b);    break;
         case 'dirt':     drawDirtBullet(b);     break;
         case 'electric': drawElectricBullet(b); break;
         case 'ice':      drawIceBullet(b);      break;
         default:
-            ctx.fillStyle = b.color;
+            ctx.fillStyle = b.color || '#ffffff';
             ctx.beginPath();
-            ctx.arc(0, 0, 5, 0, Math.PI * 2);
+            ctx.arc(0, 0, 8, 0, Math.PI * 2);
             ctx.fill();
     }
 }
@@ -881,23 +886,27 @@ function drawMetalBullet(b) {
 }
 
 function drawFireBullet(b) {
-    const flicker = 0.85 + Math.sin(renderTime * 0.008 + b.id * 1.1) * 0.15;
-    const r = 9 * flicker;
-    ctx.globalAlpha = 0.2;
-    ctx.fillStyle = '#ff6600';
-    ctx.beginPath();
-    ctx.arc(0, 0, r * 2.2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 0.7;
-    ctx.fillStyle = '#ff3300';
+    const flicker = 0.8 + Math.sin(renderTime * 0.03 + b.id) * 0.2;
+    const r = 30 * flicker;
+    
+    ctx.save();
+    // Ultra vibrant neon fire
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = '#ff0000';
+    
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = '#ff4400';
     ctx.beginPath();
     ctx.arc(0, 0, r * 1.4, 0, Math.PI * 2);
     ctx.fill();
-    ctx.globalAlpha = 1.0;
-    ctx.fillStyle = '#ffdd00';
+    
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = '#ffcc00';
     ctx.beginPath();
-    ctx.arc(0, 0, r * 0.55, 0, Math.PI * 2);
+    ctx.arc(0, 0, r * 0.7, 0, Math.PI * 2);
     ctx.fill();
+    
+    ctx.restore();
 }
 
 function drawWaterBullet(b) {

@@ -1,10 +1,9 @@
-TypeError: Cannot read properties of undefined (reading 'w')
-    at Lobby.spawnElement (file:///C:/Users/lundm/Desktop/TANK/Lundman.io/backend/server.js:472:37)
-    at Lobby.generateMap (file:///C:/Users/lundm/Desktop/TANK/Lundman.io/backend/server.js:276:18)
-    at Lobby.setupWorld (file:///C:/Users/lundm/Desktop/TANK/Lundman.io/backend/server.js:120:14)
-    at new Lobby (file:///C:/Users/lundm/Desktop/TANK/Lundman.io/backend/server.js:80:14)
-    at Socket.<anonymous> (file:///C:/Users/lundm/Desktop/TANK/Lundman.io/backend/server.js:1036:23)
-    at Socket.emit (node:events:509:28)
-    at Socket.emitUntyped (C:\Users\lundm\Desktop\TANK\Lundman.io\node_modules\socket.io\dist\typed-events.js:69:22)
-    at C:\Users\lundm\Desktop\TANK\Lundman.io\node_modules\socket.io\dist\socket.js:697:39
-    at process.processTicksAndRejections (node:internal/process/task_queues:85:11)
+ReferenceError: moduleName is not defined
+    at Lobby.fire (file:///C:/Users/lundm/Desktop/TANK/Lundman.io/backend/server.js:850:21)
+    at Lobby.playerShoot (file:///C:/Users/lundm/Desktop/TANK/Lundman.io/backend/server.js:620:18)
+    at file:///C:/Users/lundm/Desktop/TANK/Lundman.io/backend/server.js:604:36
+    at Array.forEach (<anonymous>)
+    at Lobby.update (file:///C:/Users/lundm/Desktop/TANK/Lundman.io/backend/server.js:575:37)
+    at Timeout._onTimeout (file:///C:/Users/lundm/Desktop/TANK/Lundman.io/backend/server.js:84:18)
+    at listOnTimeout (node:internal/timers:605:17)
+    at process.processTimers (node:internal/timers:541:7)

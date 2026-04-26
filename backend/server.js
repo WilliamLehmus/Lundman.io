@@ -252,8 +252,8 @@ class Lobby {
     generateMap() {
         this.zones.push({ x: 0, y: 0, w: this.worldSize, h: this.worldSize, type: 'URBAN' });
 
-        const blockSize = 500; // Size of a city block
-        const streetWidth = 180; // Width of the "roads"
+        const blockSize = 350; // Size of a city block
+        const streetWidth = 150; // Width of the "roads"
         const padding = 100;
 
         // Iterate through the grid to create blocks
@@ -301,6 +301,13 @@ class Lobby {
     }
 
     spawnBuilding(pos, w, h) {
+        // Skip if building is outside world bounds
+        const padding = 10;
+        if (pos.x - w/2 < padding || pos.x + w/2 > this.worldSize - padding ||
+            pos.y - h/2 < padding || pos.y + h/2 > this.worldSize - padding) {
+            return;
+        }
+        
         const id = ++this.lastElementId;
         const body = Bodies.rectangle(pos.x, pos.y, w, h, {
             label: 'element',
@@ -617,7 +624,7 @@ class Lobby {
             reload: baseWeapon.reload * reloadFactor
         };
         if (now - p.lastShot > weapon.reload) {
-            this.fire(p, weapon);
+            this.fire(p, weapon, moduleName);
             p.lastShot = now;
         }
     }
@@ -828,7 +835,7 @@ class Lobby {
         });
     }
 
-    fire(p, weapon) {
+    fire(p, weapon, moduleName) {
         const id = ++this.lastBulletId;
         const fireDist = weapon.type === MATERIALS.DIRT ? 80 : 45;
         const pos = {
@@ -847,6 +854,7 @@ class Lobby {
             damage: weapon.damage, 
             impact: weapon.impact,
             type: weapon.type,
+            weapon: moduleName, // Store the weapon name
             expiresAt: Date.now() + (weapon.ttl || 2000)
         };
         Body.setVelocity(bullet, {
@@ -867,7 +875,11 @@ class Lobby {
             this.spawnElement(pos, MATERIALS.DIRT, 10000, weapon.hp);
         }
         if (weapon.type === MATERIALS.FIRE) {
-            this.spawnElement(pos, MATERIALS.FIRE, 2000, undefined, p.id);
+            // Spawn fire elements slightly ahead to avoid immediate collision
+            this.spawnElement({
+                x: pos.x + Math.cos(p.body.angle) * 20,
+                y: pos.y + Math.sin(p.body.angle) * 20
+            }, MATERIALS.FIRE, 1500, undefined, p.id);
         }
     }
 
@@ -887,7 +899,9 @@ class Lobby {
             })),
             bullets: Object.values(this.bullets).map(b => ({
                 id: b.id, x: b.position.x, y: b.position.y,
-                type: b.customData.type, color: this.getElementColor(b.customData.type),
+                type: b.customData.type,
+                weapon: b.customData.weapon,
+                color: this.getElementColor(b.customData.type),
                 angle: Math.atan2(b.velocity.y, b.velocity.x)
             })),
             elements: Object.values(this.elements).map(e => ({
