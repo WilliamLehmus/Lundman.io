@@ -69,7 +69,7 @@ export const WEAPON_MODULES = {
         impact: 0.001,
         recoil: 0.001,
         duration: 3000,
-        ttl: 350
+        ttl: 550
     },
     WATER_CANNON: {
         name: 'Water Cannon',
