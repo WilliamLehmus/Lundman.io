@@ -794,25 +794,48 @@ function drawTank(p) {
     }
 
     // Status Icons
-    if (p.stunned || p.scrap >= 100) {
+    if (p.stunned || p.slowed || p.burning || p.scrap >= 100) {
         ctx.save();
-        ctx.translate(p.x, p.y - TANK_SIZE - 25);
+        ctx.translate(p.x, p.y - TANK_SIZE - 30);
         ctx.textAlign = 'center';
         
+        let yOffset = 0;
         if (p.stunned) {
             ctx.fillStyle = '#ffff00';
             ctx.font = '700 16px Outfit';
-            ctx.fillText('⚡ STUNNED', 0, 0);
-        } else {
+            ctx.fillText('⚡ STUNNED', 0, yOffset);
+            yOffset -= 20;
+        }
+        if (p.slowed) {
+            ctx.fillStyle = '#00aaff';
+            ctx.font = '700 16px Outfit';
+            ctx.fillText('❄️ SLOWED', 0, yOffset);
+            yOffset -= 20;
+        }
+        if (p.burning) {
+            ctx.fillStyle = '#ff4400';
+            ctx.font = '700 16px Outfit';
+            ctx.fillText('🔥 BURNING', 0, yOffset);
+            yOffset -= 20;
+        }
+        if (p.wet) {
+            ctx.fillStyle = '#0088ff';
+            ctx.font = '700 16px Outfit';
+            ctx.fillText('💧 WET', 0, yOffset);
+            yOffset -= 20;
+        }
+        
+        // Show buff level only if not stunned (to keep UI clean)
+        if (p.scrap >= 100 && !p.stunned && !p.slowed && !p.burning && !p.wet) {
             const buffLevel = Math.floor(p.scrap / 100);
             if (buffLevel >= 5) {
                 ctx.fillStyle = '#ffcc00';
                 ctx.font = '900 16px Outfit';
-                ctx.fillText('⭐ MAX BUFF', 0, 0);
+                ctx.fillText('⭐ MAX BUFF', 0, yOffset);
             } else if (buffLevel >= 1) {
                 ctx.fillStyle = '#00ffaa';
                 ctx.font = '700 14px Outfit';
-                ctx.fillText(`🔷 LVL ${buffLevel} BUFF`, 0, 0);
+                ctx.fillText(`🔷 LVL ${buffLevel} BUFF`, 0, yOffset);
             }
         }
         ctx.restore();

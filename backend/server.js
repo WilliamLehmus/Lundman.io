@@ -193,7 +193,7 @@ class Lobby {
             scrap: 0,
             kills: 0,
             deaths: 0,
-            statusEffects: { stun: 0, slip: 0 },
+            statusEffects: { stun: 0, slip: 0, slow: 0, burn: 0, wet: 0 },
             inputs: { up: false, down: false, left: false, right: false, shoot: false, aimAngle: 0 },
             lastBuffLevel: 0
         };
@@ -250,7 +250,7 @@ class Lobby {
             scrap: 0,
             kills: 0,
             deaths: 0,
-            statusEffects: { stun: 0, slip: 0 },
+            statusEffects: { stun: 0, slip: 0, slow: 0, burn: 0 },
             inputs: { up: false, down: false, left: false, right: false, shoot: false, aimAngle: 0 },
             isBot: true,
             botDifficulty: difficulty,
@@ -428,7 +428,17 @@ class Lobby {
                     
                     if (bulletData.type === MATERIALS.ELECTRIC) {
                         const inWater = Object.values(this.elements).some(e => e.type === MATERIALS.WATER && Query.point([e.body], victim.body.position).length > 0);
-                        victim.statusEffects.stun = Date.now() + (inWater ? 2500 : 1000);
+                        const isWet = Date.now() < victim.statusEffects.wet;
+                        victim.statusEffects.stun = Date.now() + (inWater || isWet ? 2500 : 1000);
+                    }
+                    if (bulletData.type === MATERIALS.WATER) {
+                        victim.statusEffects.wet = Date.now() + 4000;
+                    }
+                    if (bulletData.type === MATERIALS.ICE) {
+                        victim.statusEffects.slow = Date.now() + 2500;
+                    }
+                    if (bulletData.type === MATERIALS.FIRE) {
+                        victim.statusEffects.burn = Date.now() + 500;
                     }
 
                     if (victim.hp < victim.maxHp * 0.5) {
@@ -727,12 +737,20 @@ class Lobby {
                 ) || { type: 'URBAN' };
                 const biome = BIOMES[zone.type];
                 const isIce = now < statusEffects.slip || zone.type === 'ICE';
+                const isSlowed = now < statusEffects.slow;
+                const isBurning = now < statusEffects.burn;
+
+                if (isBurning) p.hp -= 0.3; // Damage over time while burning
+
                 const baseFriction = isIce ? 0.01 : biome.friction;
                 const friction = config.speed > 0.005 ? baseFriction : baseFriction * 2;
                 if (body.frictionAir !== friction) body.frictionAir = friction;
-                const moveSpeed = config.speed * biome.speedMult;
-                if (inputs.left) Body.setAngularVelocity(body, -config.turnSpeed);
-                if (inputs.right) Body.setAngularVelocity(body, config.turnSpeed);
+                
+                const moveSpeed = config.speed * biome.speedMult * (isSlowed ? 0.5 : 1.0);
+                const turnSpeed = config.turnSpeed * (isSlowed ? 0.6 : 1.0);
+
+                if (inputs.left) Body.setAngularVelocity(body, -turnSpeed);
+                if (inputs.right) Body.setAngularVelocity(body, turnSpeed);
                 if (inputs.up) {
                     Body.applyForce(body, body.position, {
                         x: Math.cos(body.angle) * moveSpeed,
@@ -1049,6 +1067,9 @@ class Lobby {
                 hp: p.hp, maxHp: p.maxHp, weapon: p.slots[p.currentSlot],
                 currentSlot: p.currentSlot, slots: p.slots, scrap: p.scrap, hidden: p.hidden,
                 stunned: p.statusEffects.stun > Date.now(),
+                slowed: p.statusEffects.slow > Date.now(),
+                burning: p.statusEffects.burn > Date.now(),
+                wet: p.statusEffects.wet > Date.now(),
                 invulnerable: p.invulnerableUntil && Date.now() < p.invulnerableUntil
             })),
             bullets: Object.values(this.bullets).map(b => ({
