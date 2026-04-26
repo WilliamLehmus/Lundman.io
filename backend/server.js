@@ -519,7 +519,10 @@ class Lobby {
                 const now = Date.now();
                 const isInvulnerable = p.invulnerableUntil && now < p.invulnerableUntil;
 
-                if (element.type === MATERIALS.ELECTRIC && !isInvulnerable) p.statusEffects.stun = now + 500;
+                if (element.type === MATERIALS.ELECTRIC && !isInvulnerable) {
+                    p.statusEffects.stun = now + 2000;
+                    this.destroyElement(element.id);
+                }
                 if (element.type === MATERIALS.ICE) p.statusEffects.slip = now + 1000;
                 if (element.type === MATERIALS.FIRE && element.ownerId !== p.id && !isInvulnerable) p.hp -= 0.5;
                 if (element.type === MATERIALS.STEAM) p.hidden = true;
