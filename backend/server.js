@@ -6,7 +6,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
-import { MATERIALS, BIOMES, CHASSIS, WEAPON_MODULES } from './gameConfig.js';
+import { MATERIALS, BIOMES, CHASSIS, WEAPON_MODULES, ALL_WEAPONS } from './gameConfig.js';
 
 // 1. Load Env from Root
 dotenv.config();
@@ -46,7 +46,7 @@ const PORT = process.env.PORT || 3000;
 app.get('/health', (req, res) => res.send('Server is live!'));
 
 // Physics Aliases
-const { Engine, Bodies, Body, Composite, Vector, Events } = Matter;
+const { Engine, Bodies, Body, Composite, Vector, Events, Query } = Matter;
 
 // Game Constants
 const TICK_RATE = 60;
@@ -113,7 +113,7 @@ class Lobby {
             hp: config.hp,
             maxHp: config.hp,
             body,
-            slots: ['STANDARD', 'FLAMETHROWER', 'WATER_CANNON', 'TESLA', 'FROST_GUN', 'DIRT_GUN'],
+            slots: ALL_WEAPONS.slice(0, config.slots),
             currentSlot: 0,
             lastShot: 0,
             scrap: 0,
@@ -155,7 +155,7 @@ class Lobby {
             hp: config.hp,
             maxHp: config.hp,
             body,
-            slots: ['STANDARD', 'FLAMETHROWER', 'WATER_CANNON', 'TESLA', 'FROST_GUN', 'DIRT_GUN'],
+            slots: ALL_WEAPONS.slice(0, config.slots),
             currentSlot: 0,
             lastShot: 0,
             scrap: 0,
@@ -164,7 +164,10 @@ class Lobby {
             isBot: true,
             botDifficulty: difficulty,
             isActive: isActive,
-            nextWeaponSwap: 0
+            nextWeaponSwap: 0,
+            stuckTicks: 0,
+            evadeUntil: 0,
+            evadeDir: 1
         };
     }
 
@@ -491,9 +494,86 @@ class Lobby {
                 };
             }
 
-            const dx = targetPos.x - bot.body.position.x;
-            const dy = targetPos.y - bot.body.position.y;
-            let targetAngle = Math.atan2(dy, dx);
+            let targetAngle;
+            if (bot.ignoreTargetUntil && now < bot.ignoreTargetUntil) {
+                // Break out of local minima: ignore the player and just drive forward to escape the trap
+                targetAngle = bot.body.angle; 
+            } else {
+                const dx = targetPos.x - bot.body.position.x;
+                const dy = targetPos.y - bot.body.position.y;
+                targetAngle = Math.atan2(dy, dx);
+            }
+
+            // --- Stuck Detection (Fallback) ---
+            if (now < bot.evadeUntil) {
+                bot.inputs.up = false;
+                bot.inputs.down = true; // Backup
+                bot.inputs.left = bot.evadeDir === -1;
+                bot.inputs.right = bot.evadeDir === 1;
+                bot.inputs.shoot = false;
+                return;
+            }
+
+            const speed = Vector.magnitude(bot.body.velocity);
+            if (bot.inputs.up && speed < 1) {
+                bot.stuckTicks = (bot.stuckTicks || 0) + 1;
+            } else {
+                bot.stuckTicks = 0;
+            }
+
+            if (bot.stuckTicks > 30) {
+                bot.evadeUntil = now + 1000 + Math.random() * 500;
+                bot.evadeDir = Math.random() > 0.5 ? 1 : -1;
+                bot.ignoreTargetUntil = bot.evadeUntil + 2000; // Wander away for 2s after evading
+                bot.stuckTicks = 0;
+            }
+            // ---------------------------------
+
+            // --- Potential Field Obstacle Avoidance ---
+            const lookAhead = 120; // Shortened slightly to avoid triggering on distant corners
+            const obstacles = Composite.allBodies(this.engine.world).filter(b => 
+                b !== bot.body && !b.isSensor && b.label !== 'bullet' && !b.label.startsWith('tank-')
+            );
+            
+            // Narrower spread (-23, -11, 0, 11, 23 degrees) so it matches the tank's actual physical width
+            // This allows it to "thread the needle" through gaps without being repulsed by the edges.
+            const angles = [-0.4, -0.2, 0, 0.2, 0.4];
+            let avoidX = 0;
+            let avoidY = 0;
+            let hitCount = 0;
+
+            for (const offset of angles) {
+                const rayAngle = bot.body.angle + offset;
+                const rayEnd = {
+                    x: bot.body.position.x + Math.cos(rayAngle) * lookAhead,
+                    y: bot.body.position.y + Math.sin(rayAngle) * lookAhead
+                };
+                const hits = Query.ray(obstacles, bot.body.position, rayEnd);
+                if (hits.length > 0) {
+                    // Center rays have stronger repulsion
+                    const weight = Math.abs(offset) < 0.1 ? 4.0 : 2.0;
+                    avoidX -= Math.cos(rayAngle) * weight;
+                    avoidY -= Math.sin(rayAngle) * weight;
+                    hitCount++;
+                }
+            }
+
+            if (hitCount > 0) {
+                if (Math.abs(avoidX) < 0.01 && Math.abs(avoidY) < 0.01) {
+                    const forceAngle = bot.body.angle + ((bot.id.charCodeAt(bot.id.length - 1) % 2 === 0) ? Math.PI/2 : -Math.PI/2);
+                    avoidX = Math.cos(forceAngle) * 4.0;
+                    avoidY = Math.sin(forceAngle) * 4.0;
+                }
+                
+                // Pure vector addition for perfectly smooth steering
+                // Target has a constant "pull" of 2.0. Avoidance forces stack up against it.
+                const targetPull = 2.0;
+                const finalX = Math.cos(targetAngle) * targetPull + avoidX;
+                const finalY = Math.sin(targetAngle) * targetPull + avoidY;
+                
+                targetAngle = Math.atan2(finalY, finalX);
+            }
+            // -----------------------------------------
 
             // EASY: Aim Error
             if (bot.botDifficulty === 'EASY') {

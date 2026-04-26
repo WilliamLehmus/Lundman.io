@@ -116,3 +116,6 @@ export const WEAPON_MODULES = {
         ttl: 1200
     }
 };
+
+export const ALL_WEAPONS = ['STANDARD', 'FLAMETHROWER', 'WATER_CANNON', 'TESLA', 'FROST_GUN', 'DIRT_GUN'];
+
