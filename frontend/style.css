@@ -474,7 +474,45 @@ button:active {
 
 #game-over h2 {
     font-size: 3rem;
-    margin-bottom: 2rem;
+    margin-bottom: 1.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5rem;
+}
+
+.results-container {
+    width: 100%;
+    max-width: 600px;
+    margin: 0 auto 2rem;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 15px;
+    padding: 1rem;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.result-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+    padding: 0.8rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    font-weight: 700;
+    align-items: center;
+}
+
+.result-header {
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.result-row.blue { color: var(--p1-color); }
+.result-row.pink { color: var(--p2-color); }
+
+.game-over-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
 }
 
 /* Animations */

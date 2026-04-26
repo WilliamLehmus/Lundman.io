@@ -117,17 +117,26 @@ function playMusic() {
     track.play().catch(e => console.log("Audio play blocked until interaction"));
 }
 
-function playShot() {
+function playWeaponSound(weaponType, x, y) {
+    // Spatial volume based on distance to camera
+    const dist = Math.hypot(x - (camera.x + canvas.width/2), y - (camera.y + canvas.height/2));
+    const spatialVol = Math.max(0, 1 - (dist / 1500));
+    const finalVol = sfxVolume * spatialVol;
+    
+    if (finalVol <= 0.01) return;
+
     const sfx = shotSFX.cloneNode();
-    sfx.volume = sfxVolume;
+    sfx.volume = finalVol;
+    
+    // Pitch shifting for different weapons
+    if (weaponType === 'TESLA') {
+        sfx.playbackRate = 2.0; // Sharp electric snap
+    } else if (weaponType === 'ARTILLERY') {
+        sfx.playbackRate = 0.7; // Deep heavy boom
+    }
+    
     sfx.play();
 }
-
-if (musicSlider) musicSlider.oninput = (e) => {
-    musicVolume = e.target.value;
-    musicTracks.forEach(t => t.volume = musicVolume);
-    localStorage.setItem('tanks_music_vol', musicVolume);
-};
 
 if (sfxSlider) sfxSlider.oninput = (e) => {
     sfxVolume = e.target.value;
@@ -222,7 +231,6 @@ function handleInput(code, isPressed) {
     if (code === 'KeyA' || code === 'ArrowLeft') { keys.left = isPressed; changed = true; }
     if (code === 'KeyD' || code === 'ArrowRight') { keys.right = isPressed; changed = true; }
     if (code === 'Space' || code === 'Enter') {
-        if (isPressed && !keys.shoot) playShot();
         keys.shoot = isPressed;
         changed = true;
     }
@@ -310,9 +318,10 @@ socket.on('game-started', () => {
     gameActive = true;
 });
 
-socket.on('match-ended', ({ winner, scores }) => {
+socket.on('match-ended', ({ winner, scores, stats }) => {
     gameActive = false;
     gameOverScreen.classList.remove('hidden');
+    
     const winnerText = document.getElementById('winner-text');
     if (winnerText) {
         if (winner === 'draw') {
@@ -323,6 +332,29 @@ socket.on('match-ended', ({ winner, scores }) => {
             winnerText.innerText = `${teamName} DOMINATES!`;
             winnerText.style.color = winner === 'blue' ? '#00f2ff' : '#ff00ff';
         }
+    }
+
+    const resultsContainer = document.getElementById('match-results');
+    if (resultsContainer && stats) {
+        resultsContainer.innerHTML = `
+            <div class="result-row result-header">
+                <div>PLAYER</div>
+                <div>KILLS</div>
+                <div>DEATHS</div>
+                <div>SCRAP</div>
+            </div>
+        `;
+        stats.forEach(p => {
+            const row = document.createElement('div');
+            row.className = `result-row ${p.team}`;
+            row.innerHTML = `
+                <div>${p.username.toUpperCase()}</div>
+                <div>${p.kills}</div>
+                <div>${p.deaths}</div>
+                <div>${p.scrap}</div>
+            `;
+            resultsContainer.appendChild(row);
+        });
     }
 });
 
@@ -355,8 +387,25 @@ if (lobbyChassisSelect) {
     };
 }
 
+const knownBulletIds = new Set();
 socket.on('state', (state) => {
     serverState = state;
+    
+    // Play sounds for new bullets
+    if (state.bullets) {
+        state.bullets.forEach(b => {
+            if (!knownBulletIds.has(b.id)) {
+                playWeaponSound(b.weapon, b.x, b.y);
+                knownBulletIds.add(b.id);
+                // Clean up old IDs to prevent memory leak
+                if (knownBulletIds.size > 200) {
+                    const first = knownBulletIds.values().next().value;
+                    knownBulletIds.delete(first);
+                }
+            }
+        });
+    }
+
     const me = state.players.find(p => p.id === myId);
     if (me && me.scrap > lastScrap) {
         const renderMe = gameState.players.find(p => p.id === myId) || me;
@@ -799,6 +848,28 @@ function drawElements() {
                 ctx.arc(e.x, e.y, e.w/2, 0, Math.PI * 2);
             }
             ctx.fill();
+
+            // Add animated lightning for electric pools
+            if (e.type === MATERIALS.ELECTRIC) {
+                ctx.save();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#00f2ff';
+                ctx.beginPath();
+                for (let i = 0; i < 2; i++) {
+                    let lx = e.x + (Math.random() - 0.5) * e.w * 0.7;
+                    let ly = e.y + (Math.random() - 0.5) * e.h * 0.7;
+                    ctx.moveTo(lx, ly);
+                    for (let j = 0; j < 3; j++) {
+                        lx += (Math.random() - 0.5) * 25;
+                        ly += (Math.random() - 0.5) * 25;
+                        ctx.lineTo(lx, ly);
+                    }
+                }
+                ctx.stroke();
+                ctx.restore();
+            }
         }
         ctx.restore();
     });

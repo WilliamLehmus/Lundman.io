@@ -71,7 +71,7 @@ class Lobby {
         this.lastBulletId = 0;
         this.lastElementId = 0;
             
-        this.matchTimer = 600; // 10 minutes match duration
+        this.matchTimer = 480; // 8 minutes match duration
         this.scoreCap = 20;
         this.scores = { blue: 0, pink: 0 };
         this.gameOver = false;
@@ -177,6 +177,8 @@ class Lobby {
             currentSlot: 0,
             lastShot: 0,
             scrap: 0,
+            kills: 0,
+            deaths: 0,
             statusEffects: { stun: 0, slip: 0 },
             inputs: { up: false, down: false, left: false, right: false, shoot: false }
         };
@@ -227,6 +229,8 @@ class Lobby {
             currentSlot: 0,
             lastShot: 0,
             scrap: 0,
+            kills: 0,
+            deaths: 0,
             statusEffects: { stun: 0, slip: 0 },
             inputs: { up: false, down: false, left: false, right: false, shoot: false },
             isBot: true,
@@ -558,25 +562,29 @@ class Lobby {
         });
     }
 
-    respawn(player, killerId = null, weaponType = null) {
-        // Point to the other team
+    respawn(player, killerId = null, weaponType = 'UNKNOWN') {
+        player.hp = player.maxHp;
+        player.deaths++;
+
+        if (killerId && this.players[killerId]) {
+            this.players[killerId].kills++;
+            
+            const killer = this.players[killerId];
+            const victim = player;
+            
+            io.to(this.id).emit('kill-feed', {
+                killer: killer.username,
+                victim: victim.username,
+                weapon: weaponType,
+                killerTeam: killer.team,
+                victimTeam: victim.team
+            });
+        }
+
         const otherTeam = player.team === 'blue' ? 'pink' : 'blue';
         if (!this.gameOver) {
             this.scores[otherTeam]++;
             this.checkMatchEnd();
-        }
-
-        if (killerId && killerId !== player.id) {
-            const killer = this.players[killerId];
-            if (killer) {
-                io.to(this.id).emit('kill-feed', {
-                    killer: killer.username,
-                    victim: player.username,
-                    weapon: weaponType,
-                    killerTeam: killer.team,
-                    victimTeam: player.team
-                });
-            }
         }
 
         player.invulnerableUntil = Date.now() + 3000;
@@ -1003,7 +1011,14 @@ class Lobby {
             this.gameOver = true;
             io.to(this.id).emit('match-ended', { 
                 winner, 
-                scores: this.scores 
+                scores: this.scores,
+                stats: Object.values(this.players).map(p => ({
+                    username: p.username,
+                    team: p.team,
+                    kills: p.kills,
+                    deaths: p.deaths,
+                    scrap: p.scrap
+                })).sort((a, b) => b.kills - a.kills)
             });
         }
     }
