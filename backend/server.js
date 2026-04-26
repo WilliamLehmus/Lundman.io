@@ -183,9 +183,19 @@ class Lobby {
     }
 
     addBot(difficulty = 'NORMAL', pos = null, isActive = true, forcedTeam = null) {
-        const id = 'bot-' + Math.random().toString(36).substr(2, 6);
-        const botNumber = Object.values(this.players).filter(p => p.isBot).length + 1;
-        const username = `BOT_MK${botNumber}_${difficulty}`;
+        const botNames = [
+            'Ironclad', 'Panzer', 'Steel Rain', 'Blitz', 'Vanguard', 
+            'Sentinel', 'Titan', 'Reaper', 'Havoc', 'Goliath',
+            'Maverick', 'Warthog', 'Sabre', 'Thunder', 'Ghost',
+            'Spectre', 'Rogue', 'Apex', 'Predator', 'Odin'
+        ];
+        const existingNames = Object.values(this.players).map(p => p.username);
+        const availableNames = botNames.filter(n => !existingNames.includes(n));
+        const username = availableNames.length > 0 ? 
+            availableNames[Math.floor(Math.random() * availableNames.length)] : 
+            `Bot-${Math.random().toString(36).substring(7, 10).toUpperCase()}`;
+
+        const id = 'bot-' + Math.random().toString(36).substring(7);
         const chassisType = 'SCOUT'; 
         const team = forcedTeam || (Object.keys(this.players).length % 2 === 0 ? 'blue' : 'pink');
         
@@ -356,7 +366,13 @@ class Lobby {
             if (targetId !== bulletData.ownerId) {
                 const victim = this.players[targetId];
                 if (victim) {
-                    victim.hp -= bulletData.damage;
+                    const now = Date.now();
+                    const isInvulnerable = victim.invulnerableUntil && now < victim.invulnerableUntil;
+                    
+                    if (!isInvulnerable) {
+                        victim.hp -= bulletData.damage;
+                    }
+                    
                     const forceDir = Vector.normalise(bullet.velocity);
                     Body.applyForce(target, target.position, Vector.mult(forceDir, bulletData.impact));
                     
@@ -370,7 +386,7 @@ class Lobby {
                     }
 
                     this.destroyBullet(bullet.id);
-                    if (victim.hp <= 0) this.respawn(victim, bulletData.ownerId, bulletData.type);
+                    if (victim.hp <= 0) this.respawn(victim, bulletData.ownerId, bulletData.weapon || bulletData.type);
                 }
             }
         }
@@ -385,6 +401,8 @@ class Lobby {
                     this.destroyBullet(bullet.id);
                     return;
                 }
+                if (bulletData.type === element.type) return;
+
                 if (element.hp != null) {
                 element.hp -= bulletData.damage;
                 if (element.hp <= 0) {
@@ -462,15 +480,22 @@ class Lobby {
             const pId = tankBody.label.split('tank-')[1];
             const p = this.players[pId];
             if (p) {
-                if (element.type === MATERIALS.ELECTRIC) p.statusEffects.stun = Date.now() + 500;
-                if (element.type === MATERIALS.ICE) p.statusEffects.slip = Date.now() + 1000;
-                if (element.type === MATERIALS.FIRE && element.ownerId !== p.id) p.hp -= 0.5;
+                const now = Date.now();
+                const isInvulnerable = p.invulnerableUntil && now < p.invulnerableUntil;
+
+                if (element.type === MATERIALS.ELECTRIC && !isInvulnerable) p.statusEffects.stun = now + 500;
+                if (element.type === MATERIALS.ICE) p.statusEffects.slip = now + 1000;
+                if (element.type === MATERIALS.FIRE && element.ownerId !== p.id && !isInvulnerable) p.hp -= 0.5;
                 if (element.type === MATERIALS.STEAM) p.hidden = true;
                 if (element.type === MATERIALS.SCRAP) {
                     p.scrap = Math.min(p.scrap + 10, 500);
                     this.destroyElement(element.id);
                 }
-                if (p.hp <= 0) this.respawn(p);
+                if (p.hp <= 0) {
+                    const weaponSource = element.type === MATERIALS.FIRE ? 'FLAMETHROWER' : 
+                                       (element.type === MATERIALS.ELECTRIC ? 'TESLA' : element.type);
+                    this.respawn(p, element.ownerId, weaponSource);
+                }
             }
         }
     }
@@ -837,7 +862,7 @@ class Lobby {
         });
     }
 
-    fire(p, weapon, moduleName) {
+    fire(p, weapon, moduleName = 'UNKNOWN') {
         const id = ++this.lastBulletId;
         const fireDist = weapon.type === MATERIALS.DIRT ? 80 : 45;
         const pos = {
@@ -948,7 +973,7 @@ class Lobby {
         this.setupWorld(playerCount);
 
         this.active = true;
-        this.matchTimer = 300;
+        this.matchTimer = 480; // 8 minutes
         this.scores = { blue: 0, pink: 0 };
         this.gameOver = false;
         this.lastTimeTick = Date.now();

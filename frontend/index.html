@@ -16,15 +16,7 @@
         <div id="fps-counter">-- FPS</div>
         <div id="version-number"></div>
         
-        <!-- Minimizable Volume Widget -->
-        <div id="mini-volume-widget">
-            <svg class="speaker-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
-            </svg>
-            <div class="slider-container">
-                <input type="range" id="mini-music-volume" min="0" max="1" step="0.05" value="0.5">
-            </div>
-        </div>
+
 
         <div id="splash-screen">
             <div class="splash-content">
@@ -130,7 +122,7 @@
                 <div id="score-cap-hint">FIRST TO 20 WINS</div>
             </div>
 
-            <div class="p2-stats stats-panel glass-panel">
+            <div class="p2-stats stats-panel glass-panel hidden">
                 <span class="label">PLAYER 2</span>
                 <div class="hp-bar-container"><div id="p2-hp" class="hp-bar"></div></div>
                 <div class="weapon-selector">

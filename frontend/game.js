@@ -86,7 +86,6 @@ const TANK_SIZE = 45;
 // Audio setup
 const optionsMenu = document.getElementById('options-menu');
 const musicSlider = document.getElementById('music-volume');
-const miniMusicSlider = document.getElementById('mini-music-volume');
 const sfxSlider = document.getElementById('sfx-volume');
 const closeOptionsBtn = document.getElementById('close-options');
 
@@ -127,14 +126,6 @@ function playShot() {
 if (musicSlider) musicSlider.oninput = (e) => {
     musicVolume = e.target.value;
     musicTracks.forEach(t => t.volume = musicVolume);
-    if (miniMusicSlider) miniMusicSlider.value = musicVolume;
-    localStorage.setItem('tanks_music_vol', musicVolume);
-};
-
-if (miniMusicSlider) miniMusicSlider.oninput = (e) => {
-    musicVolume = e.target.value;
-    musicTracks.forEach(t => t.volume = musicVolume);
-    if (musicSlider) musicSlider.value = musicVolume;
     localStorage.setItem('tanks_music_vol', musicVolume);
 };
 
@@ -184,7 +175,6 @@ function init() {
     
     // Set initial slider values
     if (musicSlider) musicSlider.value = musicVolume;
-    if (miniMusicSlider) miniMusicSlider.value = musicVolume;
     if (sfxSlider) sfxSlider.value = sfxVolume;
     
     // Load username from local storage
@@ -593,11 +583,19 @@ function drawMinimap() {
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    // Buildings
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+    // Elements (Buildings & Scrap)
     gameState.elements.forEach(e => {
-        if (e.type === 'BUILDING') {
-            ctx.fillRect(e.x * scale, e.y * scale, (e.w || 30) * scale, (e.h || 30) * scale);
+        const ex = e.x * scale;
+        const ey = e.y * scale;
+        
+        if (e.type === 'building') {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+            ctx.fillRect(ex - (e.w/2)*scale, ey - (e.h/2)*scale, e.w * scale, e.h * scale);
+        } else if (e.type === 'scrap') {
+            ctx.fillStyle = '#ffd700';
+            ctx.beginPath();
+            ctx.arc(ex, ey, 1.5, 0, Math.PI * 2);
+            ctx.fill();
         }
     });
 
@@ -618,12 +616,18 @@ function drawMinimap() {
             ctx.strokeStyle = '#fff';
             ctx.lineWidth = 1.5;
             ctx.stroke();
+            ctx.shadowBlur = 0;
         } else {
             ctx.beginPath();
             ctx.arc(px, py, 3, 0, Math.PI * 2);
             ctx.fill();
         }
     });
+
+    // Borders
+    ctx.strokeStyle = 'rgba(0, 242, 255, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0, 0, size, size);
 
     ctx.restore();
 }
@@ -650,7 +654,8 @@ function drawKillFeed() {
         const victimColor = f.victimTeam === 'blue' ? '#00f2ff' : '#ff00ff';
 
         const victimWidth = ctx.measureText(f.victim).width;
-        const weaponText = ` [${f.weapon.toUpperCase()}] `;
+        const friendlyWeapon = WEAPON_NAMES[f.weapon] || f.weapon;
+        const weaponText = ` [${friendlyWeapon.toUpperCase()}] `;
         const weaponWidth = ctx.measureText(weaponText).width;
         const killerWidth = ctx.measureText(f.killer).width;
 
@@ -847,7 +852,6 @@ function drawBullets() {
 }
 
 function drawBulletBody(b) {
-    // ULTIMATE FIRE CHECK: If it's fire or looks like it, draw it as fire
     if (b.type === 'fire' || b.weapon === 'FLAMETHROWER') {
         drawFireBullet(b);
         return;
@@ -862,7 +866,7 @@ function drawBulletBody(b) {
         default:
             ctx.fillStyle = b.color || '#ffffff';
             ctx.beginPath();
-            ctx.arc(0, 0, 8, 0, Math.PI * 2);
+            ctx.arc(0, 0, 5, 0, Math.PI * 2);
             ctx.fill();
     }
 }

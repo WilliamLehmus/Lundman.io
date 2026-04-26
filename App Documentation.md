@@ -56,6 +56,12 @@ The environment is reactive:
 - **Dynamic Buffs**: Scrap automatically increases your **Damage** and **Reload Speed** (buffs displayed in real-time).
 - **Popups**: Visual "+10 SCRAP" indicators for immediate feedback.
 
+### 5. HUD & UI Experience
+- **Adaptive HUD**: The Player 2 stats panel is hidden by default in single-player or online sessions to maximize visibility.
+- **Kill Feed**: Real-time event log in the top-right corner showing localized weapon names (e.g., "Main Gun" instead of "STANDARD").
+- **Minimap**: High-contrast overview showing buildings, world borders, and scrap locations (gold markers).
+- **Spawn Protection**: Visual feedback (shield/glitch effect) for 3 seconds after respawn, indicating invulnerability.
+
 ---
 
 ## 🛠️ Technology Stack
