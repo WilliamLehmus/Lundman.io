@@ -639,40 +639,40 @@ class Lobby {
                 this.lastTimeTick = now;
                 if (this.matchTimer <= 0) this.checkMatchEnd();
             }
-        }
 
-        this.processBots(now);
-        Object.values(this.players).forEach(p => {
-            const { inputs, body, chassis, statusEffects } = p;
-            const config = CHASSIS[chassis];
-            if (now < statusEffects.stun) return;
-            p.hidden = false;
-            const zone = this.zones.find(z => 
-                body.position.x >= z.x && body.position.x <= z.x + z.w &&
-                body.position.y >= z.y && body.position.y <= z.y + z.h
-            ) || { type: 'URBAN' };
-            const biome = BIOMES[zone.type];
-            const isIce = now < statusEffects.slip || zone.type === 'ICE';
-            const baseFriction = isIce ? 0.01 : biome.friction;
-            const friction = config.speed > 0.005 ? baseFriction : baseFriction * 2;
-            if (body.frictionAir !== friction) body.frictionAir = friction;
-            const moveSpeed = config.speed * biome.speedMult;
-            if (inputs.left) Body.setAngularVelocity(body, -config.turnSpeed);
-            if (inputs.right) Body.setAngularVelocity(body, config.turnSpeed);
-            if (inputs.up) {
-                Body.applyForce(body, body.position, {
-                    x: Math.cos(body.angle) * moveSpeed,
-                    y: Math.sin(body.angle) * moveSpeed
-                });
-            }
-            if (inputs.down) {
-                Body.applyForce(body, body.position, {
-                    x: -Math.cos(body.angle) * moveSpeed,
-                    y: -Math.sin(body.angle) * moveSpeed
-                });
-            }
-            if (inputs.shoot) this.playerShoot(p);
-        });
+            this.processBots(now);
+            Object.values(this.players).forEach(p => {
+                const { inputs, body, chassis, statusEffects } = p;
+                const config = CHASSIS[chassis];
+                if (now < statusEffects.stun) return;
+                p.hidden = false;
+                const zone = this.zones.find(z => 
+                    body.position.x >= z.x && body.position.x <= z.x + z.w &&
+                    body.position.y >= z.y && body.position.y <= z.y + z.h
+                ) || { type: 'URBAN' };
+                const biome = BIOMES[zone.type];
+                const isIce = now < statusEffects.slip || zone.type === 'ICE';
+                const baseFriction = isIce ? 0.01 : biome.friction;
+                const friction = config.speed > 0.005 ? baseFriction : baseFriction * 2;
+                if (body.frictionAir !== friction) body.frictionAir = friction;
+                const moveSpeed = config.speed * biome.speedMult;
+                if (inputs.left) Body.setAngularVelocity(body, -config.turnSpeed);
+                if (inputs.right) Body.setAngularVelocity(body, config.turnSpeed);
+                if (inputs.up) {
+                    Body.applyForce(body, body.position, {
+                        x: Math.cos(body.angle) * moveSpeed,
+                        y: Math.sin(body.angle) * moveSpeed
+                    });
+                }
+                if (inputs.down) {
+                    Body.applyForce(body, body.position, {
+                        x: -Math.cos(body.angle) * moveSpeed,
+                        y: -Math.sin(body.angle) * moveSpeed
+                    });
+                }
+                if (inputs.shoot) this.playerShoot(p);
+            });
+        }
     }
 
     playerShoot(p) {
