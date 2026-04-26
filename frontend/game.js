@@ -644,30 +644,121 @@ function drawTank(p) {
     ctx.save();
     ctx.rotate(p.angle);
 
+    // Tracks (Larvfötter)
+    ctx.fillStyle = '#111';
+    ctx.strokeStyle = '#222';
+    ctx.lineWidth = 1;
+    // Left Track
+    ctx.beginPath();
+    ctx.roundRect(-TANK_SIZE/2 - 4, -TANK_SIZE/2 + 2, TANK_SIZE + 8, 10, 3);
+    ctx.fill();
+    ctx.stroke();
+    // Right Track
+    ctx.beginPath();
+    ctx.roundRect(-TANK_SIZE/2 - 4, TANK_SIZE/2 - 12, TANK_SIZE + 8, 10, 3);
+    ctx.fill();
+    ctx.stroke();
+
     // Body
     ctx.fillStyle = '#1a1a2e';
     ctx.strokeStyle = color;
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.roundRect(-TANK_SIZE/2, -TANK_SIZE/2, TANK_SIZE, TANK_SIZE, 5);
+    ctx.roundRect(-TANK_SIZE/2, -TANK_SIZE/2, TANK_SIZE, TANK_SIZE, 8);
     ctx.fill();
     ctx.stroke();
+
+    // Front Indicators (Headlights)
+    ctx.fillStyle = 'rgba(255, 255, 100, 0.8)';
+    ctx.beginPath();
+    ctx.arc(TANK_SIZE/2 - 4, -TANK_SIZE/4, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(TANK_SIZE/2 - 4, TANK_SIZE/4, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Back Indicators (Engine Vents)
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-TANK_SIZE/2 + 6, -10);
+    ctx.lineTo(-TANK_SIZE/2 + 6, 10);
+    ctx.moveTo(-TANK_SIZE/2 + 10, -10);
+    ctx.lineTo(-TANK_SIZE/2 + 10, 10);
+    ctx.stroke();
+    
     ctx.restore();
 
     // Turret (Separate Rotation)
     ctx.save();
     ctx.rotate(p.aimAngle || p.angle);
     
+    // Turret Base Dome
+    const turretRadius = 14;
+    const gradient = ctx.createRadialGradient(-2, -2, 2, 0, 0, turretRadius);
+    gradient.addColorStop(0, '#3a3a5e');
+    gradient.addColorStop(1, '#1a1a2e');
+    ctx.fillStyle = gradient;
     ctx.beginPath();
-    ctx.arc(0, 0, 12, 0, Math.PI * 2);
+    ctx.arc(0, 0, turretRadius, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
-    // Barrel
+    // Turret Hatch (Lucka)
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.roundRect(0, -5, 30, 10, 2);
+    ctx.arc(-4, -4, 4, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Barrel
+    const weaponType = p.slots && p.slots[p.currentSlot];
+    let barrelLen = 30;
+    let barrelWidth = 10;
+    let muzzleBrake = true;
+
+    if (weaponType === 'HEAVY_GUN') {
+        barrelLen = 42;
+        barrelWidth = 14;
+    } else if (weaponType === 'FLAMETHROWER') {
+        barrelLen = 25;
+        barrelWidth = 8;
+        muzzleBrake = false;
+    } else if (weaponType === 'TESLA') {
+        barrelLen = 35;
+        barrelWidth = 6;
+    }
+
+    ctx.fillStyle = '#1a1a2e';
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    
+    // Draw Barrel
+    ctx.beginPath();
+    ctx.roundRect(turretRadius - 2, -barrelWidth/2, barrelLen, barrelWidth, 2);
     ctx.fill();
     ctx.stroke();
+
+    // Muzzle Brake or Details
+    if (muzzleBrake) {
+        ctx.beginPath();
+        ctx.roundRect(turretRadius + barrelLen - 6, -barrelWidth/2 - 2, 8, barrelWidth + 4, 2);
+        ctx.fill();
+        ctx.stroke();
+    }
+
+    // Tesla Coil effect
+    if (weaponType === 'TESLA') {
+        ctx.strokeStyle = '#ffff00';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 4; i++) {
+            ctx.beginPath();
+            ctx.moveTo(turretRadius + 5 + i*7, -barrelWidth/2 - 2);
+            ctx.lineTo(turretRadius + 5 + i*7, barrelWidth/2 + 2);
+            ctx.stroke();
+        }
+    }
+
     ctx.restore();
 
     // Username
