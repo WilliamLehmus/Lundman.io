@@ -1,4 +1,5 @@
 import { io } from "socket.io-client";
+import versionData from './version.json';
 
 // Connect directly to the backend port in development to avoid proxy timeouts
 const socket = io('http://localhost:3000', {
@@ -148,6 +149,10 @@ function init() {
     console.log('Game Initializing...');
     resize();
     setupAudio();
+    
+    // Set dynamic version
+    const versionEl = document.getElementById('version-number');
+    if (versionEl) versionEl.innerText = `v${versionData.version}`;
     
     // Set initial slider values
     musicSlider.value = musicVolume;
