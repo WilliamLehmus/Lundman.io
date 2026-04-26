@@ -346,9 +346,18 @@ function updateHUD() {
 
 let lastFpsTime = performance.now();
 let framesThisSecond = 0;
+const FPS_LIMIT = 60;
+const FRAME_INTERVAL = 1000 / FPS_LIMIT;
+let lastRenderTime = 0;
 
 function renderLoop(now) {
     requestAnimationFrame(renderLoop);
+
+    const elapsed = now - lastRenderTime;
+    if (elapsed < FRAME_INTERVAL) return;
+
+    // Adjust lastRenderTime to maintain consistent timing
+    lastRenderTime = now - (elapsed % FRAME_INTERVAL);
 
     const rawDt = now - lastFrameTime;
     lastFrameTime = now;
