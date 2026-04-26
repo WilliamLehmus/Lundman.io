@@ -318,6 +318,21 @@ class Lobby {
             targetElement.type = MATERIALS.ICE;
         }
 
+        // Alchemy: Fire vs Ice
+        if ((elementA?.type === MATERIALS.ICE && bullet?.customData.type === MATERIALS.FIRE) ||
+            (elementB?.type === MATERIALS.ICE && bullet?.customData.type === MATERIALS.FIRE)) {
+            if (elementA?.type === MATERIALS.ICE) this.destroyElement(elementA.id);
+            if (elementB?.type === MATERIALS.ICE) this.destroyElement(elementB.id);
+        }
+
+        if (elementA && elementB) {
+            if ((elementA.type === MATERIALS.FIRE && elementB.type === MATERIALS.ICE) ||
+                (elementB.type === MATERIALS.FIRE && elementA.type === MATERIALS.ICE)) {
+                this.destroyElement(elementA.id);
+                this.destroyElement(elementB.id);
+            }
+        }
+
         const tankBody = bodyA.label.startsWith('tank-') ? bodyA : (bodyB.label.startsWith('tank-') ? bodyB : null);
         const element = elementA || elementB;
         if (tankBody && element) {
@@ -329,7 +344,7 @@ class Lobby {
                 if (element.type === MATERIALS.FIRE && element.ownerId !== p.id) p.hp -= 0.5;
                 if (element.type === MATERIALS.STEAM) p.hidden = true;
                 if (element.type === MATERIALS.SCRAP) {
-                    p.scrap += 10;
+                    p.scrap = Math.min(p.scrap + 10, 500);
                     this.destroyElement(element.id);
                 }
                 if (p.hp <= 0) this.respawn(p);
