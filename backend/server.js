@@ -383,7 +383,7 @@ class Lobby {
                     this.destroyBullet(bullet.id);
                     return;
                 }
-                if (element.hp !== undefined) {
+                if (element.hp != null) {
                 element.hp -= bulletData.damage;
                 if (element.hp <= 0) {
                     if (element.type === MATERIALS.BUILDING) {
