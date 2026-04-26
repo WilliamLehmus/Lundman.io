@@ -63,6 +63,15 @@
             </div>
             <div id="lobby-status">WAITING FOR PLAYERS (2/10)...</div>
             
+            <div class="lobby-chassis-select" style="margin-bottom: 1.5rem; display: flex; flex-direction: column; align-items: center; gap: 0.5rem; pointer-events: auto;">
+                <label style="font-size: 0.8rem; letter-spacing: 2px; color: var(--p1-color);">SWITCH CHASSIS:</label>
+                <select id="lobby-chassis-select" class="premium-select" style="margin-top: 0; width: 350px;">
+                    <option value="SCOUT">SCOUT (2 SLOTS, FAST)</option>
+                    <option value="BRAWLER">BRAWLER (1 SLOT, TANKY)</option>
+                    <option value="ARTILLERY">ARTILLERY (4 SLOTS, SLOW)</option>
+                </select>
+            </div>
+
             <div class="bot-management" style="margin-bottom: 1.5rem; display: flex; justify-content: center; gap: 10px; align-items: center;">
                 <select id="bot-difficulty" class="premium-select" style="width: auto; margin-top: 0; padding: 0.8rem 1.5rem; font-size: 1rem;">
                     <option value="EASY">BOT: EASY</option>
@@ -70,6 +79,7 @@
                     <option value="HARD">BOT: HARD</option>
                 </select>
                 <button id="add-bot-btn" class="secondary-btn" style="padding: 0.8rem 1.5rem; font-size: 1rem;">ADD BOT</button>
+                <button id="remove-bot-btn" class="secondary-btn" style="padding: 0.8rem 1.5rem; font-size: 1rem; border-color: #ff3333 !important; color: #ff3333 !important;">REMOVE BOT</button>
             </div>
 
             <button id="start-game-btn" class="hidden">START GAME</button>
@@ -108,6 +118,17 @@
                 <div id="weapon-name" class="weapon-name-label">MAIN GUN</div>
                 <div class="cooldown-container"><div id="p1-cooldown" class="cooldown-bar"></div></div>
             </div>
+
+            <div id="match-info" class="glass-panel">
+                <div id="team-scores">
+                    <span class="score score-alpha" id="score-alpha">0</span>
+                    <span class="score-divider">:</span>
+                    <span class="score score-omega" id="score-omega">0</span>
+                </div>
+                <div id="match-timer">05:00</div>
+                <div id="score-cap-hint">FIRST TO 20 WINS</div>
+            </div>
+
             <div class="p2-stats stats-panel glass-panel">
                 <span class="label">PLAYER 2</span>
                 <div class="hp-bar-container"><div id="p2-hp" class="hp-bar"></div></div>
@@ -121,8 +142,8 @@
         </div>
 
         <div id="game-over" class="glass-panel hidden">
-            <h2 id="winner-text">PLAYER 1 WINS!</h2>
             <button id="restart-btn">REMATCH</button>
+            <button id="leave-btn" class="secondary-btn">LEAVE BATTLE</button>
         </div>
     </div>
 

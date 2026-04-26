@@ -37,7 +37,20 @@ const lobbyIdSpan = document.getElementById('lobby-id');
 const lobbyStatus = document.getElementById('lobby-status');
 
 const addBotBtn = document.getElementById('add-bot-btn');
+const removeBotBtn = document.getElementById('remove-bot-btn');
 const botDifficulty = document.getElementById('bot-difficulty');
+
+if (addBotBtn) {
+    addBotBtn.onclick = () => {
+        socket.emit('add-bot', { difficulty: botDifficulty.value });
+    };
+}
+
+if (removeBotBtn) {
+    removeBotBtn.onclick = () => {
+        socket.emit('remove-bot');
+    };
+}
 
 const p1HpBar = document.getElementById('p1-hp');
 const p1Scrap = document.getElementById('p1-scrap');
@@ -259,9 +272,7 @@ socket.on('dev-reload', () => {
     location.reload();
 });
 
-socket.on('lobby-update', ({ id, players }) => {
-    splashScreen.classList.add('hidden');
-    lobbyScreen.classList.remove('hidden');
+function updateLobbyUI(id, players) {
     lobbyIdSpan.innerText = id.toUpperCase();
     
     blueTeamList.innerHTML = '';
@@ -274,24 +285,82 @@ socket.on('lobby-update', ({ id, players }) => {
         
         if (p.team === 'blue') blueTeamList.appendChild(item);
         else pinkTeamList.appendChild(item);
+        
+        if (p.id === myId) {
+            const lobbyChassisSelect = document.getElementById('lobby-chassis-select');
+            if (lobbyChassisSelect && lobbyChassisSelect.value !== p.chassis) {
+                lobbyChassisSelect.value = p.chassis;
+            }
+        }
     });
 
     const count = players.length;
     lobbyStatus.innerText = `PLAYERS: ${count}/10`;
     
-    // Allow start with 1 player for testing
     if (count >= 1) {
         startGameBtn.classList.remove('hidden');
     } else {
         startGameBtn.classList.add('hidden');
     }
+}
+
+socket.on('lobby-update', ({ id, players }) => {
+    splashScreen.classList.add('hidden');
+    lobbyScreen.classList.remove('hidden');
+    updateLobbyUI(id, players);
 });
 
 socket.on('game-started', () => {
     lobbyScreen.classList.add('hidden');
+    gameOverScreen.classList.add('hidden');
     hud.classList.remove('hidden');
     gameActive = true;
 });
+
+socket.on('match-ended', ({ winner, scores }) => {
+    gameActive = false;
+    gameOverScreen.classList.remove('hidden');
+    const winnerText = document.getElementById('winner-text');
+    if (winnerText) {
+        if (winner === 'draw') {
+            winnerText.innerText = "IT'S A DRAW!";
+            winnerText.style.color = "#fff";
+        } else {
+            const teamName = winner === 'blue' ? 'ALPHA TEAM' : 'OMEGA TEAM';
+            winnerText.innerText = `${teamName} DOMINATES!`;
+            winnerText.style.color = winner === 'blue' ? '#00f2ff' : '#ff00ff';
+        }
+    }
+});
+
+socket.on('lobby-reset', ({ id, players }) => {
+    gameActive = false;
+    gameOverScreen.classList.add('hidden');
+    hud.classList.add('hidden');
+    lobbyScreen.classList.remove('hidden');
+    updateLobbyUI(id, players);
+});
+
+const restartBtn = document.getElementById('restart-btn');
+if (restartBtn) {
+    restartBtn.onclick = () => {
+        socket.emit('request-rematch');
+    };
+}
+
+const leaveBtn = document.getElementById('leave-btn');
+if (leaveBtn) {
+    leaveBtn.onclick = () => {
+        location.reload();
+    };
+}
+
+const lobbyChassisSelect = document.getElementById('lobby-chassis-select');
+if (lobbyChassisSelect) {
+    lobbyChassisSelect.onchange = (e) => {
+        socket.emit('change-chassis', e.target.value);
+    };
+}
 
 socket.on('state', (state) => {
     serverState = state;
@@ -302,6 +371,10 @@ socket.on('state', (state) => {
         lastScrap = me.scrap;
     }
     updateHUD();
+    
+    if (state.gameOver && gameActive) {
+        gameActive = false;
+    }
 });
 
 function updateHUD() {
@@ -340,6 +413,30 @@ function updateHUD() {
                     selector.dataset.currentSlot = me.currentSlot;
                 }
             }
+        }
+    }
+
+    // Global Match HUD
+    const alphaScore = document.getElementById('score-alpha');
+    const omegaScore = document.getElementById('score-omega');
+    const timerDisplay = document.getElementById('match-timer');
+    
+    if (serverState.scores) {
+        if (alphaScore) alphaScore.innerText = serverState.scores.blue;
+        if (omegaScore) omegaScore.innerText = serverState.scores.pink;
+    }
+    
+    if (serverState.timer !== undefined && timerDisplay) {
+        const mins = Math.floor(serverState.timer / 60);
+        const secs = serverState.timer % 60;
+        timerDisplay.innerText = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        
+        if (serverState.timer < 30) {
+            timerDisplay.style.color = '#ff3333';
+            timerDisplay.style.textShadow = '0 0 10px rgba(255, 51, 51, 0.5)';
+        } else {
+            timerDisplay.style.color = '#fff';
+            timerDisplay.style.textShadow = 'none';
         }
     }
 }

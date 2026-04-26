@@ -69,6 +69,12 @@ class Lobby {
         this.lastBulletId = 0;
         this.lastElementId = 0;
         
+        this.matchTimer = 300;
+        this.scoreCap = 20;
+        this.scores = { blue: 0, pink: 0 };
+        this.gameOver = false;
+        this.lastTimeTick = Date.now();
+
         this.generateMap();
         
         const wallThickness = 100;
@@ -82,6 +88,7 @@ class Lobby {
 
         this.handleCollisions();
         this.physicsInterval = setInterval(() => {
+            this.update();
             Engine.update(this.engine, 1000 / TICK_RATE);
             this.cleanupElements();
         }, 1000 / TICK_RATE);
@@ -92,7 +99,15 @@ class Lobby {
     }
 
     addPlayer(socket, username, chassisType = 'SCOUT') {
-        const team = Object.keys(this.players).length % 2 === 0 ? 'blue' : 'pink';
+        const team = Object.values(this.players).filter(p => p.team === 'blue').length <= 
+                     Object.values(this.players).filter(p => p.team === 'pink').length ? 'blue' : 'pink';
+        
+        // Replace a bot on this team if one exists
+        const botOnTeam = Object.values(this.players).find(p => p.isBot && p.team === team);
+        if (botOnTeam) {
+            this.removePlayer(botOnTeam.id);
+        }
+
         const startPos = team === 'blue' ? { x: 400, y: WORLD_SIZE/2 } : { x: WORLD_SIZE - 400, y: WORLD_SIZE/2 };
         const config = CHASSIS[chassisType];
         
@@ -122,12 +137,12 @@ class Lobby {
         };
     }
 
-    addBot(difficulty = 'NORMAL', pos = null, isActive = true) {
+    addBot(difficulty = 'NORMAL', pos = null, isActive = true, forcedTeam = null) {
         const id = 'bot-' + Math.random().toString(36).substr(2, 6);
         const botNumber = Object.values(this.players).filter(p => p.isBot).length + 1;
         const username = `BOT_MK${botNumber}_${difficulty}`;
-        const chassisType = 'SCOUT'; // Default chassis
-        const team = Object.keys(this.players).length % 2 === 0 ? 'blue' : 'pink';
+        const chassisType = 'SCOUT'; 
+        const team = forcedTeam || (Object.keys(this.players).length % 2 === 0 ? 'blue' : 'pink');
         
         let startPos;
         if (pos) {
@@ -172,9 +187,17 @@ class Lobby {
     }
 
     removePlayer(socketId) {
-        if (this.players[socketId]) {
-            Composite.remove(this.engine.world, this.players[socketId].body);
+        const p = this.players[socketId];
+        if (p) {
+            const wasBot = p.isBot;
+            const team = p.team;
+            Composite.remove(this.engine.world, p.body);
             delete this.players[socketId];
+
+            // Replace human with bot
+            if (!wasBot) {
+                this.addBot('NORMAL', null, true, team);
+            }
         }
     }
 
@@ -410,6 +433,13 @@ class Lobby {
     }
 
     respawn(player) {
+        // Point to the other team
+        const otherTeam = player.team === 'blue' ? 'pink' : 'blue';
+        if (!this.gameOver) {
+            this.scores[otherTeam]++;
+            this.checkMatchEnd();
+        }
+
         for (let i = 0; i < 5; i++) {
             this.spawnElement({
                 x: player.body.position.x + (Math.random() - 0.5) * 60,
@@ -425,6 +455,15 @@ class Lobby {
 
     update() {
         const now = Date.now();
+
+        if (this.active && !this.gameOver) {
+            if (now - this.lastTimeTick >= 1000) {
+                this.matchTimer--;
+                this.lastTimeTick = now;
+                if (this.matchTimer <= 0) this.checkMatchEnd();
+            }
+        }
+
         this.processBots(now);
         Object.values(this.players).forEach(p => {
             const { inputs, body, chassis, statusEffects } = p;
@@ -581,7 +620,6 @@ class Lobby {
                 }
                 
                 // Pure vector addition for perfectly smooth steering
-                // Target has a constant "pull" of 2.0. Avoidance forces stack up against it.
                 const targetPull = 2.0;
                 const finalX = Math.cos(targetAngle) * targetPull + avoidX;
                 const finalY = Math.sin(targetAngle) * targetPull + avoidY;
@@ -690,9 +728,11 @@ class Lobby {
     }
 
     broadcastState() {
-        this.update();
         const state = {
             worldSize: WORLD_SIZE,
+            timer: this.matchTimer,
+            scores: this.scores,
+            gameOver: this.gameOver,
             zones: this.zones.map(z => ({ ...z, color: BIOMES[z.type].color })),
             players: Object.values(this.players).map(p => ({
                 id: p.id, username: p.username, team: p.team,
@@ -738,6 +778,49 @@ class Lobby {
             case MATERIALS.ICE: return '#aaddff';
             default: return '#ffffff';
         }
+    }
+
+    checkMatchEnd() {
+        if (this.gameOver) return;
+
+        let winner = null;
+        if (this.scores.blue >= this.scoreCap) winner = 'blue';
+        else if (this.scores.pink >= this.scoreCap) winner = 'pink';
+        else if (this.matchTimer <= 0) {
+            if (this.scores.blue > this.scores.pink) winner = 'blue';
+            else if (this.scores.pink > this.scores.blue) winner = 'pink';
+            else winner = 'draw';
+        }
+
+        if (winner) {
+            this.gameOver = true;
+            io.to(this.id).emit('match-ended', { 
+                winner, 
+                scores: this.scores 
+            });
+        }
+    }
+
+    resetLobby() {
+        this.active = false;
+        this.gameOver = false;
+        this.matchTimer = 300;
+        this.scores = { blue: 0, pink: 0 };
+        this.lastTimeTick = Date.now();
+
+        // Clear bullets and elements
+        Object.keys(this.bullets).forEach(id => this.destroyBullet(id));
+        Object.keys(this.elements).forEach(id => this.destroyElement(id));
+        
+        // Respawn everyone
+        Object.values(this.players).forEach(p => this.respawn(p));
+        
+        this.generateMap();
+        
+        io.to(this.id).emit('lobby-reset', {
+            id: this.id,
+            players: Object.values(this.players).map(p => ({ username: p.username, team: p.team, id: p.id }))
+        });
     }
 
     destroy() {
@@ -808,6 +891,21 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('remove-bot', () => {
+        const lobby = lobbies[socket.lobbyId];
+        if (lobby) {
+            const bots = Object.values(lobby.players).filter(p => p.isBot);
+            if (bots.length > 0) {
+                const botToRemove = bots[bots.length - 1];
+                lobby.removePlayer(botToRemove.id);
+                io.to(lobby.id).emit('lobby-update', {
+                    id: lobby.id,
+                    players: Object.values(lobby.players).map(p => ({ username: p.username, team: p.team, id: p.id, chassis: p.chassis }))
+                });
+            }
+        }
+    });
+
     socket.on('input', (inputs) => {
         const lobby = lobbies[socket.lobbyId];
         if (lobby && lobby.players[socket.id]) lobby.players[socket.id].inputs = inputs;
@@ -829,6 +927,11 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('request-rematch', () => {
+        const lobby = lobbies[socket.lobbyId];
+        if (lobby) lobby.resetLobby();
+    });
+
     // Debug Listeners
     socket.on('debug-spawn-bot', (data) => {
         if (process.env.ENVIRONMENT !== 'development') return;
@@ -845,6 +948,26 @@ io.on('connection', (socket) => {
             Object.values(lobby.players).forEach(p => {
                 if (p.isBot) p.isActive = active;
             });
+        }
+    });
+
+    socket.on('change-chassis', (chassisType) => {
+        const lobby = lobbies[socket.lobbyId];
+        if (lobby && lobby.players[socket.id] && !lobby.active) {
+            const p = lobby.players[socket.id];
+            if (CHASSIS[chassisType]) {
+                p.chassis = chassisType;
+                p.hp = CHASSIS[chassisType].hp;
+                p.maxHp = p.hp;
+                const availableWeapons = ALL_WEAPONS.slice(0, CHASSIS[chassisType].slots);
+                p.slots = availableWeapons;
+                p.currentSlot = 0;
+                
+                io.to(lobby.id).emit('lobby-update', {
+                    id: lobby.id,
+                    players: Object.values(lobby.players).map(p => ({ username: p.username, team: p.team, id: p.id, chassis: p.chassis }))
+                });
+            }
         }
     });
 

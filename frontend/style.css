@@ -459,6 +459,50 @@ button:active {
     margin-top: 0.1rem;
 }
 
+#match-info {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 220px;
+    padding: 0.8rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    border-radius: 0 0 20px 20px;
+    border-top: none;
+}
+
+#team-scores {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    font-size: 2rem;
+    font-weight: 900;
+    line-height: 1;
+}
+
+.score-alpha { color: var(--p1-color); text-shadow: 0 0 15px var(--p1-color); }
+.score-omega { color: var(--p2-color); text-shadow: 0 0 15px var(--p2-color); }
+.score-divider { color: rgba(255, 255, 255, 0.2); font-size: 1.5rem; }
+
+#match-timer {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 2px;
+    margin-top: 2px;
+}
+
+#score-cap-hint {
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.3);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
 .hidden {
     display: none !important;
     opacity: 0;
