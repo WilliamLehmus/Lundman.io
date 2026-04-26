@@ -28,7 +28,10 @@ export const BIOMES = {
     ICE: { color: '#aaddff33', friction: 0.005, speedMult: 1.2 },
     SWAMP: { color: '#2d3e2d33', friction: 0.3, speedMult: 0.6 },
     DESERT: { color: '#edc9af33', friction: 0.1, speedMult: 0.9 },
-    URBAN: { color: 'rgba(0,0,0,0)', friction: 0.1, speedMult: 1.0 }
+    URBAN: { color: 'rgba(0,0,0,0)', friction: 0.1, speedMult: 1.0 },
+    WASTELAND: { color: 'rgba(139, 69, 19, 0.1)', friction: 0.12, speedMult: 1.0 },
+    INDUSTRIAL: { color: 'rgba(50, 50, 50, 0.2)', friction: 0.08, speedMult: 1.1 },
+    WETLAND: { color: 'rgba(0, 100, 50, 0.2)', friction: 0.25, speedMult: 0.7 }
 };
 
 export const CHASSIS = {

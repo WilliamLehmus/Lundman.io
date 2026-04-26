@@ -83,9 +83,13 @@ class Lobby {
         
         this.handleCollisions();
         this.physicsInterval = setInterval(() => {
-            this.update();
-            Engine.update(this.engine, 1000 / TICK_RATE);
-            this.cleanupElements();
+            try {
+                this.update();
+                Engine.update(this.engine, 1000 / TICK_RATE);
+                this.cleanupElements();
+            } catch (e) {
+                console.error('CRITICAL: Physics update failed in lobby', this.id, e);
+            }
         }, 1000 / TICK_RATE);
 
         this.syncInterval = setInterval(() => {
@@ -125,15 +129,20 @@ class Lobby {
     getRandomSpawn(team) {
         let pos;
         let attempts = 0;
-        const xBase = team === 'blue' ? 300 : this.worldSize - 300;
+        const xBase = team === 'blue' ? 400 : this.worldSize - 400;
         
-        while (attempts < 10) {
+        while (attempts < 50) {
             pos = {
-                x: xBase + (Math.random() - 0.5) * 400,
-                y: (this.worldSize / 2) + (Math.random() - 0.5) * (this.worldSize * 0.6)
+                x: xBase + (Math.random() - 0.5) * 600,
+                y: (this.worldSize / 2) + (Math.random() - 0.5) * (this.worldSize * 0.7)
             };
             
-            const bodies = Query.point(Object.values(this.elements).map(e => e.body), pos);
+            // Check a region around the spawn point to ensure the whole tank fits
+            const bodies = Query.region(Object.values(this.elements).map(e => e.body), {
+                min: { x: pos.x - 40, y: pos.y - 40 },
+                max: { x: pos.x + 40, y: pos.y + 40 }
+            });
+            
             if (bodies.length === 0) break;
             attempts++;
         }
@@ -266,33 +275,45 @@ class Lobby {
     }
 
     generateMap() {
-        this.zones.push({ x: 0, y: 0, w: this.worldSize, h: this.worldSize, type: 'URBAN' });
+        const biomes = ['URBAN', 'WASTELAND', 'INDUSTRIAL', 'WETLAND'];
+        const mapType = biomes[Math.floor(Math.random() * biomes.length)];
+        this.zones.push({ x: 0, y: 0, w: this.worldSize, h: this.worldSize, type: mapType });
 
-        const blockSize = 350; // Size of a city block
-        const streetWidth = 150; // Width of the "roads"
-        const padding = 100;
+        const blockSize = 350;
+        const streetWidth = 150;
+        const padding = 150;
 
-        // Iterate through the grid to create blocks
         for (let x = padding; x < this.worldSize - padding; x += blockSize + streetWidth) {
             for (let y = padding; y < this.worldSize - padding; y += blockSize + streetWidth) {
-                // 85% chance to create a block (leaves some open plazas)
-                if (Math.random() < 0.85) {
-                    this.generateCityBlock(x, y, blockSize);
-                } else {
-                    // Create a "park" or "plaza" in the empty space
-                    if (Math.random() > 0.5) {
-                        this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.WATER, null, null, null, 250, 250);
-                    }
+                const rand = Math.random();
+                
+                if (mapType === 'URBAN') {
+                    if (rand < 0.85) this.generateCityBlock(x, y, blockSize);
+                    else if (rand > 0.95) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.WATER, null, null, null, 250, 250);
+                } 
+                else if (mapType === 'WASTELAND') {
+                    if (rand < 0.4) this.generateCityBlock(x, y, blockSize); // Sparse buildings
+                    else if (rand < 0.7) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.OIL, 300000, null, null, 200, 200);
+                    else if (rand < 0.8) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.DIRT, null, null, null, 300, 300);
+                }
+                else if (mapType === 'INDUSTRIAL') {
+                    if (rand < 0.7) this.generateCityBlock(x, y, blockSize);
+                    if (Math.random() > 0.5) this.spawnElement({ x: x + blockSize, y: y + blockSize }, MATERIALS.ELECTRIC, 60000, null, null, 150, 150);
+                }
+                else if (mapType === 'WETLAND') {
+                    if (rand < 0.3) this.generateCityBlock(x, y, blockSize);
+                    else if (rand < 0.8) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.WATER, null, null, null, 300, 300);
+                    if (Math.random() > 0.7) this.spawnElement({ x: x + blockSize, y: y + blockSize }, MATERIALS.DIRT, null, null, null, 200, 200);
                 }
             }
         }
 
-        // Add some random small details like oil puddles on streets
-        for (let i = 0; i < 20; i++) {
-            this.spawnElement({
-                x: Math.random() * this.worldSize,
-                y: Math.random() * this.worldSize
-            }, MATERIALS.OIL, 60000);
+        // Random scatters based on biome
+        const scatterCount = mapType === 'WASTELAND' ? 40 : 20;
+        for (let i = 0; i < scatterCount; i++) {
+            const pos = { x: Math.random() * this.worldSize, y: Math.random() * this.worldSize };
+            const type = mapType === 'WETLAND' ? MATERIALS.WATER : (mapType === 'WASTELAND' ? MATERIALS.OIL : MATERIALS.DIRT);
+            this.spawnElement(pos, type, 120000);
         }
     }
 
@@ -301,18 +322,19 @@ class Lobby {
         
         if (type < 0.3) {
             // One big building (e.g. factory or skyscraper)
-            this.spawnBuilding({ x: bx + size/2, y: by + size/2 }, size * 0.8, size * 0.8);
+            this.spawnBuilding({ x: bx + size/2, y: by + size/2 }, size * 0.7, size * 0.7);
         } else if (type < 0.7) {
-            // L-shaped block or two vertical buildings
-            this.spawnBuilding({ x: bx + size/4, y: by + size/2 }, size * 0.4, size * 0.9);
-            this.spawnBuilding({ x: bx + size * 0.75, y: by + size/2 }, size * 0.4, size * 0.9);
+            // Two buildings with a guaranteed wide alley (at least 80px)
+            const bW = size * 0.35;
+            this.spawnBuilding({ x: bx + bW/2 + 10, y: by + size/2 }, bW, size * 0.85);
+            this.spawnBuilding({ x: bx + size - bW/2 - 10, y: by + size/2 }, bW, size * 0.85);
         } else {
-            // Four small corner buildings
-            const s = size * 0.35;
-            this.spawnBuilding({ x: bx + s, y: by + s }, s*1.8, s*1.8);
-            this.spawnBuilding({ x: bx + size - s, y: by + s }, s*1.8, s*1.8);
-            this.spawnBuilding({ x: bx + s, y: by + size - s }, s*1.8, s*1.8);
-            this.spawnBuilding({ x: bx + size - s, y: by + size - s }, s*1.8, s*1.8);
+            // Four small corner buildings with wide central cross-path
+            const s = size * 0.3;
+            this.spawnBuilding({ x: bx + s, y: by + s }, s*1.6, s*1.6);
+            this.spawnBuilding({ x: bx + size - s, y: by + s }, s*1.6, s*1.6);
+            this.spawnBuilding({ x: bx + s, y: by + size - s }, s*1.6, s*1.6);
+            this.spawnBuilding({ x: bx + size - s, y: by + size - s }, s*1.6, s*1.6);
         }
     }
 
@@ -405,6 +427,27 @@ class Lobby {
                     this.destroyBullet(bullet.id);
                     return;
                 }
+
+                if (bulletData.type === MATERIALS.ELECTRIC && element.type === MATERIALS.WATER) {
+                    element.type = MATERIALS.ELECTRIC;
+                    element.expiresAt = Date.now() + 2000;
+                    this.destroyBullet(bullet.id);
+                    return;
+                }
+
+                if (bulletData.type === MATERIALS.FIRE && element.type === MATERIALS.WATER) {
+                    this.spawnElement(bullet.position, MATERIALS.STEAM, 4000);
+                    this.destroyElement(element.id);
+                    this.destroyBullet(bullet.id);
+                    return;
+                }
+
+                if (bulletData.type === MATERIALS.ICE && element.type === MATERIALS.WATER) {
+                    element.type = MATERIALS.ICE;
+                    this.destroyBullet(bullet.id);
+                    return;
+                }
+
                 if (bulletData.type === element.type) return;
 
                 if (element.hp != null) {
@@ -434,40 +477,15 @@ class Lobby {
         const elementA = bodyA.label === 'element' ? this.elements[bodyA.elementId] : null;
         const elementB = bodyB.label === 'element' ? this.elements[bodyB.elementId] : null;
         const bullet = bodyA.label === 'bullet' ? bodyA : (bodyB.label === 'bullet' ? bodyB : null);
-        const pos = bullet ? bullet.position : bodyA.position;
 
-        if ((elementA?.type === MATERIALS.OIL && bullet?.customData.type === MATERIALS.FIRE) ||
-            (elementB?.type === MATERIALS.OIL && bullet?.customData.type === MATERIALS.FIRE)) {
-            this.spawnElement(pos, MATERIALS.FIRE, 3000, undefined, bullet?.customData.ownerId);
-            if (elementA?.type === MATERIALS.OIL) this.destroyElement(elementA.id);
-            if (elementB?.type === MATERIALS.OIL) this.destroyElement(elementB.id);
-        }
-
-        if ((elementA?.type === MATERIALS.WATER && bullet?.customData.type === MATERIALS.ELECTRIC) ||
-            (elementB?.type === MATERIALS.WATER && bullet?.customData.type === MATERIALS.ELECTRIC)) {
-            const targetElement = elementA?.type === MATERIALS.WATER ? elementA : elementB;
-            targetElement.type = MATERIALS.ELECTRIC;
-            targetElement.expiresAt = Date.now() + 2000;
-        }
-
-        if ((elementA?.type === MATERIALS.WATER && bullet?.customData.type === MATERIALS.FIRE) ||
-            (elementB?.type === MATERIALS.WATER && bullet?.customData.type === MATERIALS.FIRE)) {
-            this.spawnElement(pos, MATERIALS.STEAM, 4000);
-            if (elementA?.type === MATERIALS.WATER) this.destroyElement(elementA.id);
-            if (elementB?.type === MATERIALS.WATER) this.destroyElement(elementB.id);
-        }
-
-        if ((elementA?.type === MATERIALS.WATER && bullet?.customData.type === MATERIALS.ICE) ||
-            (elementB?.type === MATERIALS.WATER && bullet?.customData.type === MATERIALS.ICE)) {
-            const targetElement = elementA?.type === MATERIALS.WATER ? elementA : elementB;
-            targetElement.type = MATERIALS.ICE;
-        }
-
-        // Alchemy: Fire vs Ice
-        if ((elementA?.type === MATERIALS.ICE && bullet?.customData.type === MATERIALS.FIRE) ||
-            (elementB?.type === MATERIALS.ICE && bullet?.customData.type === MATERIALS.FIRE)) {
-            if (elementA?.type === MATERIALS.ICE) this.destroyElement(elementA.id);
-            if (elementB?.type === MATERIALS.ICE) this.destroyElement(elementB.id);
+        // Bullet vs Puddle Alchemy is now handled in processBulletCollision for consistency
+        if (!bullet && elementA && elementB) {
+            // Puddle vs Puddle Alchemy (e.g. Fire puddle hits Ice puddle)
+            if ((elementA.type === MATERIALS.FIRE && elementB.type === MATERIALS.ICE) ||
+                (elementB.type === MATERIALS.FIRE && elementA.type === MATERIALS.ICE)) {
+                this.destroyElement(elementA.id);
+                this.destroyElement(elementB.id);
+            }
         }
 
         if (elementA && elementB) {
@@ -505,6 +523,16 @@ class Lobby {
     }
 
     spawnElement(pos, type, duration = null, hp = null, ownerId = null, customW = null, customH = null) {
+        // Prevent spawning elements inside buildings
+        if (type !== MATERIALS.BUILDING) {
+            const buildings = Object.values(this.elements)
+                .filter(e => e.type === MATERIALS.BUILDING)
+                .map(e => e.body);
+            
+            const isInside = Query.point(buildings, pos).length > 0;
+            if (isInside) return null;
+        }
+
         const id = ++this.lastElementId;
         const config = MATERIAL_PROPERTIES[type] || { w: 30, h: 30 };
         const w = customW || config.w;
@@ -651,15 +679,14 @@ class Lobby {
         const moduleName = p.slots[p.currentSlot];
         const baseWeapon = WEAPON_MODULES[moduleName];
         const now = Date.now();
-        const buffFactor = 1 + (p.scrap / 100);
-        const reloadFactor = 1 / (1 + p.scrap / 200);
-        const weapon = {
-            ...baseWeapon,
-            damage: baseWeapon.damage * buffFactor,
-            reload: baseWeapon.reload * reloadFactor
-        };
-        if (now - p.lastShot > weapon.reload) {
-            this.fire(p, weapon, moduleName);
+        
+        // Scrap Bonus: +20% damage and +10% fire rate per 100 scrap
+        const scrapBuff = 1 + (p.scrap / 500); 
+        const reloadTime = baseWeapon.reload / (1 + (p.scrap / 1000));
+
+        if (now - p.lastShot > reloadTime) {
+            // Apply damage bonus in the fire call
+            this.fire(p, baseWeapon, moduleName, scrapBuff);
             p.lastShot = now;
         }
     }
@@ -686,6 +713,7 @@ class Lobby {
             if (closestEnemy) {
                 targetPos = closestEnemy.body.position;
             } else {
+                bot.inputs.shoot = false; // Stop shooting if no valid target
                 let closestScrap = null;
                 let minScrapDist = 800; 
                 Object.values(this.elements).forEach(e => {
@@ -870,7 +898,7 @@ class Lobby {
         });
     }
 
-    fire(p, weapon, moduleName = 'UNKNOWN') {
+    fire(p, weapon, moduleName = 'UNKNOWN', scrapBuff = 1) {
         const id = ++this.lastBulletId;
         const fireDist = weapon.type === MATERIALS.DIRT ? 80 : 45;
         const pos = {
@@ -884,12 +912,13 @@ class Lobby {
             isSensor: weapon.type === MATERIALS.DIRT 
         });
         bullet.id = id;
+        
         bullet.customData = { 
             ownerId: p.id, 
-            damage: weapon.damage, 
-            impact: weapon.impact,
+            damage: weapon.damage * scrapBuff, 
+            impact: weapon.impact * scrapBuff,
             type: weapon.type,
-            weapon: moduleName, // Store the weapon name
+            weapon: moduleName, 
             expiresAt: Date.now() + (weapon.ttl || 2000)
         };
         Body.setVelocity(bullet, {
@@ -1026,7 +1055,7 @@ class Lobby {
     resetLobby() {
         this.active = false;
         this.gameOver = false;
-        this.matchTimer = 300;
+        this.matchTimer = 480;
         this.scores = { blue: 0, pink: 0 };
         this.lastTimeTick = Date.now();
 

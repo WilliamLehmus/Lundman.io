@@ -1,9 +1,7 @@
-ReferenceError: moduleName is not defined
-    at Lobby.fire (file:///C:/Users/lundm/Desktop/TANK/Lundman.io/backend/server.js:850:21)
-    at Lobby.playerShoot (file:///C:/Users/lundm/Desktop/TANK/Lundman.io/backend/server.js:620:18)
-    at file:///C:/Users/lundm/Desktop/TANK/Lundman.io/backend/server.js:604:36
-    at Array.forEach (<anonymous>)
-    at Lobby.update (file:///C:/Users/lundm/Desktop/TANK/Lundman.io/backend/server.js:575:37)
-    at Timeout._onTimeout (file:///C:/Users/lundm/Desktop/TANK/Lundman.io/backend/server.js:84:18)
+TypeError: Cannot read properties of undefined (reading 'color')
+    at file:///C:/Users/lundm/Desktop/TANK/Lundman.io/backend/server.js:952:71
+    at Array.map (<anonymous>)
+    at Lobby.broadcastState (file:///C:/Users/lundm/Desktop/TANK/Lundman.io/backend/server.js:952:31)
+    at Timeout._onTimeout (file:///C:/Users/lundm/Desktop/TANK/Lundman.io/backend/server.js:92:18)
     at listOnTimeout (node:internal/timers:605:17)
     at process.processTimers (node:internal/timers:541:7)
