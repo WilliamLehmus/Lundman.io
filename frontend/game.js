@@ -2,8 +2,8 @@ import { io } from "socket.io-client";
 import versionData from './version.json';
 import { MATERIALS, MATERIAL_PROPERTIES } from '../backend/gameConfig.js';
 
-// Connect directly to the backend port in development to avoid proxy timeouts
-const socket = io('http://localhost:3000', {
+// Connect to the same host the game is served from
+const socket = io({
     transports: ['websocket', 'polling']
 });
 

@@ -8,9 +8,11 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { MATERIALS, MATERIAL_PROPERTIES, BIOMES, CHASSIS, WEAPON_MODULES, ALL_WEAPONS } from './gameConfig.js';
 
-// 1. Load Env from Root
 dotenv.config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const ENVIRONMENT = process.env.ENVIRONMENT || process.env.NODE_ENV || 'development';
+const IS_DEV = ENVIRONMENT === 'development';
 
 const app = express();
 const server = http.createServer(app);
@@ -1010,7 +1012,7 @@ class Lobby {
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
-    if (process.env.ENVIRONMENT === 'development') {
+    if (IS_DEV) {
         socket.emit('debug-init');
     }
     socket.on('join-game', (data) => {
@@ -1110,7 +1112,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('debug-spawn-bot', (data) => {
-        if (process.env.ENVIRONMENT !== 'development') return;
+        if (!IS_DEV) return;
         const lobby = lobbies[socket.lobbyId];
         if (lobby) {
             lobby.addBot(data.difficulty || 'NORMAL', data.pos, data.isActive);
@@ -1118,7 +1120,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('debug-toggle-bots', (active) => {
-        if (process.env.ENVIRONMENT !== 'development') return;
+        if (!IS_DEV) return;
         const lobby = lobbies[socket.lobbyId];
         if (lobby) {
             Object.values(lobby.players).forEach(p => {
@@ -1148,7 +1150,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('debug-spawn-terrain', (data) => {
-        if (process.env.ENVIRONMENT !== 'development') return;
+        if (!IS_DEV) return;
         const lobby = lobbies[socket.lobbyId];
         if (lobby) {
             lobby.spawnBuilding(data.pos, data.w || 100, data.h || 100);
@@ -1173,4 +1175,8 @@ io.on('connection', (socket) => {
 });
 
 process.on('uncaughtException', e => fs.writeFileSync('crash.log', e.stack));
-server.listen(PORT, '0.0.0.0', () => console.log(`Server on ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server on ${PORT}`);
+    console.log(`Environment: ${ENVIRONMENT}`);
+    console.log(`Debug Mode: ${IS_DEV ? 'ENABLED' : 'DISABLED'}`);
+});
