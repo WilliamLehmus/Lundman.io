@@ -146,6 +146,11 @@ class Lobby {
             if (bodies.length === 0) break;
             attempts++;
         }
+
+        // Final safety clamp
+        pos.x = Math.max(100, Math.min(this.worldSize - 100, pos.x));
+        pos.y = Math.max(100, Math.min(this.worldSize - 100, pos.y));
+
         return pos;
     }
 
@@ -317,7 +322,10 @@ class Lobby {
         // Random scatters based on biome
         const scatterCount = mapType === 'WASTELAND' ? 40 : 20;
         for (let i = 0; i < scatterCount; i++) {
-            const pos = { x: Math.random() * this.worldSize, y: Math.random() * this.worldSize };
+            const pos = { 
+                x: 150 + Math.random() * (this.worldSize - 300), 
+                y: 150 + Math.random() * (this.worldSize - 300) 
+            };
             const type = mapType === 'WETLAND' ? MATERIALS.WATER : (mapType === 'WASTELAND' ? MATERIALS.OIL : MATERIALS.DIRT);
             this.spawnElement(pos, type, 120000);
         }
@@ -406,7 +414,8 @@ class Lobby {
             const targetId = target.label.split('tank-')[1];
             if (targetId !== bulletData.ownerId) {
                 const victim = this.players[targetId];
-                if (victim) {
+                const attacker = this.players[bulletData.ownerId];
+                if (victim && (!attacker || victim.team !== attacker.team)) {
                     const now = Date.now();
                     const isInvulnerable = victim.invulnerableUntil && now < victim.invulnerableUntil;
                     
@@ -565,11 +574,18 @@ class Lobby {
             if (isInside) return null;
         }
 
-        const id = ++this.lastElementId;
         const config = MATERIAL_PROPERTIES[type] || { w: 30, h: 30 };
         const w = customW || config.w;
         const h = customH || config.h;
 
+        // Boundary check
+        const padding = 10;
+        if (pos.x - w/2 < padding || pos.x + w/2 > this.worldSize - padding ||
+            pos.y - h/2 < padding || pos.y + h/2 > this.worldSize - padding) {
+            return null;
+        }
+
+        const id = ++this.lastElementId;
         const body = Bodies.rectangle(pos.x, pos.y, w, h, {
             label: 'element',
             isStatic: true,
@@ -930,7 +946,7 @@ class Lobby {
             }
 
             const aimTolerance = bot.botDifficulty === 'HARD' ? 0.2 : (bot.botDifficulty === 'NORMAL' ? 0.5 : 0.8);
-            if (targetPos && minDist < idealRange * 2.0) {
+            if (closestEnemy && minDist < idealRange * 2.0) {
                 // Bots can shoot even if body isn't aligned, as long as turret is reasonably pointed
                 bot.inputs.shoot = bot.botDifficulty === 'EASY' ? Math.random() > 0.7 : true;
             } else {
