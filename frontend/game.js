@@ -61,7 +61,7 @@ let camera = { x: 0, y: 0 };
 let shake = { x: 0, y: 0, intensity: 0 };
 let particles = []; // { x, y, vx, vy, life, color, size }
 let playerEvents = []; // { text, color, time }
-
+let mousePos = { x: 0, y: 0 };
 
 socket.on('kill-feed', (data) => {
     killFeed.push({ ...data, time: Date.now() });
@@ -73,7 +73,19 @@ socket.on('kill-feed', (data) => {
         spawnExplosion(victim.x, victim.y, victim.team === 'blue' ? '#00f2ff' : '#ff00ff');
     }
 });
-const keys = { up: false, down: false, left: false, right: false, shoot: false };
+
+socket.on('collision-effect', (data) => {
+    // Spawn hit particles at the exact collision point
+    const hitColor = data.targetLabel === 'element' ? '#fff' : (data.targetLabel && data.targetLabel.startsWith('tank-') ? '#ff0000' : '#ffcc00');
+    spawnParticles(data.x, data.y, hitColor, 8);
+    
+    // If it hit a tank, maybe add a tiny shake
+    const me = gameState.players.find(p => p.id === myId);
+    if (data.targetLabel === `tank-${myId}`) {
+        shake.intensity = Math.max(shake.intensity, 5);
+    }
+});
+const keys = { up: false, down: false, left: false, right: false, shoot: false, aimAngle: 0 };
 
 // Rendering
 let renderTime = 0;
@@ -209,7 +221,31 @@ function init() {
     }, 100);
 
     window.addEventListener('resize', resize);
+    window.addEventListener('mousemove', e => {
+        mousePos.x = e.clientX;
+        mousePos.y = e.clientY;
+        updateAimAngle();
+    });
     requestAnimationFrame(renderLoop);
+}
+
+function updateAimAngle() {
+    if (!gameActive || !myId) return;
+    const me = gameState.players.find(p => p.id === myId);
+    if (!me) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const canvasMouseX = mousePos.x - rect.left;
+    const canvasMouseY = mousePos.y - rect.top;
+
+    const worldMouseX = canvasMouseX + camera.x;
+    const worldMouseY = canvasMouseY + camera.y;
+    const aimAngle = Math.atan2(worldMouseY - me.y, worldMouseX - me.x);
+    
+    if (isNaN(keys.aimAngle) || Math.abs(aimAngle - keys.aimAngle) > 0.01) {
+        keys.aimAngle = aimAngle;
+        socket.emit('input', keys);
+    }
 }
 
 function showActionButtons() {
@@ -242,6 +278,7 @@ function handleInput(code, isPressed) {
     }
 
     if (changed) {
+        updateAimAngle();
         socket.emit('input', keys);
     }
 
@@ -604,6 +641,7 @@ function drawTank(p) {
     if (p.hidden && p.id === myId) ctx.globalAlpha = 0.5;
     
     ctx.translate(p.x, p.y);
+    ctx.save();
     ctx.rotate(p.angle);
 
     // Body
@@ -614,8 +652,12 @@ function drawTank(p) {
     ctx.roundRect(-TANK_SIZE/2, -TANK_SIZE/2, TANK_SIZE, TANK_SIZE, 5);
     ctx.fill();
     ctx.stroke();
+    ctx.restore();
 
-    // Turret
+    // Turret (Separate Rotation)
+    ctx.save();
+    ctx.rotate(p.aimAngle || p.angle);
+    
     ctx.beginPath();
     ctx.arc(0, 0, 12, 0, Math.PI * 2);
     ctx.fill();
@@ -626,6 +668,7 @@ function drawTank(p) {
     ctx.roundRect(0, -5, 30, 10, 2);
     ctx.fill();
     ctx.stroke();
+    ctx.restore();
 
     // Username
     ctx.restore();
@@ -660,17 +703,26 @@ function drawTank(p) {
     }
 
     // Status Icons
-    if (p.stunned || p.scrap >= 500) {
+    if (p.stunned || p.scrap >= 100) {
         ctx.save();
         ctx.translate(p.x, p.y - TANK_SIZE - 25);
+        ctx.textAlign = 'center';
+        
         if (p.stunned) {
             ctx.fillStyle = '#ffff00';
             ctx.font = '700 16px Outfit';
             ctx.fillText('⚡ STUNNED', 0, 0);
-        } else if (p.scrap >= 500) {
-            ctx.fillStyle = '#ffcc00';
-            ctx.font = '900 16px Outfit';
-            ctx.fillText('⭐ MAX BUFF', 0, 0);
+        } else {
+            const buffLevel = Math.floor(p.scrap / 100);
+            if (buffLevel >= 5) {
+                ctx.fillStyle = '#ffcc00';
+                ctx.font = '900 16px Outfit';
+                ctx.fillText('⭐ MAX BUFF', 0, 0);
+            } else if (buffLevel >= 1) {
+                ctx.fillStyle = '#00ffaa';
+                ctx.font = '700 14px Outfit';
+                ctx.fillText(`🔷 LVL ${buffLevel} BUFF`, 0, 0);
+            }
         }
         ctx.restore();
     }
@@ -841,14 +893,15 @@ function interpolateState(dt) {
     gameState.worldSize = serverState.worldSize;
 
     gameState.players = serverState.players.map(sp => {
-        if (sp.id === myId) return { ...sp }; // local player snaps to server position
         const gp = gameState.players.find(p => p.id === sp.id);
         if (!gp) return { ...sp };
+        const P = sp.id === myId ? 1.0 : (1 - Math.pow(0.75, dt)); // local player snaps to server position
         return {
             ...sp,
             x: lerp(gp.x, sp.x, P),
             y: lerp(gp.y, sp.y, P),
-            angle: lerpAngle(gp.angle, sp.angle, P)
+            angle: lerpAngle(gp.angle, sp.angle, P),
+            aimAngle: lerpAngle(gp.aimAngle || gp.angle, sp.aimAngle || sp.angle, P)
         };
     });
 
@@ -1319,27 +1372,42 @@ if (spawnWallBtn) {
 }
 
 canvas.addEventListener('mousedown', (e) => {
-    if (!debugMode || !debugSpawnType || !gameActive) return;
+    if (!gameActive) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
+    if (debugMode && debugSpawnType) {
+        const rect = canvas.getBoundingClientRect();
+        const screenX = e.clientX - rect.left;
+        const screenY = e.clientY - rect.top;
+        const worldX = screenX + camera.x;
+        const worldY = screenY + camera.y;
 
-    const worldX = screenX + camera.x;
-    const worldY = screenY + camera.y;
+        if (debugSpawnType === 'bot') {
+            socket.emit('debug-spawn-bot', { 
+                pos: { x: worldX, y: worldY }, 
+                difficulty: 'NORMAL',
+                isActive: botsActive
+            });
+        } else if (debugSpawnType === 'wall') {
+            socket.emit('debug-spawn-terrain', {
+                pos: { x: worldX, y: worldY },
+                w: 100,
+                h: 100
+            });
+        }
+        return;
+    }
 
-    if (debugSpawnType === 'bot') {
-        socket.emit('debug-spawn-bot', { 
-            pos: { x: worldX, y: worldY }, 
-            difficulty: 'NORMAL',
-            isActive: botsActive
-        });
-    } else if (debugSpawnType === 'wall') {
-        socket.emit('debug-spawn-terrain', {
-            pos: { x: worldX, y: worldY },
-            w: 100,
-            h: 100
-        });
+    if (e.button === 0) {
+        keys.shoot = true;
+        updateAimAngle();
+        socket.emit('input', keys);
+    }
+});
+
+window.addEventListener('mouseup', (e) => {
+    if (e.button === 0 && keys.shoot) {
+        keys.shoot = false;
+        socket.emit('input', keys);
     }
 });
 
@@ -1386,6 +1454,10 @@ if (joystickContainer) {
         keys.down = dy > 30;
         keys.left = dx < -30;
         keys.right = dx > 30;
+        
+        if (dist > 10) {
+            keys.aimAngle = angle;
+        }
         
         socket.emit('input', keys);
     }

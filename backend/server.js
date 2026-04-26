@@ -189,7 +189,7 @@ class Lobby {
             kills: 0,
             deaths: 0,
             statusEffects: { stun: 0, slip: 0 },
-            inputs: { up: false, down: false, left: false, right: false, shoot: false },
+            inputs: { up: false, down: false, left: false, right: false, shoot: false, aimAngle: 0 },
             lastBuffLevel: 0
         };
     }
@@ -246,7 +246,7 @@ class Lobby {
             kills: 0,
             deaths: 0,
             statusEffects: { stun: 0, slip: 0 },
-            inputs: { up: false, down: false, left: false, right: false, shoot: false },
+            inputs: { up: false, down: false, left: false, right: false, shoot: false, aimAngle: 0 },
             isBot: true,
             botDifficulty: difficulty,
             isActive: isActive,
@@ -385,6 +385,15 @@ class Lobby {
                 if (bodyA.label === 'bullet' || bodyB.label === 'bullet') {
                     const bullet = bodyA.label === 'bullet' ? bodyA : bodyB;
                     const target = bodyA.label === 'bullet' ? bodyB : bodyA;
+                    
+                    // Emit hit effect for all clients
+                    io.to(this.id).emit('collision-effect', {
+                        x: bullet.position.x,
+                        y: bullet.position.y,
+                        type: bullet.customData.type,
+                        targetLabel: target.label
+                    });
+
                     this.processBulletCollision(bullet, target);
                 }
             });
@@ -898,6 +907,17 @@ class Lobby {
                 bot.inputs.left = false; bot.inputs.right = false;
             }
 
+            // 3. Separate Turret Aiming
+            let turretTargetAngle = bot.body.angle; // Default to body angle
+            if (targetPos) {
+                // Calculate direct angle to target (with leading for HARD)
+                turretTargetAngle = Math.atan2(targetPos.y - bot.body.position.y, targetPos.x - bot.body.position.x);
+                if (bot.botDifficulty === 'EASY') {
+                    turretTargetAngle += Math.sin(now / 300) * 0.2; // Add some inaccuracy
+                }
+            }
+            bot.inputs.aimAngle = turretTargetAngle;
+
             const currentWeapon = WEAPON_MODULES[bot.slots[bot.currentSlot]];
             const idealRange = currentWeapon.type === MATERIALS.FIRE ? 150 : 400;
 
@@ -909,9 +929,10 @@ class Lobby {
                 bot.inputs.up = false; bot.inputs.down = false;
             }
 
-            const aimTolerance = bot.botDifficulty === 'HARD' ? 0.1 : (bot.botDifficulty === 'NORMAL' ? 0.3 : 0.5);
-            if (Math.abs(angleDiff) < aimTolerance && minDist < idealRange * 1.5) {
-                bot.inputs.shoot = bot.botDifficulty === 'EASY' ? Math.random() > 0.5 : true;
+            const aimTolerance = bot.botDifficulty === 'HARD' ? 0.2 : (bot.botDifficulty === 'NORMAL' ? 0.5 : 0.8);
+            if (targetPos && minDist < idealRange * 2.0) {
+                // Bots can shoot even if body isn't aligned, as long as turret is reasonably pointed
+                bot.inputs.shoot = bot.botDifficulty === 'EASY' ? Math.random() > 0.7 : true;
             } else {
                 bot.inputs.shoot = false;
             }
@@ -936,9 +957,10 @@ class Lobby {
     fire(p, weapon, moduleName = 'UNKNOWN', scrapBuff = 1) {
         const id = ++this.lastBulletId;
         const fireDist = weapon.type === MATERIALS.DIRT ? 80 : 45;
+        const aimAngle = p.inputs.aimAngle !== undefined ? p.inputs.aimAngle : p.body.angle;
         const pos = {
-            x: p.body.position.x + Math.cos(p.body.angle) * fireDist,
-            y: p.body.position.y + Math.sin(p.body.angle) * fireDist
+            x: p.body.position.x + Math.cos(aimAngle) * fireDist,
+            y: p.body.position.y + Math.sin(aimAngle) * fireDist
         };
         const bullet = Bodies.circle(pos.x, pos.y, weapon.radius, {
             label: 'bullet',
@@ -957,14 +979,14 @@ class Lobby {
             expiresAt: Date.now() + (weapon.ttl || 2000)
         };
         Body.setVelocity(bullet, {
-            x: Math.cos(p.body.angle) * weapon.speed,
-            y: Math.sin(p.body.angle) * weapon.speed
+            x: Math.cos(aimAngle) * weapon.speed,
+            y: Math.sin(aimAngle) * weapon.speed
         });
         const recoil = weapon.recoil || 0;
         if (recoil > 0) {
             Body.applyForce(p.body, p.body.position, {
-                x: -Math.cos(p.body.angle) * recoil,
-                y: -Math.sin(p.body.angle) * recoil
+                x: -Math.cos(aimAngle) * recoil,
+                y: -Math.sin(aimAngle) * recoil
             });
         }
         this.bullets[id] = bullet;
@@ -992,6 +1014,7 @@ class Lobby {
             players: Object.values(this.players).map(p => ({
                 id: p.id, username: p.username, team: p.team,
                 x: p.body.position.x, y: p.body.position.y, angle: p.body.angle,
+                aimAngle: p.inputs.aimAngle !== undefined ? p.inputs.aimAngle : p.body.angle,
                 hp: p.hp, maxHp: p.maxHp, weapon: p.slots[p.currentSlot],
                 currentSlot: p.currentSlot, slots: p.slots, scrap: p.scrap, hidden: p.hidden,
                 stunned: p.statusEffects.stun > Date.now(),

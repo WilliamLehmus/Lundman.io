@@ -24,9 +24,10 @@ body {
     align-items: center;
 }
 
-canvas {
+#game-canvas {
     display: block;
-    background: radial-gradient(circle at center, #1a1a2e 0%, #0a0a12 100%);
+    background: #0a0a12;
+    cursor: crosshair;
 }
 
 #ui-layer {
