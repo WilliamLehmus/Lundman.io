@@ -563,3 +563,66 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); z-index: 2000; justify-content: center; align-items: center; }
+
+/* Debug Menu */
+#debug-menu {
+    position: fixed;
+    top: 80px;
+    left: 20px;
+    background: rgba(0, 0, 0, 0.8);
+    border: 1px solid #ff00ff;
+    padding: 15px;
+    border-radius: 10px;
+    z-index: 5000;
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    box-shadow: 0 0 20px rgba(255, 0, 255, 0.3);
+}
+
+#debug-menu h3 {
+    font-size: 0.8rem;
+    color: #ff00ff;
+    margin-bottom: 5px;
+    letter-spacing: 2px;
+}
+
+.debug-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.debug-btn {
+    padding: 8px 12px;
+    font-size: 0.7rem;
+    background: #222;
+    border: 1px solid #444;
+    color: #aaa;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: left;
+    width: 100%;
+}
+
+.debug-btn:hover {
+    background: #333;
+    border-color: #ff00ff;
+    color: #fff;
+    transform: none;
+    box-shadow: none;
+}
+
+.debug-btn.active {
+    background: rgba(255, 0, 255, 0.2);
+    border-color: #ff00ff;
+    color: #fff;
+}
+
+#debug-hint {
+    font-size: 0.6rem;
+    color: rgba(255, 255, 255, 0.4);
+    margin-top: 5px;
+}

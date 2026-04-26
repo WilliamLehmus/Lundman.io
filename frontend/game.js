@@ -243,6 +243,17 @@ socket.on('connect', () => {
     myId = socket.id;
 });
 
+let debugMode = false;
+let debugSpawnType = null;
+let botsActive = true;
+
+socket.on('debug-init', () => {
+    debugMode = true;
+    const debugMenu = document.getElementById('debug-menu');
+    if (debugMenu) debugMenu.classList.remove('hidden');
+    console.log('Debug mode activated');
+});
+
 socket.on('dev-reload', () => {
     console.log('Backend changed, reloading...');
     location.reload();
@@ -791,5 +802,60 @@ if (addBotBtn) {
         socket.emit('add-bot', { difficulty: botDifficulty ? botDifficulty.value : 'NORMAL' });
     };
 }
+
+// Debug Button Handlers
+const spawnBotBtn = document.getElementById('debug-spawn-bot-btn');
+const toggleBotBtn = document.getElementById('debug-toggle-bot-btn');
+const spawnWallBtn = document.getElementById('debug-spawn-wall-btn');
+
+if (spawnBotBtn) {
+    spawnBotBtn.onclick = () => {
+        debugSpawnType = debugSpawnType === 'bot' ? null : 'bot';
+        spawnBotBtn.classList.toggle('active', debugSpawnType === 'bot');
+        if (spawnWallBtn) spawnWallBtn.classList.remove('active');
+    };
+}
+
+if (toggleBotBtn) {
+    toggleBotBtn.onclick = () => {
+        botsActive = !botsActive;
+        toggleBotBtn.classList.toggle('active', botsActive);
+        toggleBotBtn.innerText = `BOTS: ${botsActive ? 'ON' : 'OFF'}`;
+        socket.emit('debug-toggle-bots', botsActive);
+    };
+}
+
+if (spawnWallBtn) {
+    spawnWallBtn.onclick = () => {
+        debugSpawnType = debugSpawnType === 'wall' ? null : 'wall';
+        spawnWallBtn.classList.toggle('active', debugSpawnType === 'wall');
+        if (spawnBotBtn) spawnBotBtn.classList.remove('active');
+    };
+}
+
+canvas.addEventListener('mousedown', (e) => {
+    if (!debugMode || !debugSpawnType || !gameActive) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const screenX = e.clientX - rect.left;
+    const screenY = e.clientY - rect.top;
+
+    const worldX = screenX + camera.x;
+    const worldY = screenY + camera.y;
+
+    if (debugSpawnType === 'bot') {
+        socket.emit('debug-spawn-bot', { 
+            pos: { x: worldX, y: worldY }, 
+            difficulty: 'NORMAL',
+            isActive: botsActive
+        });
+    } else if (debugSpawnType === 'wall') {
+        socket.emit('debug-spawn-terrain', {
+            pos: { x: worldX, y: worldY },
+            w: 100,
+            h: 100
+        });
+    }
+});
 
 init();

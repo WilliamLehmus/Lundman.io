@@ -122,13 +122,20 @@ class Lobby {
         };
     }
 
-    addBot(difficulty = 'NORMAL') {
+    addBot(difficulty = 'NORMAL', pos = null, isActive = true) {
         const id = 'bot-' + Math.random().toString(36).substr(2, 6);
         const botNumber = Object.values(this.players).filter(p => p.isBot).length + 1;
         const username = `BOT_MK${botNumber}_${difficulty}`;
         const chassisType = 'SCOUT'; // Default chassis
         const team = Object.keys(this.players).length % 2 === 0 ? 'blue' : 'pink';
-        const startPos = team === 'blue' ? { x: 400, y: WORLD_SIZE/2 } : { x: WORLD_SIZE - 400, y: WORLD_SIZE/2 };
+        
+        let startPos;
+        if (pos) {
+            startPos = pos;
+        } else {
+            startPos = team === 'blue' ? { x: 400, y: WORLD_SIZE/2 } : { x: WORLD_SIZE - 400, y: WORLD_SIZE/2 };
+        }
+        
         const config = CHASSIS[chassisType];
         
         const body = Bodies.rectangle(startPos.x, startPos.y, TANK_SIZE, TANK_SIZE, {
@@ -137,7 +144,7 @@ class Lobby {
             label: `tank-${id}`
         });
         
-        if (team === 'pink') Body.setAngle(body, Math.PI);
+        if (team === 'pink' && !pos) Body.setAngle(body, Math.PI);
         Composite.add(this.engine.world, body);
 
         this.players[id] = {
@@ -156,6 +163,7 @@ class Lobby {
             inputs: { up: false, down: false, left: false, right: false, shoot: false },
             isBot: true,
             botDifficulty: difficulty,
+            isActive: isActive,
             nextWeaponSwap: 0
         };
     }
@@ -451,7 +459,7 @@ class Lobby {
     }
 
     processBots(now) {
-        Object.values(this.players).filter(p => p.isBot && p.hp > 0).forEach(bot => {
+        Object.values(this.players).filter(p => p.isBot && p.hp > 0 && p.isActive !== false).forEach(bot => {
             let closestEnemy = null;
             let minDist = Infinity;
             Object.values(this.players).filter(p => p.team !== bot.team && p.hp > 0).forEach(enemy => {
@@ -641,6 +649,10 @@ class Lobby {
 
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
+
+    if (process.env.ENVIRONMENT === 'development') {
+        socket.emit('debug-init');
+    }
     socket.on('join-game', (data) => {
         if (!data || typeof data.username !== 'string' || data.username.trim() === '') return;
         let { username, chassisType } = data;
@@ -715,6 +727,37 @@ io.on('connection', (socket) => {
         if (lobby && Object.keys(lobby.players).length >= MIN_PLAYERS) {
             lobby.active = true;
             io.to(lobby.id).emit('game-started');
+        }
+    });
+
+    // Debug Listeners
+    socket.on('debug-spawn-bot', (data) => {
+        if (process.env.ENVIRONMENT !== 'development') return;
+        const lobby = lobbies[socket.lobbyId];
+        if (lobby) {
+            lobby.addBot(data.difficulty || 'NORMAL', data.pos, data.isActive);
+            io.to(lobby.id).emit('lobby-update', {
+                id: lobby.id,
+                players: Object.values(lobby.players).map(p => ({ username: p.username, team: p.team, id: p.id, chassis: p.chassis }))
+            });
+        }
+    });
+
+    socket.on('debug-toggle-bots', (active) => {
+        if (process.env.ENVIRONMENT !== 'development') return;
+        const lobby = lobbies[socket.lobbyId];
+        if (lobby) {
+            Object.values(lobby.players).forEach(p => {
+                if (p.isBot) p.isActive = active;
+            });
+        }
+    });
+
+    socket.on('debug-spawn-terrain', (data) => {
+        if (process.env.ENVIRONMENT !== 'development') return;
+        const lobby = lobbies[socket.lobbyId];
+        if (lobby) {
+            lobby.spawnBuilding(data.pos, data.w || 100, data.h || 100);
         }
     });
 
