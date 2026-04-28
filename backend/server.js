@@ -167,6 +167,13 @@ class Lobby {
         const startPos = this.getRandomSpawn(team);
         const config = CHASSIS[chassisType];
         
+        // Persistence: Load previous stats if available
+        if (playerData[username]) {
+            console.log('Restoring stats for:', username);
+        } else {
+            playerData[username] = { kills: 0, deaths: 0, scrap: 0, lastSeen: Date.now() };
+        }
+
         const body = Bodies.rectangle(startPos.x, startPos.y, TANK_SIZE - 2, TANK_SIZE - 2, {
             frictionAir: config.speed > 0.005 ? 0.1 : 0.2,
             mass: config.mass,
@@ -275,6 +282,17 @@ class Lobby {
         if (p) {
             const wasBot = p.isBot;
             const team = p.team;
+            const username = p.username;
+
+            // Persistence: Save human stats on leave
+            if (!wasBot && playerData[username]) {
+                playerData[username].kills += p.kills;
+                playerData[username].deaths += p.deaths;
+                playerData[username].scrap += p.scrap;
+                playerData[username].lastSeen = Date.now();
+                savePlayers();
+            }
+
             Composite.remove(this.engine.world, p.body);
             delete this.players[socketId];
 
@@ -449,6 +467,18 @@ class Lobby {
                     
                     if (!isInvulnerable) {
                         victim.hp -= bulletData.damage;
+
+                        // Leak oil when damaged (persistent during match)
+                        if (Math.random() > 0.4) {
+                            const offset = { 
+                                x: (Math.random() - 0.5) * 40, 
+                                y: (Math.random() - 0.5) * 40 
+                            };
+                            this.spawnElement({ 
+                                x: victim.body.position.x + offset.x, 
+                                y: victim.body.position.y + offset.y 
+                            }, MATERIALS.OIL, null, null, null, 25, 25);
+                        }
                     }
                     
                     const forceDir = Vector.normalise(bullet.velocity);
@@ -608,7 +638,7 @@ class Lobby {
                         }
                     }
                 }
-                if (element.type === MATERIALS.ICE) p.statusEffects.slip = now + 1000;
+                if ((element.type === MATERIALS.ICE || element.type === MATERIALS.OIL)) p.statusEffects.slip = now + 1000;
                 if (element.type === MATERIALS.FIRE && element.ownerId !== p.id && !isInvulnerable) p.hp -= 0.5;
                 if (element.type === MATERIALS.STEAM) p.hidden = true;
                 if (element.type === MATERIALS.SCRAP) {
@@ -779,14 +809,15 @@ class Lobby {
                     body.position.y >= z.y && body.position.y <= z.y + z.h
                 ) || { type: 'URBAN' };
                 const biome = BIOMES[zone.type];
-                const isIce = now < statusEffects.slip || zone.type === 'ICE';
+                const isSlipping = now < statusEffects.slip;
                 const isSlowed = now < statusEffects.slow;
                 const isBurning = now < statusEffects.burn;
 
                 if (isBurning) p.hp -= 0.3; // Damage over time while burning
 
-                const baseFriction = isIce ? 0.01 : biome.friction;
-                const friction = config.speed > 0.005 ? baseFriction : baseFriction * 2;
+                // Adjust friction: Slips (Ice/Oil) are now less extreme (0.04 instead of 0.01)
+                const baseFriction = isSlipping ? 0.04 : (zone.type === 'ICE' ? 0.015 : biome.friction);
+                const friction = config.speed > 0.005 ? baseFriction : baseFriction * 1.5;
                 if (body.frictionAir !== friction) body.frictionAir = friction;
                 
                 const moveSpeed = config.speed * biome.speedMult * (isSlowed ? 0.5 : 1.0);
@@ -828,231 +859,121 @@ class Lobby {
     }
 
     processBots(now) {
-        Object.values(this.players).filter(p => p.isBot).forEach(bot => {
+        const bots = Object.values(this.players).filter(p => p.isBot);
+        if (bots.length === 0) return;
+
+        // Optimization: Get obstacles once per frame
+        const obstacles = Composite.allBodies(this.engine.world).filter(b => !b.isSensor && b.label !== 'bullet');
+
+        bots.forEach(bot => {
             if (bot.hp <= 0 || bot.isActive === false) {
                 bot.inputs = { up: false, down: false, left: false, right: false, shoot: false };
                 return;
             }
-            let avoidX = 0;
-            let avoidY = 0;
-            let closestEnemy = null;
-            let minDist = Infinity;
-            Object.values(this.players).filter(p => p.team !== bot.team && p.hp > 0 && !p.hidden && (!p.invulnerableUntil || now > p.invulnerableUntil)).forEach(enemy => {
-                const dist = Vector.magnitude(Vector.sub(enemy.body.position, bot.body.position));
-                if (dist < minDist) {
-                    minDist = dist;
-                    closestEnemy = enemy;
+
+            // 1. Objective Selection
+            let target = null;
+            let objectivePos = null;
+            let minDist = 1500;
+
+            // Target nearest enemy
+            Object.values(this.players).forEach(p => {
+                if (p.id !== bot.id && p.team !== bot.team && p.hp > 0 && !p.hidden) {
+                    const d = Vector.magnitude(Vector.sub(p.body.position, bot.body.position));
+                    if (d < minDist) {
+                        minDist = d;
+                        target = p;
+                    }
                 }
             });
 
-            let targetPos = null;
-            if (closestEnemy) {
-                targetPos = closestEnemy.body.position;
+            if (target) {
+                objectivePos = target.body.position;
             } else {
-                bot.inputs.shoot = false; // Stop shooting if no valid target
-                let closestScrap = null;
-                let minScrapDist = 800; 
-                Object.values(this.elements).forEach(e => {
-                    if (e.type === MATERIALS.SCRAP) {
-                        const dist = Vector.magnitude(Vector.sub(e.body.position, bot.body.position));
-                        if (dist < minScrapDist) {
-                            minScrapDist = dist;
-                            closestScrap = e;
-                        }
-                    }
-                });
-                if (closestScrap) {
-                    targetPos = closestScrap.body.position;
-                    minDist = minScrapDist;
+                // If no enemy, wander
+                if (!bot.wanderTarget || now > (bot.nextWanderChange || 0)) {
+                    bot.wanderTarget = {
+                        x: 500 + Math.random() * (this.worldSize - 1000),
+                        y: 500 + Math.random() * (this.worldSize - 1000)
+                    };
+                    bot.nextWanderChange = now + 8000 + Math.random() * 5000;
                 }
+                objectivePos = bot.wanderTarget;
             }
 
-            if (!targetPos) {
-                bot.inputs = { up: false, down: false, left: false, right: false, shoot: false };
-                return;
-            }
+            if (!objectivePos) return;
 
-            const targetPull = 2.5;
-            let targetAngle = Math.atan2(targetPos.y - bot.body.position.y, targetPos.x - bot.body.position.x);
-
-            // 1. Stuck Detection
-            const distMoved = Vector.magnitude(Vector.sub(bot.body.position, bot.lastPos || bot.body.position));
-            bot.lastPos = { x: bot.body.position.x, y: bot.body.position.y };
+            // 2. Simple Pathfinding (Avoidance)
+            let avoidX = 0;
+            let avoidY = 0;
+            const lookAhead = 200;
             
-            if (distMoved < 0.5 && bot.inputs.up) {
+            const rays = [-0.7, 0, 0.7];
+            rays.forEach(offset => {
+                const angle = bot.body.angle + offset;
+                const end = {
+                    x: bot.body.position.x + Math.cos(angle) * lookAhead,
+                    y: bot.body.position.y + Math.sin(angle) * lookAhead
+                };
+                const hits = Query.ray(obstacles, bot.body.position, end);
+                if (hits.length > 0 && hits[0].body !== bot.body) {
+                    const force = (lookAhead - (hits[0].fraction * lookAhead)) / lookAhead;
+                    avoidX -= Math.cos(angle) * force * 15;
+                    avoidY -= Math.sin(angle) * force * 15;
+                    // Side nudge
+                    const side = offset >= 0 ? -1 : 1;
+                    avoidX += Math.cos(angle + Math.PI/2 * side) * force * 10;
+                    avoidY += Math.sin(angle + Math.PI/2 * side) * force * 10;
+                }
+            });
+
+            const angleToObj = Math.atan2(objectivePos.y - bot.body.position.y, objectivePos.x - bot.body.position.x);
+            const moveX = Math.cos(angleToObj) * 10 + avoidX;
+            const moveY = Math.sin(angleToObj) * 10 + avoidY;
+            const moveAngle = Math.atan2(moveY, moveX);
+
+            // 3. Apply Inputs
+            let angleDiff = moveAngle - bot.body.angle;
+            angleDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff));
+
+            bot.inputs.left = angleDiff < -0.2;
+            bot.inputs.right = angleDiff > 0.2;
+            
+            const dist = Vector.magnitude(Vector.sub(objectivePos, bot.body.position));
+            if (dist > 150) {
+                bot.inputs.up = Math.abs(angleDiff) < 1.2;
+                bot.inputs.down = false;
+            } else {
+                bot.inputs.up = false;
+                bot.inputs.down = (target && dist < 100);
+            }
+
+            // 4. Aim & Shoot
+            if (target) {
+                bot.inputs.aimAngle = Math.atan2(target.body.position.y - bot.body.position.y, target.body.position.x - bot.body.position.x);
+                bot.inputs.shoot = dist < 1000;
+            } else {
+                bot.inputs.aimAngle = bot.body.angle;
+                bot.inputs.shoot = false;
+            }
+
+            // Stuck Recovery
+            const dPos = Vector.magnitude(Vector.sub(bot.body.position, bot.lastPos || bot.body.position));
+            bot.lastPos = { x: bot.body.position.x, y: bot.body.position.y };
+            if (dPos < 0.2 && (bot.inputs.up || bot.inputs.down)) {
                 bot.stuckTicks = (bot.stuckTicks || 0) + 1;
             } else {
                 bot.stuckTicks = 0;
             }
 
-            if (bot.stuckTicks > 60) {
-                bot.reverseUntil = now + 1500;
+            if (bot.stuckTicks > 40) {
+                bot.reverseUntil = now + 1000;
+                bot.panicDir = Math.random() > 0.5 ? 1 : -1;
                 bot.stuckTicks = 0;
             }
 
-            if (now < bot.reverseUntil) {
-                bot.inputs = { up: false, down: true, left: Math.random() > 0.5, right: Math.random() < 0.5, shoot: true };
-                return;
-            }
-
-            // 2. Separation Force
-            Object.values(this.players).forEach(other => {
-                if (other.id === bot.id) return;
-                const dx = bot.body.position.x - other.body.position.x;
-                const dy = bot.body.position.y - other.body.position.y;
-                const distSq = dx*dx + dy*dy;
-                const minClearance = 200; 
-                if (distSq < minClearance * minClearance) {
-                    const dist = Math.sqrt(distSq) || 1;
-                    const force = (minClearance - dist) / minClearance;
-                    const strength = force * force * 15.0; 
-                    avoidX += (dx / dist) * strength;
-                    avoidY += (dy / dist) * strength;
-                }
-            });
-
-            // HARD: Target Leading
-            if (bot.botDifficulty === 'HARD' && closestEnemy) {
-                const weapon = WEAPON_MODULES[bot.slots[bot.currentSlot]];
-                const timeToTarget = minDist / (weapon.speed || 10);
-                targetPos = {
-                    x: targetPos.x + closestEnemy.body.velocity.x * timeToTarget,
-                    y: targetPos.y + closestEnemy.body.velocity.y * timeToTarget
-                };
-            }
-
-            if (bot.ignoreTargetUntil && now < bot.ignoreTargetUntil) {
-                targetAngle = bot.body.angle; 
-            } else {
-                let tx = targetPos.x + bot.targetOffset.x;
-                let ty = targetPos.y + bot.targetOffset.y;
-
-                if (bot.role === 'FLANKER') {
-                    const distToPlayer = Vector.magnitude(Vector.sub(targetPos, bot.body.position));
-                    if (distToPlayer > 500) {
-                        const angleToPlayer = Math.atan2(ty - bot.body.position.y, tx - bot.body.position.x);
-                        const flankAngle = angleToPlayer + (Math.PI / 2.5) * bot.strafeDir;
-                        tx = bot.body.position.x + Math.cos(flankAngle) * 600;
-                        ty = bot.body.position.y + Math.sin(flankAngle) * 600;
-                    }
-                }
-
-                targetAngle = Math.atan2(ty - bot.body.position.y, tx - bot.body.position.x);
-
-                const strafeAngle = targetAngle + (Math.PI / 2) * bot.strafeDir;
-                avoidX += Math.cos(strafeAngle) * 1.5;
-                avoidY += Math.sin(strafeAngle) * 1.5;
-            }
-
-            const lookAhead = 250;
-            const obstacles = Composite.allBodies(this.engine.world).filter(b => {
-                if (b === bot.body || b.label === 'bullet' || b.label.startsWith('tank-')) return false;
-                
-                // Always avoid solid objects (Buildings, Walls)
-                if (!b.isSensor) return true;
-                
-                // Avoid dangerous sensors (Fire, Electric Puddles)
-                if (b.label === 'element') {
-                    const e = this.elements[b.elementId];
-                    if (e && (e.type === MATERIALS.FIRE || e.type === MATERIALS.ELECTRIC)) return true;
-                }
-                
-                return false;
-            });
-            
-            const angles = [-0.6, -0.3, 0, 0.3, 0.6];
-            let hitCount = 0;
-
-            for (const offset of angles) {
-                const rayAngle = bot.body.angle + offset;
-                const rayEnd = {
-                    x: bot.body.position.x + Math.cos(rayAngle) * lookAhead,
-                    y: bot.body.position.y + Math.sin(rayAngle) * lookAhead
-                };
-                const hits = Query.ray(obstacles, bot.body.position, rayEnd);
-                if (hits.length > 0) {
-                    const weight = Math.abs(offset) < 0.1 ? 4.0 : 2.0;
-                    avoidX -= Math.cos(rayAngle) * weight;
-                    avoidY -= Math.sin(rayAngle) * weight;
-                    hitCount++;
-                }
-            }
-
-            if (hitCount > 0) {
-                if (Math.abs(avoidX) < 0.01 && Math.abs(avoidY) < 0.01) {
-                    const forceAngle = bot.body.angle + ((bot.id.charCodeAt(bot.id.length - 1) % 2 === 0) ? Math.PI/2 : -Math.PI/2);
-                    avoidX = Math.cos(forceAngle) * 4.0;
-                    avoidY = Math.sin(forceAngle) * 4.0;
-                }
-                
-                const finalX = Math.cos(targetAngle) * targetPull + avoidX;
-                const finalY = Math.sin(targetAngle) * targetPull + avoidY;
-                
-                targetAngle = Math.atan2(finalY, finalX);
-            }
-
-            if (bot.botDifficulty === 'EASY') {
-                const error = Math.sin(now / 500 + bot.body.id) * 0.5;
-                targetAngle += error;
-            }
-
-            let angleDiff = targetAngle - bot.body.angle;
-            if (!Number.isFinite(angleDiff)) angleDiff = 0;
-            angleDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff));
-
-            const turnThreshold = bot.botDifficulty === 'HARD' ? 0.05 : 0.1;
-
-            if (angleDiff > turnThreshold) {
-                bot.inputs.right = true; bot.inputs.left = false;
-            } else if (angleDiff < -turnThreshold) {
-                bot.inputs.left = true; bot.inputs.right = false;
-            } else {
-                bot.inputs.left = false; bot.inputs.right = false;
-            }
-
-            // 3. Separate Turret Aiming
-            let turretTargetAngle = bot.body.angle; // Default to body angle
-            if (targetPos) {
-                // Calculate direct angle to target (with leading for HARD)
-                turretTargetAngle = Math.atan2(targetPos.y - bot.body.position.y, targetPos.x - bot.body.position.x);
-                if (bot.botDifficulty === 'EASY') {
-                    turretTargetAngle += Math.sin(now / 300) * 0.2; // Add some inaccuracy
-                }
-            }
-            bot.inputs.aimAngle = turretTargetAngle;
-
-            const currentWeapon = WEAPON_MODULES[bot.slots[bot.currentSlot]];
-            const idealRange = currentWeapon.type === MATERIALS.FIRE ? 150 : 400;
-
-            if (minDist > idealRange) {
-                bot.inputs.up = true; bot.inputs.down = false;
-            } else if (minDist < idealRange * 0.5 && bot.botDifficulty !== 'EASY') {
-                bot.inputs.down = true; bot.inputs.up = false;
-            } else {
-                bot.inputs.up = false; bot.inputs.down = false;
-            }
-
-            const aimTolerance = bot.botDifficulty === 'HARD' ? 0.2 : (bot.botDifficulty === 'NORMAL' ? 0.5 : 0.8);
-            if (closestEnemy && minDist < idealRange * 2.0) {
-                // Bots can shoot even if body isn't aligned, as long as turret is reasonably pointed
-                bot.inputs.shoot = bot.botDifficulty === 'EASY' ? Math.random() > 0.7 : true;
-            } else {
-                bot.inputs.shoot = false;
-            }
-
-            if (now > bot.nextWeaponSwap) {
-                if (bot.botDifficulty === 'NORMAL' && Math.random() > 0.5) {
-                    bot.currentSlot = Math.floor(Math.random() * bot.slots.length);
-                } else if (bot.botDifficulty === 'HARD') {
-                    if (minDist < 200) {
-                        bot.currentSlot = Math.max(0, bot.slots.indexOf('FLAMETHROWER'));
-                    } else if (minDist > 500) {
-                        bot.currentSlot = Math.max(0, bot.slots.indexOf('STANDARD'));
-                    } else {
-                        bot.currentSlot = Math.floor(Math.random() * bot.slots.length);
-                    }
-                }
-                bot.nextWeaponSwap = now + 3000 + Math.random() * 2000;
+            if (now < (bot.reverseUntil || 0)) {
+                bot.inputs = { up: false, down: true, left: bot.panicDir > 0, right: bot.panicDir < 0, shoot: false };
             }
         });
     }
@@ -1203,6 +1124,18 @@ class Lobby {
 
         if (winner) {
             this.gameOver = true;
+            
+            // Persistence: Save stats for all human players
+            Object.values(this.players).forEach(p => {
+                if (!p.isBot && playerData[p.username]) {
+                    playerData[p.username].kills += p.kills;
+                    playerData[p.username].deaths += p.deaths;
+                    playerData[p.username].scrap += p.scrap;
+                    playerData[p.username].lastSeen = Date.now();
+                }
+            });
+            savePlayers();
+
             io.to(this.id).emit('match-ended', { 
                 winner, 
                 scores: this.scores,

@@ -27,8 +27,9 @@ The core of the game engine lives on the **Node.js server**.
 - **Latency Sensitivity**: Due to the lack of prediction, high-latency connections may result in visible jitter or "snapping" for the local player. This is a known architectural state and is not currently prioritized for refactoring.
 
 ### 5. Persistence & Data
-- **Player Stats**: Basic player statistics (Kills, Deaths, Scrap) are persisted in a local `players.json` file on the server.
-- **Authentication**: There is currently no authentication or password system. Usernames are treated as unique identifiers, but any client can claim any username.
+- **Player Stats**: Persistent player statistics (Lifetime Kills, Deaths, Scrap) are stored in `players.json`.
+- **Session Stats**: In-match stats are reset each game, but the results are added to the persistent lifetime totals at match end or when leaving.
+- **Authentication**: There is currently no authentication or password system. Usernames are treated as unique identifiers.
 - **Session Data**: HUD settings and volume preferences are persisted in the browser's `localStorage`.
 
 ---
@@ -72,6 +73,11 @@ The environment is reactive:
 The game features a server-side AI system that scales with player count:
 - **Replacement Logic**: Bots automatically fill empty slots in lobbies to maintain a 5v5 balance. When a human player joins, a bot is removed.
 - **Behavior States**:
+    - **COMBAT**: Prioritizes closest enemy, uses distance-based weapon selection, and leads shots (HARD difficulty).
+    - **SCAVENGE**: Searches for scrap within a 1500px radius if no enemies are visible.
+    - **WANDER**: If no targets are found, bots pick a random point in the world and patrol.
+    - **STEAM AWARENESS**: Bots have a random chance to "blind fire" into Steam clouds if they lose sight of a target, instead of ignoring them.
+    - **STUCK RECOVERY**: Improved detection with panic-turns and reversing to escape complex terrain.
 ### 6. Environmental Physics & Alchemy
 - **Alchemy Matrix**:
     - **Fire + Water**: Evaporates into `STEAM` (Small puddles only).
