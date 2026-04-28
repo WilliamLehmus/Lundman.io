@@ -308,6 +308,7 @@ class Lobby {
         let mapType = forcedType === 'RANDOM' || !biomes.includes(forcedType) 
             ? biomes[Math.floor(Math.random() * biomes.length)] 
             : forcedType;
+        this.mapType = mapType; // Store for other methods
         this.zones.push({ x: 0, y: 0, w: this.worldSize, h: this.worldSize, type: mapType });
 
         const blockSize = 350;
@@ -366,22 +367,8 @@ class Lobby {
             }
         }
 
-        const scatterCount = mapType === 'WASTELAND' ? 40 : 20;
-        for (let i = 0; i < scatterCount; i++) {
-            const pos = { 
-                x: 150 + Math.random() * (this.worldSize - 300), 
-                y: 150 + Math.random() * (this.worldSize - 300) 
-            };
-            
-            let type;
-            if (mapType === 'WETLAND') type = MATERIALS.WATER;
-            else if (mapType === 'WASTELAND') type = MATERIALS.OIL;
-            else if (mapType === 'INDUSTRIAL') type = MATERIALS.DIRT;
-            else if (mapType === 'URBAN') type = MATERIALS.SCRAP;
-            else type = MATERIALS.DIRT;
-
-            this.spawnElement(pos, type, 120000);
-        }
+        // Removed initial random scatter of scrap/materials at match start as requested.
+        // Elements should now primarily come from crates, barrels, or active gameplay.
 
         // --- NEW: Global Props Scatter (Barrels & Crates) ---
         // This ensures props are more spread out and less clustered around buildings
@@ -749,14 +736,32 @@ class Lobby {
             const isInside = Query.point(buildings, pos).length > 0;
             if (isInside) return null;
 
+            // NEW: Sidewalk check for URBAN biome
+            if (this.mapType === 'URBAN') {
+                const blockSize = 350;
+                const streetWidth = 150;
+                const padding = 150;
+                const step = blockSize + streetWidth;
+                const buffer = 20; // Sidewalk extension
+
+                const relativeX = (pos.x - (padding - buffer)) % step;
+                const relativeY = (pos.y - (padding - buffer)) % step;
+                
+                // If we are within the blockSize + buffer*2 area, we are on a sidewalk/building lot
+                if (relativeX >= 0 && relativeX < blockSize + buffer * 2 &&
+                    relativeY >= 0 && relativeY < blockSize + buffer * 2) {
+                    return null;
+                }
+            }
+
             // NEW: Prevent physical props from overlapping each other
             if (solidTypes.includes(type)) {
                 const otherSolids = Object.values(this.elements)
                     .filter(e => solidTypes.includes(e.type))
                     .map(e => e.body);
                 
-                // Use a slightly larger radius for spacing
-                const spacing = 40; 
+                // Increased spacing to prevent tight clustering
+                const spacing = 120; 
                 const overlaps = Query.region(otherSolids, {
                     min: { x: pos.x - spacing, y: pos.y - spacing },
                     max: { x: pos.x + spacing, y: pos.y + spacing }
@@ -777,10 +782,11 @@ class Lobby {
         }
 
         const id = ++this.lastElementId;
+        const isSolid = solidTypes.includes(type);
         const body = Bodies.rectangle(pos.x, pos.y, w, h, {
             label: 'element',
             isStatic: true,
-            isSensor: true
+            isSensor: !isSolid
         });
         body.elementId = id;
 

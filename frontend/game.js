@@ -78,13 +78,35 @@ let camera = { x: 0, y: 0 };
 let shake = { x: 0, y: 0, intensity: 0 };
 let particles = []; // { x, y, vx, vy, life, color, size }
 let atmosphereParticles = []; // { x, y, size, vx, vy, speed, color }
+let environmentalObjects = []; // Dynamic objects like Tumbleweeds
+let lizards = []; // Scurrying desert life
 let groundDetails = []; // Cache for procedural cracks/stains
+let lastBiome = null;
+let lastWorldSize = 0;
+let lastAtmoBiome = null;
 let playerEvents = []; // { text, color, time }
 let mousePos = { x: 0, y: 0 };
 let renderTime = 0;
 
 // Premium Visuals Toggle (Set to true to enable high-end atmosphere/effects)
-const ENABLE_PREMIUM_VISUALS = false;
+let ENABLE_PREMIUM_VISUALS = localStorage.getItem('tanks_premium_visuals') === 'true';
+
+const premiumToggle = document.getElementById('premium-visuals-toggle');
+if (premiumToggle) {
+    premiumToggle.checked = ENABLE_PREMIUM_VISUALS;
+    premiumToggle.onchange = (e) => {
+        ENABLE_PREMIUM_VISUALS = e.target.checked;
+        localStorage.setItem('tanks_premium_visuals', ENABLE_PREMIUM_VISUALS);
+        
+        // Update CSS filter if needed
+        const canvas = document.getElementById('gameCanvas');
+        if (canvas) {
+            canvas.style.filter = ENABLE_PREMIUM_VISUALS 
+                ? 'brightness(1.1) contrast(1.1) saturate(1.1) drop-shadow(0 0 10px rgba(0, 242, 255, 0.1))' 
+                : 'none';
+        }
+    };
+}
 
 socket.on('kill-feed', (data) => {
     killFeed.push({ ...data, time: Date.now() });
@@ -99,12 +121,21 @@ socket.on('kill-feed', (data) => {
 
 socket.on('collision-effect', (data) => {
     // Spawn hit particles at the exact collision point
-    const hitColor = data.targetLabel === 'element' ? '#fff' : (data.targetLabel && data.targetLabel.startsWith('tank-') ? '#ff0000' : '#ffcc00');
+    const isTank = data.targetLabel && data.targetLabel.startsWith('tank-');
+    const hitColor = data.targetLabel === 'element' ? '#fff' : (isTank ? '#ff0000' : '#ffcc00');
     spawnParticles(data.x, data.y, hitColor, 8);
     
+    // PREMIUM: Extra impact juice
+    if (ENABLE_PREMIUM_VISUALS) {
+        if (data.targetLabel === 'element' || data.targetLabel === 'wall') {
+            // Dust/Debris
+            spawnParticles(data.x, data.y, '#666', 5, 1.5); 
+            shake.intensity = Math.max(shake.intensity, 2);
+        }
+    }
+
     // If it hit a tank, maybe add a tiny shake
-    const me = gameState.players.find(p => p.id === myId);
-    if (data.targetLabel === `tank-${myId}`) {
+    if (isTank && data.targetLabel === `tank-${myId}`) {
         shake.intensity = Math.max(shake.intensity, 5);
     }
 });
@@ -649,7 +680,9 @@ function renderLoop(now) {
         
         if (ENABLE_PREMIUM_VISUALS) {
             updateAtmosphere(dt);
+            updateEnvironmentalObjects(dt);
             drawAtmosphere();
+            drawEnvironmentalObjects();
         }
 
         ctx.strokeStyle = 'rgba(0, 242, 255, 0.5)';
@@ -665,9 +698,13 @@ function renderLoop(now) {
             drawTank(p);
             // NEW: Dust particles when moving
             if (ENABLE_PREMIUM_VISUALS && renderTime % 5 < 1) { 
+                const currentBiome = gameState.zones && gameState.zones[0] ? gameState.zones[0].type : 'RANDOM';
                 const isMoving = p.id === myId ? (keys.up || keys.down || keys.left || keys.right) : true; 
                 if (isMoving) {
-                    spawnParticles(p.x - Math.cos(p.angle) * 20, p.y - Math.sin(p.angle) * 20, 'rgba(100,100,100,0.2)', 1, 0.5);
+                    // More intense dust in wasteland
+                    const pCount = currentBiome === 'WASTELAND' ? 2 : 1;
+                    const pColor = currentBiome === 'WASTELAND' ? 'rgba(150, 100, 50, 0.3)' : 'rgba(100,100,100,0.2)';
+                    spawnParticles(p.x - Math.cos(p.angle) * 20, p.y - Math.sin(p.angle) * 20, pColor, pCount, 0.5);
                 }
             }
         });
@@ -680,7 +717,10 @@ function renderLoop(now) {
         drawMinimap();
         drawKillFeed();
         drawPlayerEvents();
-        if (ENABLE_PREMIUM_VISUALS) drawVignette();
+        if (ENABLE_PREMIUM_VISUALS) {
+            drawVignette();
+            drawGlobalTint();
+        }
     } else {
         drawGrid();
     }
@@ -703,7 +743,7 @@ function drawTank(p) {
     ctx.save();
     ctx.rotate(p.angle);
 
-    // Tracks (Larvfötter)
+    // Tracks (Larvfotter)
     ctx.fillStyle = '#111';
     ctx.strokeStyle = '#222';
     ctx.lineWidth = 1;
@@ -1039,6 +1079,15 @@ function drawGrid() {
     
     const currentBiome = gameState.zones && gameState.zones[0] ? gameState.zones[0].type : 'RANDOM';
 
+    // Reset ground details if biome or size changes
+    if (currentBiome !== lastBiome || worldSize !== lastWorldSize) {
+        groundDetails = [];
+        lizards = []; // Reset lizards too
+        environmentalObjects = [];
+        lastBiome = currentBiome;
+        lastWorldSize = worldSize;
+    }
+
     if (currentBiome === 'URBAN') {
         // 1. Darker Base Asphalt
         ctx.fillStyle = '#08080c';
@@ -1127,6 +1176,216 @@ function drawGrid() {
                 }
             }
         }
+    } else if (currentBiome === 'WASTELAND') {
+        // 1. Dust/Rust Base
+        ctx.fillStyle = '#160e0a';
+        ctx.fillRect(0, 0, worldSize, worldSize);
+
+        if (ENABLE_PREMIUM_VISUALS) {
+            // Heat Shimmer (subtle wobble)
+            const wobble = Math.sin(Date.now() * 0.003) * 1.5;
+            ctx.translate(0, wobble);
+            
+            // Ground Textures
+            if (groundDetails.length === 0) {
+                for (let i = 0; i < 700; i++) {
+                    const r = Math.random();
+                    groundDetails.push({
+                        x: Math.random() * worldSize,
+                        y: Math.random() * worldSize,
+                        size: r < 0.1 ? 15 + Math.random() * 25 : (r < 0.3 ? 5 + Math.random() * 10 : 2 + Math.random() * 5),
+                        opacity: 0.04 + Math.random() * 0.1,
+                        type: r < 0.1 ? 'rock' : (r < 0.3 ? 'crack' : 'dust'),
+                        color: Math.random() > 0.5 ? '#2a1a0f' : '#1e140d'
+                    });
+                }
+            }
+            ctx.save();
+            groundDetails.forEach(d => {
+                if (d.x > camera.x - 40 && d.x < camera.x + canvas.width + 40 &&
+                    d.y > camera.y - 40 && d.y < camera.y + canvas.height + 40) {
+                    if (d.type === 'rock') {
+                        ctx.fillStyle = '#1a100a';
+                        ctx.globalAlpha = d.opacity * 2;
+                        ctx.beginPath();
+                        ctx.moveTo(d.x, d.y - d.size);
+                        ctx.lineTo(d.x + d.size, d.y);
+                        ctx.lineTo(d.x, d.y + d.size);
+                        ctx.lineTo(d.x - d.size, d.y);
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.strokeStyle = 'rgba(255, 150, 50, 0.05)';
+                        ctx.stroke();
+                    } else if (d.type === 'crack') {
+                        ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+                        ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        ctx.moveTo(d.x - d.size, d.y);
+                        ctx.lineTo(d.x + d.size, d.y);
+                        ctx.stroke();
+                    } else {
+                        ctx.fillStyle = d.color;
+                        ctx.globalAlpha = d.opacity;
+                        ctx.beginPath();
+                        ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+            });
+            ctx.restore();
+
+            // Cloud Shadows
+            ctx.save();
+            ctx.globalCompositeOperation = 'multiply';
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+            for (let i = 0; i < 3; i++) {
+                const cx = ((renderTime * 0.5) + (i * worldSize/3)) % worldSize;
+                const cy = ((renderTime * 0.3) + (i * worldSize/4)) % worldSize;
+                ctx.beginPath();
+                ctx.ellipse(cx, cy, 400, 300, Math.PI/4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+
+            // Scurrying Lizards
+            if (lizards.length === 0) {
+                for (let i = 0; i < 20; i++) {
+                    lizards.push({ x: Math.random() * worldSize, y: Math.random() * worldSize, vx: 0, vy: 0 });
+                }
+            }
+            const me = gameState.players.find(p => p.id === myId);
+            lizards.forEach(l => {
+                if (me) {
+                    const dist = Math.hypot(me.x - l.x, me.y - l.y);
+                    if (dist < 150) {
+                        const angle = Math.atan2(l.y - me.y, l.x - me.x);
+                        l.vx = Math.cos(angle) * 5;
+                        l.vy = Math.sin(angle) * 5;
+                    }
+                }
+                l.x += l.vx; l.y += l.vy;
+                l.vx *= 0.95; l.vy *= 0.95;
+                if (l.x > camera.x && l.x < camera.x + canvas.width && l.y > camera.y && l.y < camera.y + canvas.height) {
+                    ctx.fillStyle = '#4a3a1a';
+                    ctx.fillRect(l.x, l.y, 3, 2);
+                }
+            });
+        }
+
+        // Wind streaks
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)';
+        ctx.setLineDash([100, 200]);
+        ctx.beginPath();
+        for (let i = 0; i < worldSize; i += 300) {
+            ctx.moveTo(0, i);
+            ctx.lineTo(worldSize, i + 100);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+    } else if (currentBiome === 'ICE') {
+        // 1. Frosty Deep Blue Base
+        ctx.fillStyle = '#08141c';
+        ctx.fillRect(0, 0, worldSize, worldSize);
+
+        if (ENABLE_PREMIUM_VISUALS) {
+            if (groundDetails.length === 0) {
+                for (let i = 0; i < 400; i++) {
+                    groundDetails.push({
+                        x: Math.random() * worldSize,
+                        y: Math.random() * worldSize,
+                        size: 10 + Math.random() * 20,
+                        opacity: 0.05 + Math.random() * 0.1,
+                        type: Math.random() > 0.7 ? 'crack' : 'snow'
+                    });
+                }
+            }
+            ctx.save();
+            groundDetails.forEach(d => {
+                if (d.x > camera.x - 30 && d.x < camera.x + canvas.width + 30 &&
+                    d.y > camera.y - 30 && d.y < camera.y + canvas.height + 30) {
+                    if (d.type === 'snow') {
+                        ctx.fillStyle = '#fff';
+                        ctx.globalAlpha = d.opacity * 0.4;
+                        ctx.beginPath();
+                        ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2);
+                        ctx.fill();
+                    } else {
+                        ctx.strokeStyle = 'rgba(200, 240, 255, 0.15)';
+                        ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        ctx.moveTo(d.x - d.size, d.y - d.size/2);
+                        ctx.lineTo(d.x + d.size, d.y + d.size/2);
+                        ctx.stroke();
+                    }
+                }
+            });
+            ctx.restore();
+        }
+    } else if (currentBiome === 'INDUSTRIAL') {
+        // 1. Concrete Grey Base
+        ctx.fillStyle = '#121214';
+        ctx.fillRect(0, 0, worldSize, worldSize);
+
+        if (ENABLE_PREMIUM_VISUALS) {
+            if (groundDetails.length === 0) {
+                for (let i = 0; i < 500; i++) {
+                    groundDetails.push({
+                        x: Math.random() * worldSize,
+                        y: Math.random() * worldSize,
+                        size: 5 + Math.random() * 15,
+                        opacity: 0.05 + Math.random() * 0.15,
+                        type: Math.random() > 0.5 ? 'stain' : 'line'
+                    });
+                }
+            }
+            ctx.save();
+            groundDetails.forEach(d => {
+                if (d.x > camera.x - 30 && d.x < camera.x + canvas.width + 30 &&
+                    d.y > camera.y - 30 && d.y < camera.y + canvas.height + 30) {
+                    if (d.type === 'stain') {
+                        ctx.fillStyle = '#000';
+                        ctx.globalAlpha = d.opacity;
+                        ctx.beginPath();
+                        ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2);
+                        ctx.fill();
+                    } else {
+                        ctx.fillStyle = 'rgba(255, 200, 0, 0.05)';
+                        ctx.fillRect(d.x, d.y, 40, 2);
+                    }
+                }
+            });
+            ctx.restore();
+        }
+    } else if (currentBiome === 'WETLAND') {
+        // 1. Murky Green Base
+        ctx.fillStyle = '#0a100a';
+        ctx.fillRect(0, 0, worldSize, worldSize);
+
+        if (ENABLE_PREMIUM_VISUALS) {
+            if (groundDetails.length === 0) {
+                for (let i = 0; i < 300; i++) {
+                    groundDetails.push({
+                        x: Math.random() * worldSize,
+                        y: Math.random() * worldSize,
+                        size: 15 + Math.random() * 25,
+                        opacity: 0.1 + Math.random() * 0.15,
+                        color: Math.random() > 0.5 ? '#1a2a1a' : '#0a1a0a'
+                    });
+                }
+            }
+            ctx.save();
+            groundDetails.forEach(d => {
+                if (d.x > camera.x - 40 && d.x < camera.x + canvas.width + 40 &&
+                    d.y > camera.y - 40 && d.y < camera.y + canvas.height + 40) {
+                    ctx.fillStyle = d.color;
+                    ctx.globalAlpha = d.opacity;
+                    ctx.beginPath();
+                    ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+            ctx.restore();
+        }
     } else {
         // Default Grid
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)'; 
@@ -1186,6 +1445,9 @@ function interpolateState(dt) {
 
 function drawElements() {
     if (!gameState.elements) return;
+    const currentBiome = gameState.zones && gameState.zones[0] ? gameState.zones[0].type : 'RANDOM';
+    const isWasteland = currentBiome === 'WASTELAND';
+
     gameState.elements.forEach(e => {
         ctx.save();
         const config = MATERIAL_PROPERTIES[e.type] || { color: '#fff' };
@@ -1199,10 +1461,15 @@ function drawElements() {
 
             // 2. Main Building Body
             const bGradient = ctx.createLinearGradient(e.x, e.y - e.h/2, e.x, e.y + e.h/2);
-            bGradient.addColorStop(0, '#252535'); // Top (lighter)
-            bGradient.addColorStop(1, '#151520'); // Bottom (darker)
+            if (isWasteland) {
+                bGradient.addColorStop(0, '#3a2a1a'); // Rusted Top
+                bGradient.addColorStop(1, '#1a100a'); // Dark Bottom
+            } else {
+                bGradient.addColorStop(0, '#252535'); // Top (lighter)
+                bGradient.addColorStop(1, '#151520'); // Bottom (darker)
+            }
             ctx.fillStyle = bGradient;
-            ctx.strokeStyle = 'rgba(0, 242, 255, 0.6)';
+            ctx.strokeStyle = isWasteland ? 'rgba(150, 80, 50, 0.5)' : 'rgba(0, 242, 255, 0.6)';
             ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.roundRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h, 4);
@@ -1210,13 +1477,13 @@ function drawElements() {
             ctx.stroke();
 
             // 3. Roof Details (The "Shell" fix)
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+            ctx.fillStyle = isWasteland ? 'rgba(100, 50, 0, 0.05)' : 'rgba(255, 255, 255, 0.03)';
             ctx.fillRect(e.x - e.w/2 + 10, e.y - e.h/2 + 10, e.w - 20, e.h - 20);
             
             // Add a "Roof Unit" (HVAC / Helipad)
             if (e.w > 120 && e.h > 120) {
-                ctx.fillStyle = '#111';
-                ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+                ctx.fillStyle = isWasteland ? '#2a1a0f' : '#111';
+                ctx.strokeStyle = isWasteland ? 'rgba(150,80,50,0.1)' : 'rgba(255,255,255,0.1)';
                 ctx.beginPath();
                 ctx.roundRect(e.x - 20, e.y - 20, 40, 40, 5);
                 ctx.fill();
@@ -1234,13 +1501,13 @@ function drawElements() {
             const winSpacingY = 18;
             for (let wx = e.x - e.w/2 + 15; wx < e.x + e.w/2 - 10; wx += winSpacingX) {
                 for (let wy = e.y - e.h/2 + 15; wy < e.y + e.h/2 - 10; wy += winSpacingY) {
-                    const isLit = (Math.floor(wx * 0.7 + wy * 1.3 + e.id)) % 6 > 3;
+                    const isLit = (Math.floor(wx * 0.7 + wy * 1.3 + e.id)) % 6 > (isWasteland ? 5 : 3);
                     if (isLit) {
-                        ctx.fillStyle = `rgba(255, 240, 150, ${0.3 * flicker})`;
-                        ctx.shadowBlur = 5;
-                        ctx.shadowColor = 'rgba(255, 240, 150, 0.5)';
+                        ctx.fillStyle = isWasteland ? `rgba(255, 150, 50, ${0.2 * flicker})` : `rgba(255, 240, 150, ${0.3 * flicker})`;
+                        ctx.shadowBlur = isWasteland ? 2 : 5;
+                        ctx.shadowColor = isWasteland ? '#ff6600' : 'rgba(255, 240, 150, 0.5)';
                         ctx.fillRect(wx, wy, winSize, winSize);
-                        ctx.shadowBlur = 0; // Reset for performance
+                        ctx.shadowBlur = 0;
                     } else {
                         ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
                         ctx.fillRect(wx, wy, winSize, winSize);
@@ -1250,22 +1517,24 @@ function drawElements() {
 
             // Neon Signs on random buildings
             if (e.id % 5 === 0) {
-                const neonColors = ['#ff00ff', '#00f2ff', '#ffff00', '#ff0000'];
+                const neonColors = isWasteland ? ['#ff5500', '#ff0000', '#aa6600', '#666'] : ['#ff00ff', '#00f2ff', '#ffff00', '#ff0000'];
                 const nColor = neonColors[e.id % neonColors.length];
-                const texts = ['HOTEL', 'BAR', 'CLUB', 'REPAIR', 'TANK', 'NEON'];
+                const texts = isWasteland ? ['DEAD', 'LOST', 'VOID', 'RUST', 'STOP', 'WAR'] : ['HOTEL', 'BAR', 'CLUB', 'REPAIR', 'TANK', 'NEON'];
                 const text = texts[e.id % texts.length];
                 
                 ctx.save();
                 ctx.translate(e.x, e.y - e.h/2 - 10);
-                ctx.shadowBlur = 10;
-                ctx.shadowColor = nColor;
-                ctx.fillStyle = nColor;
-                ctx.font = 'bold 14px Outfit';
-                ctx.textAlign = 'center';
-                // Flickering effect
-                if (Math.sin(Date.now() * 0.02 + e.id) > -0.9) {
+                
+                // Intense flickering for wasteland
+                const atmoFlicker = isWasteland ? (Math.random() > 0.2 ? (Math.sin(Date.now() * 0.05 + e.id) > 0 ? 1 : 0) : 0) : (Math.sin(Date.now() * 0.02 + e.id) > -0.9 ? 1 : 0);
+                
+                if (atmoFlicker) {
+                    ctx.shadowBlur = isWasteland ? 5 : 10;
+                    ctx.shadowColor = nColor;
+                    ctx.fillStyle = nColor;
+                    ctx.font = 'bold 14px Outfit';
+                    ctx.textAlign = 'center';
                     ctx.fillText(text, 0, 0);
-                    // Add a small rectangle base for the sign
                     ctx.fillRect(-ctx.measureText(text).width/2 - 4, 4, ctx.measureText(text).width + 8, 2);
                 }
                 ctx.restore();
@@ -1676,15 +1945,26 @@ function drawVignette() {
 
 function updateAtmosphere(dt) {
     const worldSize = gameState.worldSize || 4000;
-    if (atmosphereParticles.length < 60) {
-        for (let i = 0; i < 60; i++) {
+    const currentBiome = gameState.zones && gameState.zones[0] ? gameState.zones[0].type : 'RANDOM';
+    
+    // Reset atmosphere if biome changes
+    if (currentBiome !== lastAtmoBiome) {
+        atmosphereParticles = [];
+        lastAtmoBiome = currentBiome;
+    }
+
+    if (atmosphereParticles.length < 80) {
+        const pColor = currentBiome === 'WASTELAND' ? 'rgba(255, 150, 50, 0.1)' : 
+                       (currentBiome === 'ICE' ? 'rgba(200, 240, 255, 0.15)' : 'rgba(0, 242, 255, 0.15)');
+        
+        for (let i = 0; i < 80; i++) {
             atmosphereParticles.push({
                 x: Math.random() * worldSize,
                 y: Math.random() * worldSize,
                 size: 0.5 + Math.random() * 2,
-                vx: (Math.random() - 0.5) * 0.5,
+                vx: (Math.random() - 0.5) * 0.5 + (currentBiome === 'WASTELAND' ? 0.3 : 0), // Slight wind drift in wasteland
                 vy: (Math.random() - 0.5) * 0.5,
-                color: Math.random() > 0.8 ? 'rgba(0, 242, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)'
+                color: Math.random() > 0.7 ? pColor : 'rgba(255, 255, 255, 0.05)'
             });
         }
     }
@@ -1696,6 +1976,70 @@ function updateAtmosphere(dt) {
         if (p.y < 0) p.y = worldSize;
         if (p.y > worldSize) p.y = 0;
     });
+}
+
+function updateEnvironmentalObjects(dt) {
+    const currentBiome = gameState.zones && gameState.zones[0] ? gameState.zones[0].type : 'RANDOM';
+    const worldSize = gameState.worldSize || 4000;
+
+    if (currentBiome === 'WASTELAND' && environmentalObjects.length < 12) {
+        if (Math.random() > 0.98) {
+            environmentalObjects.push({
+                x: -100,
+                y: Math.random() * worldSize,
+                size: 10 + Math.random() * 15,
+                vx: 3 + Math.random() * 5,
+                vy: (Math.random() - 0.5) * 2,
+                angle: 0,
+                rotationSpeed: 0.1 + Math.random() * 0.2,
+                type: 'tumbleweed'
+            });
+        }
+    }
+
+    for (let i = environmentalObjects.length - 1; i >= 0; i--) {
+        const obj = environmentalObjects[i];
+        obj.x += obj.vx * dt;
+        obj.y += obj.vy * dt;
+        obj.angle += obj.rotationSpeed * dt;
+        if (obj.x > worldSize + 200) environmentalObjects.splice(i, 1);
+    }
+}
+
+function drawEnvironmentalObjects() {
+    environmentalObjects.forEach(obj => {
+        if (obj.x > camera.x - 50 && obj.x < camera.x + canvas.width + 50 &&
+            obj.y > camera.y - 50 && obj.y < camera.y + canvas.height + 50) {
+            
+            ctx.save();
+            ctx.translate(obj.x, obj.y);
+            ctx.rotate(obj.angle);
+            
+            if (obj.type === 'tumbleweed') {
+                ctx.strokeStyle = '#3a2a1a';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                for (let i = 0; i < 5; i++) {
+                    ctx.ellipse(0, 0, obj.size, obj.size * 0.7, (i * Math.PI)/5, 0, Math.PI * 2);
+                }
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+    });
+}
+
+function drawGlobalTint() {
+    if (!ENABLE_PREMIUM_VISUALS) return;
+    const currentBiome = gameState.zones && gameState.zones[0] ? gameState.zones[0].type : 'RANDOM';
+    
+    if (currentBiome === 'WASTELAND') {
+        ctx.save();
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.fillStyle = 'rgba(255, 200, 100, 0.08)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.restore();
+    }
 }
 
 function drawAtmosphere() {
