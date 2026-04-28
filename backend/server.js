@@ -377,6 +377,7 @@ class Lobby {
             if (mapType === 'WETLAND') type = MATERIALS.WATER;
             else if (mapType === 'WASTELAND') type = MATERIALS.OIL;
             else if (mapType === 'INDUSTRIAL') type = MATERIALS.DIRT;
+            else if (mapType === 'URBAN') type = MATERIALS.SCRAP;
             else type = MATERIALS.DIRT;
 
             this.spawnElement(pos, type, 120000);

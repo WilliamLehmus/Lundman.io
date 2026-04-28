@@ -623,6 +623,11 @@ function renderLoop(now) {
         ctx.save();
         ctx.translate(-camera.x + shake.x, -camera.y + shake.y);
 
+        // 1. Clipping Mask (Prevents anything from leaking outside the map)
+        ctx.beginPath();
+        ctx.rect(0, 0, gameState.worldSize, gameState.worldSize);
+        ctx.clip();
+
         drawZones();
         drawGrid();
 
@@ -1005,29 +1010,40 @@ function drawGrid() {
     const currentBiome = gameState.zones && gameState.zones[0] ? gameState.zones[0].type : 'RANDOM';
 
     if (currentBiome === 'URBAN') {
-        // Draw Asphalt Roads
-        ctx.fillStyle = '#111118';
+        // 1. Darker Base Asphalt
+        ctx.fillStyle = '#08080c';
         ctx.fillRect(0, 0, worldSize, worldSize);
 
-        // Grid Lines (Subtle)
-        ctx.strokeStyle = 'rgba(0, 242, 255, 0.05)';
+        const blockSize = 350;
+        const streetWidth = 150;
+        const padding = 150;
+        const step = blockSize + streetWidth;
+
+        // 2. Draw Sidewalks (Curbs) - Lighter gray blocks under buildings
+        ctx.fillStyle = '#1a1a25';
+        for (let x = padding - 10; x < worldSize - padding; x += step) {
+            for (let y = padding - 10; y < worldSize - padding; y += step) {
+                ctx.beginPath();
+                ctx.roundRect(x, y, blockSize + 20, blockSize + 20, 10);
+                ctx.fill();
+            }
+        }
+
+        // 3. Grid Lines (Subtle Scanning Grid)
+        ctx.strokeStyle = 'rgba(0, 242, 255, 0.03)';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        for (let x = 0; x <= worldSize; x += 500) { // Main block lines
+        for (let x = 0; x <= worldSize; x += 100) {
             ctx.moveTo(x, 0); ctx.lineTo(x, worldSize);
             ctx.moveTo(0, x); ctx.lineTo(worldSize, x);
         }
         ctx.stroke();
 
-        // Road Markings (Yellow dashed lines)
-        ctx.strokeStyle = 'rgba(255, 200, 0, 0.3)';
+        // 4. Road Markings (Yellow dashed lines + Crosswalks)
+        ctx.strokeStyle = 'rgba(255, 200, 0, 0.2)';
         ctx.setLineDash([20, 30]);
         ctx.lineWidth = 2;
         ctx.beginPath();
-        const blockSize = 350;
-        const streetWidth = 150;
-        const padding = 150;
-        const step = blockSize + streetWidth;
         
         for (let x = padding - streetWidth/2; x < worldSize; x += step) {
             ctx.moveTo(x, 0); ctx.lineTo(x, worldSize);
@@ -1037,6 +1053,17 @@ function drawGrid() {
         }
         ctx.stroke();
         ctx.setLineDash([]); // Reset dash
+
+        // 5. Crosswalks (Zebra crossings at intersections)
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+        for (let x = padding + blockSize; x < worldSize - padding; x += step) {
+            for (let y = padding + blockSize; y < worldSize - padding; y += step) {
+                // Horizontal crossing
+                for (let i = 0; i < 5; i++) {
+                    ctx.fillRect(x + 10, y + 20 + i*25, streetWidth - 20, 12);
+                }
+            }
+        }
     } else {
         // Default Grid
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)'; 
@@ -1101,24 +1128,58 @@ function drawElements() {
         const config = MATERIAL_PROPERTIES[e.type] || { color: '#fff' };
         
         if (e.type === MATERIALS.BUILDING) {
-            ctx.fillStyle = '#222';
-            ctx.strokeStyle = 'rgba(0, 242, 255, 0.4)';
+            // 1. Building Shadow (Deep Depth)
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.beginPath();
+            ctx.roundRect(e.x - e.w/2 + 8, e.y - e.h/2 + 8, e.w, e.h, 6);
+            ctx.fill();
+
+            // 2. Main Building Body
+            const bGradient = ctx.createLinearGradient(e.x, e.y - e.h/2, e.x, e.y + e.h/2);
+            bGradient.addColorStop(0, '#252535'); // Top (lighter)
+            bGradient.addColorStop(1, '#151520'); // Bottom (darker)
+            ctx.fillStyle = bGradient;
+            ctx.strokeStyle = 'rgba(0, 242, 255, 0.6)';
             ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.roundRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h, 4);
             ctx.fill();
             ctx.stroke();
 
-            // Add flickering window lights for Urban feel
+            // 3. Roof Details (The "Shell" fix)
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+            ctx.fillRect(e.x - e.w/2 + 10, e.y - e.h/2 + 10, e.w - 20, e.h - 20);
+            
+            // Add a "Roof Unit" (HVAC / Helipad)
+            if (e.w > 120 && e.h > 120) {
+                ctx.fillStyle = '#111';
+                ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+                ctx.beginPath();
+                ctx.roundRect(e.x - 20, e.y - 20, 40, 40, 5);
+                ctx.fill();
+                ctx.stroke();
+                // Fan details
+                ctx.beginPath();
+                ctx.arc(e.x, e.y, 15, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+
+            // 4. Windows ( facade feel)
             const flicker = Math.sin(Date.now() * 0.01 + e.id) * 0.3 + 0.7;
-            ctx.fillStyle = `rgba(255, 240, 150, ${0.15 * flicker})`;
-            // Windows
-            const winSize = 8;
-            const winSpacing = 20;
-            for (let wx = e.x - e.w/2 + 10; wx < e.x + e.w/2 - 10; wx += winSpacing) {
-                for (let wy = e.y - e.h/2 + 10; wy < e.y + e.h/2 - 10; wy += winSpacing) {
-                    // Deterministic check for which windows are "lit"
-                    if ((Math.floor(wx * 0.123 + wy * 0.456 + e.id)) % 5 > 2) {
+            const winSize = 6;
+            const winSpacingX = 15;
+            const winSpacingY = 18;
+            for (let wx = e.x - e.w/2 + 15; wx < e.x + e.w/2 - 10; wx += winSpacingX) {
+                for (let wy = e.y - e.h/2 + 15; wy < e.y + e.h/2 - 10; wy += winSpacingY) {
+                    const isLit = (Math.floor(wx * 0.7 + wy * 1.3 + e.id)) % 6 > 3;
+                    if (isLit) {
+                        ctx.fillStyle = `rgba(255, 240, 150, ${0.3 * flicker})`;
+                        ctx.shadowBlur = 5;
+                        ctx.shadowColor = 'rgba(255, 240, 150, 0.5)';
+                        ctx.fillRect(wx, wy, winSize, winSize);
+                        ctx.shadowBlur = 0; // Reset for performance
+                    } else {
+                        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
                         ctx.fillRect(wx, wy, winSize, winSize);
                     }
                 }
@@ -1164,24 +1225,28 @@ function drawElements() {
             ctx.stroke();
         } else if (e.type === MATERIALS.BARREL_EXPLOSIVE || e.type === MATERIALS.BARREL_OIL) {
             ctx.translate(e.x, e.y);
-            // Shadow
-            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            // Deep Shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
             ctx.beginPath();
-            ctx.ellipse(3, 3, e.w/2, e.h/3, 0, 0, Math.PI*2);
+            ctx.ellipse(4, 4, e.w/2, e.h/3, 0, 0, Math.PI*2);
             ctx.fill();
-            // Barrel Body
-            ctx.fillStyle = config.color;
-            ctx.strokeStyle = '#222';
+            // Barrel Body (Gradient)
+            const bGrad = ctx.createLinearGradient(-e.w/2, -e.h/2, e.w/2, e.h/2);
+            bGrad.addColorStop(0, config.color);
+            bGrad.addColorStop(1, '#000');
+            ctx.fillStyle = bGrad;
+            ctx.strokeStyle = '#000';
             ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.roundRect(-e.w/2, -e.h/2, e.w, e.h, 5);
             ctx.fill();
             ctx.stroke();
-            // Barrel Hoops
-            ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+            // Shiny highlight
+            ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+            ctx.lineWidth = 3;
             ctx.beginPath();
-            ctx.moveTo(-e.w/2, -e.h/4); ctx.lineTo(e.w/2, -e.h/4);
-            ctx.moveTo(-e.w/2, e.h/4); ctx.lineTo(e.w/2, e.h/4);
+            ctx.moveTo(-e.w/2 + 5, -e.h/2 + 5);
+            ctx.lineTo(-e.w/2 + 5, e.h/2 - 5);
             ctx.stroke();
             // Symbol
             ctx.fillStyle = 'rgba(255,255,255,0.8)';
@@ -1190,6 +1255,10 @@ function drawElements() {
             ctx.fillText(e.type === MATERIALS.BARREL_EXPLOSIVE ? '!' : '●', 0, 6);
         } else if (e.type === MATERIALS.CRATE) {
             ctx.translate(e.x, e.y);
+            // Shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.4)';
+            ctx.fillRect(-e.w/2 + 5, -e.h/2 + 5, e.w, e.h);
+            // Body
             ctx.fillStyle = config.color;
             ctx.strokeStyle = '#222';
             ctx.lineWidth = 2;
@@ -1197,11 +1266,14 @@ function drawElements() {
             ctx.roundRect(-e.w/2, -e.h/2, e.w, e.h, 3);
             ctx.fill();
             ctx.stroke();
-            // Cross boards
+            // Wood Grain / Cross boards
+            ctx.strokeStyle = 'rgba(0,0,0,0.3)';
             ctx.beginPath();
             ctx.moveTo(-e.w/2+5, -e.h/2+5); ctx.lineTo(e.w/2-5, e.h/2-5);
             ctx.moveTo(e.w/2-5, -e.h/2+5); ctx.lineTo(-e.w/2+5, e.h/2-5);
             ctx.stroke();
+            ctx.strokeStyle = '#222';
+            ctx.strokeRect(-e.w/2 + 8, -e.h/2 + 8, e.w - 16, e.h - 16);
         } else {
             ctx.fillStyle = config.color;
             ctx.beginPath();
