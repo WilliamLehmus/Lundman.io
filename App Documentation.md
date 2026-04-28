@@ -136,3 +136,22 @@ npm run dev
 - **Shoot**: `Space` or `Enter`
 - **Weapons**: `1, 2, 3, 4, 5, 6` to switch slots.
 - **Persistence**: Username is automatically saved to LocalStorage.
+139: 
+140: ---
+141: 
+142: ## 🛠️ Development & Debugging
+143: 
+144: ### 1. Common Pitfalls (MANDATORY READ)
+145: > [!IMPORTANT]
+146: > **Syntax Integrity**: When editing large methods in `server.js` (like `processBulletCollision`), always verify that the class structure remains intact. A misplaced or extra closing brace `}` can prematurely close the `Lobby` class, causing subsequent methods to be defined in the global scope and crashing the server with a `SyntaxError`.
+147: 
+148: > [!TIP]
+149: > **Server Health Check**: If the frontend shows a `WebSocket connection failed` error, the backend has likely crashed. Check the terminal or visit `http://localhost:3000/health` to verify server status.
+150: 
+151: - **Port Conflicts (`EADDRINUSE`)**: If port 3000 is stuck, use `taskkill /F /IM node.exe` to clear orphaned processes.
+152: - **Atomic Edits**: Avoid replacing massive blocks of code across class boundaries. Use smaller, more targeted edits to maintain structural integrity.
+153: 
+154: ### 2. Debugging Tools
+155: - **Manual Map Selection**: Use the dropdown in the lobby to force biomes for testing.
+156: - **Server Logs**: Use `console.log` on the backend and watch the `npm run dev` output for real-time physics and logic debugging.
+157: - **Matter.js Inspector**: (Planned) Integration with a visual inspector for server-side bodies.

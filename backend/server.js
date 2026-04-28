@@ -97,7 +97,7 @@ class Lobby {
         }, 1000 / 60); // 60Hz sync
     }
 
-    setupWorld(playerCount) {
+    setupWorld(playerCount, forcedMapType = 'RANDOM') {
         // Clear existing
         Object.values(this.elements).forEach(e => Composite.remove(this.engine.world, e.body));
         this.elements = {};
@@ -123,7 +123,7 @@ class Lobby {
         this.walls = walls;
         Composite.add(this.engine.world, walls);
 
-        this.generateMap();
+        this.generateMap(forcedMapType);
     }
 
     getRandomSpawn(team) {
@@ -303,9 +303,11 @@ class Lobby {
         }
     }
 
-    generateMap() {
-        const biomes = ['URBAN', 'WASTELAND', 'INDUSTRIAL', 'WETLAND'];
-        const mapType = biomes[Math.floor(Math.random() * biomes.length)];
+    generateMap(forcedType = 'RANDOM') {
+        const biomes = ['URBAN', 'WASTELAND', 'INDUSTRIAL', 'WETLAND', 'ICE'];
+        let mapType = forcedType === 'RANDOM' || !biomes.includes(forcedType) 
+            ? biomes[Math.floor(Math.random() * biomes.length)] 
+            : forcedType;
         this.zones.push({ x: 0, y: 0, w: this.worldSize, h: this.worldSize, type: mapType });
 
         const blockSize = 350;
@@ -332,6 +334,10 @@ class Lobby {
                     if (rand < 0.3) this.generateCityBlock(x, y, blockSize);
                     else if (rand < 0.8) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.WATER, null, null, null, 300, 300);
                     if (Math.random() > 0.7) this.spawnElement({ x: x + blockSize, y: y + blockSize }, MATERIALS.DIRT, null, null, null, 200, 200);
+                }
+                else if (mapType === 'ICE') {
+                    if (rand < 0.2) this.generateCityBlock(x, y, blockSize);
+                    else if (rand < 0.8) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.ICE, null, null, null, 250, 250);
                 }
             }
         }
@@ -376,27 +382,30 @@ class Lobby {
             this.spawnElement(pos, type, 120000);
         }
     }
-
     generateCityBlock(bx, by, size) {
-        const type = Math.random();
-        
-        if (type < 0.3) {
-            // One big building (e.g. factory or skyscraper)
-            this.spawnBuilding({ x: bx + size/2, y: by + size/2 }, size * 0.7, size * 0.7);
-        } else if (type < 0.7) {
-            // Two buildings with a guaranteed wide alley (at least 80px)
-            const bW = size * 0.35;
-            this.spawnBuilding({ x: bx + bW/2 + 10, y: by + size/2 }, bW, size * 0.85);
-            this.spawnBuilding({ x: bx + size - bW/2 - 10, y: by + size/2 }, bW, size * 0.85);
-        } else {
-            // Four small corner buildings with wide central cross-path
-            const s = size * 0.3;
-            this.spawnBuilding({ x: bx + s, y: by + s }, s*1.6, s*1.6);
-            this.spawnBuilding({ x: bx + size - s, y: by + s }, s*1.6, s*1.6);
-            this.spawnBuilding({ x: bx + s, y: by + size - s }, s*1.6, s*1.6);
-            this.spawnBuilding({ x: bx + size - s, y: by + size - s }, s*1.6, s*1.6);
+        // Main Building
+        const bw = size * (0.6 + Math.random() * 0.3);
+        const bh = size * (0.6 + Math.random() * 0.3);
+        this.spawnBuilding({ x: bx + size/2, y: by + size/2 }, bw, bh);
+
+        // Add Urban props around the buildings
+        const propCount = 2 + Math.floor(Math.random() * 4);
+        for (let i = 0; i < propCount; i++) {
+            const pos = {
+                x: bx + Math.random() * size,
+                y: by + Math.random() * size
+            };
+            const rand = Math.random();
+            let pType;
+            if (rand < 0.3) pType = MATERIALS.BARREL_EXPLOSIVE;
+            else if (rand < 0.6) pType = MATERIALS.BARREL_OIL;
+            else pType = MATERIALS.CRATE;
+            
+            const props = MATERIAL_PROPERTIES[pType];
+            this.spawnElement(pos, pType, null, props.hp);
         }
     }
+
 
     spawnBuilding(pos, w, h) {
         // Skip if building is outside world bounds
@@ -562,20 +571,42 @@ class Lobby {
 
                 if (bulletData.type === element.type) return;
 
-                if (element.hp != null) {
-                element.hp -= bulletData.damage;
-                if (element.hp <= 0) {
-                    if (element.type === MATERIALS.BUILDING) {
-                        for (let i = 0; i < 10; i++) {
-                            this.spawnElement({
-                                x: element.body.position.x + (Math.random() - 0.5) * element.w,
-                                y: element.body.position.y + (Math.random() - 0.5) * element.h
-                            }, MATERIALS.SCRAP, 30000);
+                // Determine if this element should physically block bullets
+                const isSolid = [
+                    MATERIALS.BUILDING, 
+                    MATERIALS.BARREL_EXPLOSIVE, 
+                    MATERIALS.BARREL_OIL, 
+                    MATERIALS.CRATE
+                ].includes(element.type);
+
+                if (isSolid) {
+                    if (element.hp != null) {
+                        element.hp -= bulletData.damage;
+                        if (element.hp <= 0) {
+                            if (element.type === MATERIALS.BUILDING) {
+                                for (let i = 0; i < 10; i++) {
+                                    this.spawnElement({
+                                        x: element.body.position.x + (Math.random() - 0.5) * element.w,
+                                        y: element.body.position.y + (Math.random() - 0.5) * element.h
+                                    }, MATERIALS.SCRAP, 30000);
+                                }
+                            } else if (element.type === MATERIALS.BARREL_EXPLOSIVE) {
+                                this.barrelExplode(element.body.position, 'fire', bulletData.ownerId);
+                            } else if (element.type === MATERIALS.BARREL_OIL) {
+                                this.barrelExplode(element.body.position, 'oil', bulletData.ownerId);
+                            } else if (element.type === MATERIALS.CRATE) {
+                                for (let i = 0; i < 3; i++) {
+                                    this.spawnElement({
+                                        x: element.body.position.x + (Math.random() - 0.5) * 30,
+                                        y: element.body.position.y + (Math.random() - 0.5) * 30
+                                    }, MATERIALS.SCRAP, 30000);
+                                }
+                            }
+                            this.destroyElement(target.elementId);
                         }
                     }
-                    this.destroyElement(target.elementId);
+                    this.destroyBullet(bullet.id);
                 }
-                this.destroyBullet(bullet.id);
             }
         }
         
@@ -583,7 +614,6 @@ class Lobby {
             this.destroyBullet(bullet.id);
         }
     }
-}
 
     processElementInteraction(bodyA, bodyB) {
         const elementA = bodyA.label === 'element' ? this.elements[bodyA.elementId] : null;
@@ -650,6 +680,36 @@ class Lobby {
                                        (element.type === MATERIALS.ELECTRIC ? 'TESLA' : element.type);
                     this.respawn(p, element.ownerId, weaponSource);
                 }
+            }
+        }
+    }
+
+    barrelExplode(pos, type, ownerId) {
+        const radius = 180;
+        Object.values(this.players).forEach(p => {
+            const dist = Vector.magnitude(Vector.sub(p.body.position, pos));
+            if (dist < radius) {
+                const damage = (1 - dist/radius) * 70;
+                p.hp -= damage;
+                if (p.hp <= 0) this.respawn(p, ownerId, 'EXPLOSION');
+            }
+        });
+
+        io.to(this.id).emit('explosion', { x: pos.x, y: pos.y, radius });
+
+        if (type === 'fire') {
+            for (let i = 0; i < 5; i++) {
+                this.spawnElement({
+                    x: pos.x + (Math.random() - 0.5) * 100,
+                    y: pos.y + (Math.random() - 0.5) * 100
+                }, MATERIALS.FIRE, 8000, 100, ownerId, 60, 60);
+            }
+        } else {
+            for (let i = 0; i < 3; i++) {
+                this.spawnElement({
+                    x: pos.x + (Math.random() - 0.5) * 120,
+                    y: pos.y + (Math.random() - 0.5) * 120
+                }, MATERIALS.OIL, null, null, null, 80, 80);
             }
         }
     }
@@ -1089,11 +1149,11 @@ class Lobby {
         }
     }
 
-    startGame() {
+    startGame(mapType = 'RANDOM') {
         if (this.active) return;
         
         const playerCount = Object.keys(this.players).length;
-        this.setupWorld(playerCount);
+        this.setupWorld(playerCount, mapType);
 
         this.active = true;
         this.matchTimer = 480; // 8 minutes
@@ -1266,10 +1326,10 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('start-game', () => {
+    socket.on('start-game', (data) => {
         const lobby = lobbies[socket.lobbyId];
         if (lobby && Object.keys(lobby.players).length >= MIN_PLAYERS) {
-            lobby.startGame();
+            lobby.startGame(data?.mapType);
             io.to(lobby.id).emit('game-started');
         }
     });

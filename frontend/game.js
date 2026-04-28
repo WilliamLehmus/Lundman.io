@@ -7,6 +7,23 @@ const socket = io({
     transports: ['websocket', 'polling']
 });
 
+socket.on('explosion', (data) => {
+    shake.intensity = 20;
+    // Massive particle burst
+    for (let i = 0; i < 30; i++) {
+        const p = createParticle(data.x, data.y, Math.random() > 0.5 ? '#ff4400' : '#ffcc00', 10 + Math.random() * 10);
+        p.vx *= 1.5;
+        p.vy *= 1.5;
+    }
+    for (let i = 0; i < 15; i++) {
+        createParticle(data.x, data.y, '#333', 15 + Math.random() * 20);
+    }
+});
+
+socket.on('player-event', (data) => {
+    // Handling for player-specific events like level up or achievements
+});
+
 socket.on('connect', () => {
     console.log('Socket connected successfully:', socket.id);
     myId = socket.id;
@@ -984,24 +1001,60 @@ function drawGrid() {
     const gridSize = 100;
     const worldSize = gameState.worldSize || 4000;
     
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)'; 
-    ctx.lineWidth = 1;
+    // Determine current biome (simple check based on first zone)
+    const currentBiome = gameState.zones && gameState.zones[0] ? gameState.zones[0].type : 'RANDOM';
 
-    const startX = Math.max(0, Math.floor(camera.x / gridSize) * gridSize);
-    const endX = Math.min(worldSize, Math.ceil((camera.x + canvas.width) / gridSize) * gridSize);
-    const startY = Math.max(0, Math.floor(camera.y / gridSize) * gridSize);
-    const endY = Math.min(worldSize, Math.ceil((camera.y + canvas.height) / gridSize) * gridSize);
+    if (currentBiome === 'URBAN') {
+        // Draw Asphalt Roads
+        ctx.fillStyle = '#111118';
+        ctx.fillRect(0, 0, worldSize, worldSize);
 
-    ctx.beginPath();
-    for (let x = startX; x <= endX; x += gridSize) {
-        ctx.moveTo(x, startY);
-        ctx.lineTo(x, endY);
+        // Grid Lines (Subtle)
+        ctx.strokeStyle = 'rgba(0, 242, 255, 0.05)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let x = 0; x <= worldSize; x += 500) { // Main block lines
+            ctx.moveTo(x, 0); ctx.lineTo(x, worldSize);
+            ctx.moveTo(0, x); ctx.lineTo(worldSize, x);
+        }
+        ctx.stroke();
+
+        // Road Markings (Yellow dashed lines)
+        ctx.strokeStyle = 'rgba(255, 200, 0, 0.3)';
+        ctx.setLineDash([20, 30]);
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        const blockSize = 350;
+        const streetWidth = 150;
+        const padding = 150;
+        const step = blockSize + streetWidth;
+        
+        for (let x = padding - streetWidth/2; x < worldSize; x += step) {
+            ctx.moveTo(x, 0); ctx.lineTo(x, worldSize);
+        }
+        for (let y = padding - streetWidth/2; y < worldSize; y += step) {
+            ctx.moveTo(0, y); ctx.lineTo(worldSize, y);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]); // Reset dash
+    } else {
+        // Default Grid
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)'; 
+        ctx.lineWidth = 1;
+        const startX = Math.max(0, Math.floor(camera.x / gridSize) * gridSize);
+        const endX = Math.min(worldSize, Math.ceil((camera.x + canvas.width) / gridSize) * gridSize);
+        const startY = Math.max(0, Math.floor(camera.y / gridSize) * gridSize);
+        const endY = Math.min(worldSize, Math.ceil((camera.y + canvas.height) / gridSize) * gridSize);
+
+        ctx.beginPath();
+        for (let x = startX; x <= endX; x += gridSize) {
+            ctx.moveTo(x, startY); ctx.lineTo(x, endY);
+        }
+        for (let y = startY; y <= endY; y += gridSize) {
+            ctx.moveTo(startX, y); ctx.lineTo(endX, y);
+        }
+        ctx.stroke();
     }
-    for (let y = startY; y <= endY; y += gridSize) {
-        ctx.moveTo(startX, y);
-        ctx.lineTo(endX, y);
-    }
-    ctx.stroke();
 }
 
 function interpolateState(dt) {
@@ -1055,9 +1108,43 @@ function drawElements() {
             ctx.roundRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h, 4);
             ctx.fill();
             ctx.stroke();
-            ctx.fillStyle = 'rgba(0, 242, 255, 0.1)';
-            for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) {
-                ctx.fillRect(e.x - e.w/3 + i*e.w/3, e.y - e.h/3 + j*e.h/3, 10, 10);
+
+            // Add flickering window lights for Urban feel
+            const flicker = Math.sin(Date.now() * 0.01 + e.id) * 0.3 + 0.7;
+            ctx.fillStyle = `rgba(255, 240, 150, ${0.15 * flicker})`;
+            // Windows
+            const winSize = 8;
+            const winSpacing = 20;
+            for (let wx = e.x - e.w/2 + 10; wx < e.x + e.w/2 - 10; wx += winSpacing) {
+                for (let wy = e.y - e.h/2 + 10; wy < e.y + e.h/2 - 10; wy += winSpacing) {
+                    // Deterministic check for which windows are "lit"
+                    if ((Math.floor(wx * 0.123 + wy * 0.456 + e.id)) % 5 > 2) {
+                        ctx.fillRect(wx, wy, winSize, winSize);
+                    }
+                }
+            }
+
+            // Neon Signs on random buildings
+            if (e.id % 5 === 0) {
+                const neonColors = ['#ff00ff', '#00f2ff', '#ffff00', '#ff0000'];
+                const nColor = neonColors[e.id % neonColors.length];
+                const texts = ['HOTEL', 'BAR', 'CLUB', 'REPAIR', 'TANK', 'NEON'];
+                const text = texts[e.id % texts.length];
+                
+                ctx.save();
+                ctx.translate(e.x, e.y - e.h/2 - 10);
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = nColor;
+                ctx.fillStyle = nColor;
+                ctx.font = 'bold 14px Outfit';
+                ctx.textAlign = 'center';
+                // Flickering effect
+                if (Math.sin(Date.now() * 0.02 + e.id) > -0.9) {
+                    ctx.fillText(text, 0, 0);
+                    // Add a small rectangle base for the sign
+                    ctx.fillRect(-ctx.measureText(text).width/2 - 4, 4, ctx.measureText(text).width + 8, 2);
+                }
+                ctx.restore();
             }
         } else if (e.type === MATERIALS.SCRAP) {
             // Draw Scrap as a rotating gold gear/nut
@@ -1074,6 +1161,46 @@ function drawElements() {
             ctx.fill();
             ctx.strokeStyle = '#fff';
             ctx.lineWidth = 1;
+            ctx.stroke();
+        } else if (e.type === MATERIALS.BARREL_EXPLOSIVE || e.type === MATERIALS.BARREL_OIL) {
+            ctx.translate(e.x, e.y);
+            // Shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            ctx.beginPath();
+            ctx.ellipse(3, 3, e.w/2, e.h/3, 0, 0, Math.PI*2);
+            ctx.fill();
+            // Barrel Body
+            ctx.fillStyle = config.color;
+            ctx.strokeStyle = '#222';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.roundRect(-e.w/2, -e.h/2, e.w, e.h, 5);
+            ctx.fill();
+            ctx.stroke();
+            // Barrel Hoops
+            ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+            ctx.beginPath();
+            ctx.moveTo(-e.w/2, -e.h/4); ctx.lineTo(e.w/2, -e.h/4);
+            ctx.moveTo(-e.w/2, e.h/4); ctx.lineTo(e.w/2, e.h/4);
+            ctx.stroke();
+            // Symbol
+            ctx.fillStyle = 'rgba(255,255,255,0.8)';
+            ctx.font = 'bold 16px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(e.type === MATERIALS.BARREL_EXPLOSIVE ? '!' : '●', 0, 6);
+        } else if (e.type === MATERIALS.CRATE) {
+            ctx.translate(e.x, e.y);
+            ctx.fillStyle = config.color;
+            ctx.strokeStyle = '#222';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.roundRect(-e.w/2, -e.h/2, e.w, e.h, 3);
+            ctx.fill();
+            ctx.stroke();
+            // Cross boards
+            ctx.beginPath();
+            ctx.moveTo(-e.w/2+5, -e.h/2+5); ctx.lineTo(e.w/2-5, e.h/2-5);
+            ctx.moveTo(e.w/2-5, -e.h/2+5); ctx.lineTo(-e.w/2+5, e.h/2-5);
             ctx.stroke();
         } else {
             ctx.fillStyle = config.color;
@@ -1441,7 +1568,8 @@ joinBtn.onclick = () => {
 };
 
 startGameBtn.onclick = () => {
-    socket.emit('start-game');
+    const mapType = document.getElementById('map-select').value;
+    socket.emit('start-game', { mapType });
 };
 
 if (addBotBtn) {

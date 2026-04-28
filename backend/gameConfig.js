@@ -10,7 +10,10 @@ export const MATERIALS = {
     GAS: 'gas',
     STEAM: 'steam',
     SCRAP: 'scrap',
-    BUILDING: 'building'
+    BUILDING: 'building',
+    BARREL_EXPLOSIVE: 'barrel_explosive',
+    BARREL_OIL: 'barrel_oil',
+    CRATE: 'crate'
 };
 
 export const MATERIAL_PROPERTIES = {
@@ -21,7 +24,10 @@ export const MATERIAL_PROPERTIES = {
     [MATERIALS.STEAM]: { w: 120, h: 120, color: 'rgba(255, 255, 255, 0.2)' },
     [MATERIALS.SCRAP]: { w: 20, h: 20, color: '#ffd700' },
     [MATERIALS.BUILDING]: { w: 100, h: 100, color: '#333' },
-    [MATERIALS.DIRT]: { w: 40, h: 40, color: '#554433' }
+    [MATERIALS.DIRT]: { w: 40, h: 40, color: '#554433' },
+    [MATERIALS.BARREL_EXPLOSIVE]: { w: 35, h: 45, color: '#ff4444', hp: 20 },
+    [MATERIALS.BARREL_OIL]: { w: 35, h: 45, color: '#ffcc00', hp: 20 },
+    [MATERIALS.CRATE]: { w: 45, h: 45, color: '#8b4513', hp: 30 }
 };
 
 export const BIOMES = {
