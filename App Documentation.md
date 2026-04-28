@@ -110,6 +110,14 @@ The game features a server-side AI system that scales with player count:
 - **Authority**: All pathfinding calculations occur on the **server**. 
 - **Method**: Bots use a combination of local raycasting for immediate obstacle avoidance and a server-side navigation mesh/grid (planned) to navigate the procedurally generated biomes.
 - **Dynamic Awareness**: Because the server handles the map generation and bot logic, it can adapt bot paths in real-time as buildings are destroyed or elements (like fire or oil) are spawned.
+### 9. Premium Visual Effects (Optional)
+The game includes a set of high-end atmospheric effects that can be toggled in `frontend/game.js` via the `ENABLE_PREMIUM_VISUALS` constant.
+- **Features when enabled**:
+    - **Ambient Atmosphere**: Floating cyan embers and dust particles.
+    - **Ground Textures**: Procedural grit and stains in the URBAN biome.
+    - **Cinematic Vignette**: Darkened edges for better focus.
+    - **Kinetic Feedback**: Screen shake on firing and dust trails behind moving tanks.
+- **Default State**: `false` (for maximum performance and a clean aesthetic).
 
 ---
 

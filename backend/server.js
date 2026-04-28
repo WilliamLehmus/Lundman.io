@@ -382,6 +382,28 @@ class Lobby {
 
             this.spawnElement(pos, type, 120000);
         }
+
+        // --- NEW: Global Props Scatter (Barrels & Crates) ---
+        // This ensures props are more spread out and less clustered around buildings
+        const propScatterCount = Math.floor(this.worldSize / 60); 
+        for (let i = 0; i < propScatterCount; i++) {
+            const pos = { 
+                x: 100 + Math.random() * (this.worldSize - 200), 
+                y: 100 + Math.random() * (this.worldSize - 200) 
+            };
+            
+            // Check if we are spawning on top of an existing building or player
+            // spawnElement already handles building overlap check, but we can do a distance check for players
+            const rand = Math.random();
+            let pType;
+            // Increased barrel rates as requested by the user
+            if (rand < 0.35) pType = MATERIALS.BARREL_EXPLOSIVE;
+            else if (rand < 0.70) pType = MATERIALS.BARREL_OIL;
+            else pType = MATERIALS.CRATE;
+            
+            const props = MATERIAL_PROPERTIES[pType];
+            this.spawnElement(pos, pType, null, props.hp);
+        }
     }
     generateCityBlock(bx, by, size) {
         // Main Building
@@ -389,8 +411,8 @@ class Lobby {
         const bh = size * (0.6 + Math.random() * 0.3);
         this.spawnBuilding({ x: bx + size/2, y: by + size/2 }, bw, bh);
 
-        // Add Urban props around the buildings
-        const propCount = 2 + Math.floor(Math.random() * 4);
+        // Reduced Urban props around buildings to prevent clustering
+        const propCount = 1 + Math.floor(Math.random() * 2);
         for (let i = 0; i < propCount; i++) {
             const pos = {
                 x: bx + Math.random() * size,
@@ -398,8 +420,9 @@ class Lobby {
             };
             const rand = Math.random();
             let pType;
-            if (rand < 0.3) pType = MATERIALS.BARREL_EXPLOSIVE;
-            else if (rand < 0.6) pType = MATERIALS.BARREL_OIL;
+            // Favor barrels slightly more here too
+            if (rand < 0.35) pType = MATERIALS.BARREL_EXPLOSIVE;
+            else if (rand < 0.70) pType = MATERIALS.BARREL_OIL;
             else pType = MATERIALS.CRATE;
             
             const props = MATERIAL_PROPERTIES[pType];
@@ -717,6 +740,7 @@ class Lobby {
 
     spawnElement(pos, type, duration = null, hp = null, ownerId = null, customW = null, customH = null) {
         // Prevent spawning elements inside buildings
+        const solidTypes = [MATERIALS.BUILDING, MATERIALS.CRATE, MATERIALS.BARREL_EXPLOSIVE, MATERIALS.BARREL_OIL];
         if (type !== MATERIALS.BUILDING) {
             const buildings = Object.values(this.elements)
                 .filter(e => e.type === MATERIALS.BUILDING)
@@ -724,6 +748,21 @@ class Lobby {
             
             const isInside = Query.point(buildings, pos).length > 0;
             if (isInside) return null;
+
+            // NEW: Prevent physical props from overlapping each other
+            if (solidTypes.includes(type)) {
+                const otherSolids = Object.values(this.elements)
+                    .filter(e => solidTypes.includes(e.type))
+                    .map(e => e.body);
+                
+                // Use a slightly larger radius for spacing
+                const spacing = 40; 
+                const overlaps = Query.region(otherSolids, {
+                    min: { x: pos.x - spacing, y: pos.y - spacing },
+                    max: { x: pos.x + spacing, y: pos.y + spacing }
+                });
+                if (overlaps.length > 0) return null;
+            }
         }
 
         const config = MATERIAL_PROPERTIES[type] || { w: 30, h: 30 };

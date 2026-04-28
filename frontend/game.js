@@ -77,8 +77,14 @@ let gameActive = false;
 let camera = { x: 0, y: 0 };
 let shake = { x: 0, y: 0, intensity: 0 };
 let particles = []; // { x, y, vx, vy, life, color, size }
+let atmosphereParticles = []; // { x, y, size, vx, vy, speed, color }
+let groundDetails = []; // Cache for procedural cracks/stains
 let playerEvents = []; // { text, color, time }
 let mousePos = { x: 0, y: 0 };
+let renderTime = 0;
+
+// Premium Visuals Toggle (Set to true to enable high-end atmosphere/effects)
+const ENABLE_PREMIUM_VISUALS = false;
 
 socket.on('kill-feed', (data) => {
     killFeed.push({ ...data, time: Date.now() });
@@ -105,7 +111,6 @@ socket.on('collision-effect', (data) => {
 const keys = { up: false, down: false, left: false, right: false, shoot: false, aimAngle: 0 };
 
 // Rendering
-let renderTime = 0;
 let lastFrameTime = performance.now();
 const bulletTrails = new Map();
 
@@ -482,6 +487,17 @@ socket.on('state', (state) => {
                 // Muzzle Flash / Spawn particles
                 spawnParticles(b.x, b.y, b.color, 5);
                 
+                // NEW: Small shake on shoot (only if near player)
+                if (ENABLE_PREMIUM_VISUALS) {
+                    const me = serverState?.players?.find(p => p.id === myId);
+                    if (me) {
+                        const dist = Math.hypot(me.x - b.x, me.y - b.y);
+                        if (dist < 1000) {
+                            shake.intensity = Math.max(shake.intensity, 3 * (1 - dist/1000));
+                        }
+                    }
+                }
+                
                 if (knownBulletIds.size > 200) {
                     const first = knownBulletIds.values().next().value;
                     knownBulletIds.delete(first);
@@ -630,6 +646,11 @@ function renderLoop(now) {
 
         drawZones();
         drawGrid();
+        
+        if (ENABLE_PREMIUM_VISUALS) {
+            updateAtmosphere(dt);
+            drawAtmosphere();
+        }
 
         ctx.strokeStyle = 'rgba(0, 242, 255, 0.5)';
         ctx.lineWidth = 5;
@@ -640,7 +661,16 @@ function renderLoop(now) {
         drawBulletTrails();
         drawBullets();
 
-        gameState.players.forEach(p => drawTank(p));
+        gameState.players.forEach(p => {
+            drawTank(p);
+            // NEW: Dust particles when moving
+            if (ENABLE_PREMIUM_VISUALS && renderTime % 5 < 1) { 
+                const isMoving = p.id === myId ? (keys.up || keys.down || keys.left || keys.right) : true; 
+                if (isMoving) {
+                    spawnParticles(p.x - Math.cos(p.angle) * 20, p.y - Math.sin(p.angle) * 20, 'rgba(100,100,100,0.2)', 1, 0.5);
+                }
+            }
+        });
         updateParticles(dt);
         drawParticles();
         drawPopups(dt);
@@ -650,6 +680,7 @@ function renderLoop(now) {
         drawMinimap();
         drawKillFeed();
         drawPlayerEvents();
+        if (ENABLE_PREMIUM_VISUALS) drawVignette();
     } else {
         drawGrid();
     }
@@ -1006,7 +1037,6 @@ function drawGrid() {
     const gridSize = 100;
     const worldSize = gameState.worldSize || 4000;
     
-    // Determine current biome (simple check based on first zone)
     const currentBiome = gameState.zones && gameState.zones[0] ? gameState.zones[0].type : 'RANDOM';
 
     if (currentBiome === 'URBAN') {
@@ -1014,18 +1044,49 @@ function drawGrid() {
         ctx.fillStyle = '#08080c';
         ctx.fillRect(0, 0, worldSize, worldSize);
 
+        // 1.1 Procedural Ground Detail (Grit & Stains)
+        if (ENABLE_PREMIUM_VISUALS) {
+            if (groundDetails.length === 0) {
+                for (let i = 0; i < 800; i++) {
+                    groundDetails.push({
+                        x: Math.random() * worldSize,
+                        y: Math.random() * worldSize,
+                        size: 1 + Math.random() * 3,
+                        opacity: 0.05 + Math.random() * 0.1,
+                        isDark: Math.random() > 0.5
+                    });
+                }
+            }
+            
+            ctx.save();
+            groundDetails.forEach(d => {
+                // Only draw if on screen
+                if (d.x > camera.x - 10 && d.x < camera.x + canvas.width + 10 &&
+                    d.y > camera.y - 10 && d.y < camera.y + canvas.height + 10) {
+                    ctx.fillStyle = d.isDark ? `rgba(0,0,0,${d.opacity})` : `rgba(255,255,255,${d.opacity * 0.3})`;
+                    ctx.beginPath();
+                    ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+            ctx.restore();
+        }
+
         const blockSize = 350;
         const streetWidth = 150;
         const padding = 150;
         const step = blockSize + streetWidth;
 
-        // 2. Draw Sidewalks (Curbs) - Lighter gray blocks under buildings
+        // 2. Draw Sidewalks (Curbs)
         ctx.fillStyle = '#1a1a25';
         for (let x = padding - 10; x < worldSize - padding; x += step) {
             for (let y = padding - 10; y < worldSize - padding; y += step) {
                 ctx.beginPath();
                 ctx.roundRect(x, y, blockSize + 20, blockSize + 20, 10);
                 ctx.fill();
+                // Subtle curb edge
+                ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+                ctx.stroke();
             }
         }
 
@@ -1039,8 +1100,8 @@ function drawGrid() {
         }
         ctx.stroke();
 
-        // 4. Road Markings (Yellow dashed lines + Crosswalks)
-        ctx.strokeStyle = 'rgba(255, 200, 0, 0.2)';
+        // 4. Road Markings (Worn Yellow dashed lines)
+        ctx.strokeStyle = 'rgba(255, 200, 0, 0.15)';
         ctx.setLineDash([20, 30]);
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -1052,15 +1113,17 @@ function drawGrid() {
             ctx.moveTo(0, y); ctx.lineTo(worldSize, y);
         }
         ctx.stroke();
-        ctx.setLineDash([]); // Reset dash
+        ctx.setLineDash([]); 
 
-        // 5. Crosswalks (Zebra crossings at intersections)
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+        // 5. Crosswalks (Worn Zebra crossings)
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
         for (let x = padding + blockSize; x < worldSize - padding; x += step) {
             for (let y = padding + blockSize; y < worldSize - padding; y += step) {
-                // Horizontal crossing
                 for (let i = 0; i < 5; i++) {
-                    ctx.fillRect(x + 10, y + 20 + i*25, streetWidth - 20, 12);
+                    // Add random wear to crosswalk bars
+                    if (Math.random() > 0.1) {
+                        ctx.fillRect(x + 15, y + 20 + i*25, streetWidth - 30, 10);
+                    }
                 }
             }
         }
@@ -1225,34 +1288,78 @@ function drawElements() {
             ctx.stroke();
         } else if (e.type === MATERIALS.BARREL_EXPLOSIVE || e.type === MATERIALS.BARREL_OIL) {
             ctx.translate(e.x, e.y);
-            // Deep Shadow
-            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            // Deep Shadow (Cylindrical)
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
             ctx.beginPath();
-            ctx.ellipse(4, 4, e.w/2, e.h/3, 0, 0, Math.PI*2);
+            ctx.ellipse(5, 5, e.w/2 + 2, e.h/2 + 2, 0, 0, Math.PI*2);
             ctx.fill();
-            // Barrel Body (Gradient)
-            const bGrad = ctx.createLinearGradient(-e.w/2, -e.h/2, e.w/2, e.h/2);
+
+            // Main Cylinder Body
+            const bGrad = ctx.createLinearGradient(-e.w/2, 0, e.w/2, 0);
             bGrad.addColorStop(0, config.color);
-            bGrad.addColorStop(1, '#000');
+            bGrad.addColorStop(0.3, config.color);
+            bGrad.addColorStop(0.5, 'rgba(255,255,255,0.5)'); // Central Highlight
+            bGrad.addColorStop(0.7, config.color);
+            bGrad.addColorStop(1, '#000'); // Shadow side
+            
             ctx.fillStyle = bGrad;
-            ctx.strokeStyle = '#000';
+            ctx.strokeStyle = '#111';
             ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.roundRect(-e.w/2, -e.h/2, e.w, e.h, 5);
+            ctx.roundRect(-e.w/2, -e.h/2, e.w, e.h, 4);
             ctx.fill();
             ctx.stroke();
-            // Shiny highlight
-            ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-            ctx.lineWidth = 3;
+
+            // Reinforcing Rings (Doom style)
+            ctx.fillStyle = 'rgba(0,0,0,0.4)';
+            const ringH = 4;
+            ctx.fillRect(-e.w/2, -e.h/2 + 8, e.w, ringH); // Top ring
+            ctx.fillRect(-e.w/2, -ringH/2, e.w, ringH);   // Middle ring
+            ctx.fillRect(-e.w/2, e.h/2 - 12, e.w, ringH); // Bottom ring
+
+            // Metallic Cap (Top)
+            ctx.fillStyle = 'rgba(255,255,255,0.15)';
             ctx.beginPath();
-            ctx.moveTo(-e.w/2 + 5, -e.h/2 + 5);
-            ctx.lineTo(-e.w/2 + 5, e.h/2 - 5);
-            ctx.stroke();
+            ctx.ellipse(0, -e.h/2 + 2, e.w/2 - 2, 3, 0, 0, Math.PI*2);
+            ctx.fill();
+
             // Symbol
-            ctx.fillStyle = 'rgba(255,255,255,0.8)';
-            ctx.font = 'bold 16px monospace';
-            ctx.textAlign = 'center';
-            ctx.fillText(e.type === MATERIALS.BARREL_EXPLOSIVE ? '!' : '●', 0, 6);
+            ctx.save();
+            ctx.translate(0, 4);
+            if (e.type === MATERIALS.BARREL_EXPLOSIVE) {
+                // Draw Flame Symbol with Glow
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#fff';
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.moveTo(0, -14);
+                ctx.bezierCurveTo(-10, -6, -12, 6, 0, 10);
+                ctx.bezierCurveTo(12, 6, 10, -6, 0, -14);
+                ctx.fill();
+                ctx.shadowBlur = 0; // Reset
+                
+                // Inner flame
+                ctx.fillStyle = '#ff4444';
+                ctx.beginPath();
+                ctx.moveTo(0, -8);
+                ctx.bezierCurveTo(-6, -3, -7, 3, 0, 6);
+                ctx.bezierCurveTo(7, 3, 6, -3, 0, -8);
+                ctx.fill();
+            } else {
+                // Draw Oil Drop Symbol
+                ctx.fillStyle = '#000';
+                ctx.beginPath();
+                ctx.moveTo(0, -12);
+                ctx.bezierCurveTo(-8, -4, -10, 8, 0, 8);
+                ctx.bezierCurveTo(10, 8, 8, -4, 0, -12);
+                ctx.fill();
+                // Highlight on drop
+                ctx.fillStyle = 'rgba(255,255,255,0.4)';
+                ctx.beginPath();
+                ctx.arc(-3, -2, 2, 0, Math.PI*2);
+                ctx.fill();
+            }
+            ctx.restore();
         } else if (e.type === MATERIALS.CRATE) {
             ctx.translate(e.x, e.y);
             // Shadow
@@ -1552,7 +1659,60 @@ function drawPlayerEvents() {
     ctx.restore();
 }
 
-function spawnParticles(x, y, color, count = 10) {
+function drawVignette() {
+    const gradient = ctx.createRadialGradient(
+        canvas.width / 2, canvas.height / 2, canvas.width * 0.1,
+        canvas.width / 2, canvas.height / 2, canvas.width * 0.8
+    );
+    gradient.addColorStop(0, 'rgba(0,0,0,0)');
+    gradient.addColorStop(1, 'rgba(0,0,15,0.4)');
+    
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0); // Ignore camera
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+}
+
+function updateAtmosphere(dt) {
+    const worldSize = gameState.worldSize || 4000;
+    if (atmosphereParticles.length < 60) {
+        for (let i = 0; i < 60; i++) {
+            atmosphereParticles.push({
+                x: Math.random() * worldSize,
+                y: Math.random() * worldSize,
+                size: 0.5 + Math.random() * 2,
+                vx: (Math.random() - 0.5) * 0.5,
+                vy: (Math.random() - 0.5) * 0.5,
+                color: Math.random() > 0.8 ? 'rgba(0, 242, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)'
+            });
+        }
+    }
+    atmosphereParticles.forEach(p => {
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        if (p.x < 0) p.x = worldSize;
+        if (p.x > worldSize) p.x = 0;
+        if (p.y < 0) p.y = worldSize;
+        if (p.y > worldSize) p.y = 0;
+    });
+}
+
+function drawAtmosphere() {
+    ctx.save();
+    atmosphereParticles.forEach(p => {
+        if (p.x > camera.x - 50 && p.x < camera.x + canvas.width + 50 &&
+            p.y > camera.y - 50 && p.y < camera.y + canvas.height + 50) {
+            ctx.fillStyle = p.color;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    });
+    ctx.restore();
+}
+
+function spawnParticles(x, y, color, count = 10, sizeMult = 1) {
     for (let i = 0; i < count; i++) {
         particles.push({
             x, y,
@@ -1560,7 +1720,7 @@ function spawnParticles(x, y, color, count = 10) {
             vy: (Math.random() - 0.5) * 8,
             life: 1.0,
             color,
-            size: Math.random() * 4 + 2
+            size: (Math.random() * 4 + 2) * sizeMult
         });
     }
 }

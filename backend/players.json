@@ -2,7 +2,19 @@
   "Lundixz": {
     "kills": 13,
     "deaths": 6,
-    "scrap": 770,
-    "lastSeen": 1777392060430
+    "scrap": 800,
+    "lastSeen": 1777392360939
+  },
+  "TestTank": {
+    "kills": 0,
+    "deaths": 0,
+    "scrap": 20,
+    "lastSeen": 1777392976927
+  },
+  "TestTestTank": {
+    "kills": 0,
+    "deaths": 0,
+    "scrap": 20,
+    "lastSeen": 1777394352894
   }
 }

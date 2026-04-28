@@ -24,9 +24,9 @@ body {
     align-items: center;
 }
 
-#game-canvas {
+#gameCanvas {
     display: block;
-    background: #0a0a12;
+    background: #06060a;
     cursor: crosshair;
 }
 
