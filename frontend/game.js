@@ -575,6 +575,18 @@ function updateHUD() {
             p1Scrap.innerText = me.scrap;
         }
 
+        // Display Scrap Damage Buff (Gap Fix)
+        const buffEl = document.getElementById('p1-buff');
+        if (buffEl) {
+            const scrapBuff = 1 + (me.scrap / 100);
+            if (scrapBuff > 1) {
+                buffEl.innerText = `x${scrapBuff.toFixed(1)} DMG`;
+                buffEl.style.color = '#ffff00';
+            } else {
+                buffEl.innerText = '';
+            }
+        }
+
         const weaponNameEl = document.getElementById('weapon-name');
         if (weaponNameEl) weaponNameEl.innerText = WEAPON_NAMES[me.weapon] || me.weapon;
 
@@ -1100,15 +1112,28 @@ function drawGrid() {
 
     if (currentBiome === 'URBAN' || currentBiome === 'INDUSTRIAL') {
         const isIndustrial = currentBiome === 'INDUSTRIAL';
-        // 1. Base floor (Asphalt for Urban, Concrete for Industrial)
+        // 1. Base floor
         ctx.fillStyle = isIndustrial ? '#1e1e24' : '#08080c';
         ctx.fillRect(0, 0, worldSize, worldSize);
 
-        // Industrial Concrete Plate Lines
+        // 1.1 INDUSTRIAL Details
         if (isIndustrial) {
+            // Diamond Plate Texture (Subtle)
             ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+            ctx.lineWidth = 1;
+            const plateSize = 250;
+            for (let x = 0; x < worldSize; x += plateSize) {
+                for (let y = 0; y < worldSize; y += plateSize) {
+                    ctx.beginPath();
+                    ctx.moveTo(x + 10, y + 10); ctx.lineTo(x + 30, y + 30);
+                    ctx.moveTo(x + 30, y + 10); ctx.lineTo(x + 10, y + 30);
+                    ctx.stroke();
+                }
+            }
+
+            // Concrete Plate Lines
+            ctx.strokeStyle = 'rgba(255,255,255,0.04)';
             ctx.lineWidth = 2;
-            const plateSize = 200;
             ctx.beginPath();
             for (let x = 0; x < worldSize; x += plateSize) {
                 ctx.moveTo(x, 0); ctx.lineTo(x, worldSize);
@@ -1117,122 +1142,108 @@ function drawGrid() {
                 ctx.moveTo(0, y); ctx.lineTo(worldSize, y);
             }
             ctx.stroke();
+
+            // 1.2 Power Cables (Pulsing neon)
+            if (ENABLE_PREMIUM_VISUALS) {
+                const cablePulse = 0.05 + Math.sin(Date.now() * 0.0015) * 0.04;
+                ctx.save();
+                ctx.lineWidth = 5;
+                ctx.strokeStyle = `rgba(0, 242, 255, ${cablePulse})`;
+                ctx.shadowBlur = 12 * (cablePulse * 12);
+                ctx.shadowColor = '#00f2ff';
+                const spacing = 1000;
+                for (let g = 500; g < worldSize; g += spacing) {
+                    ctx.beginPath();
+                    ctx.moveTo(g, 0);
+                    for (let cy = 0; cy < worldSize; cy += 300) ctx.lineTo(g + Math.sin(cy/200 + g)*25, cy);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(0, g);
+                    for (let cx = 0; cx < worldSize; cx += 300) ctx.lineTo(cx, g + Math.cos(cx/250 + g)*25);
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
         }
 
-        // 1.1 Procedural Ground Detail (Grit & Stains)
+        // 1.3 Procedural Ground Detail (Grit & Vents)
         if (ENABLE_PREMIUM_VISUALS) {
             if (groundDetails.length === 0) {
                 for (let i = 0; i < 800; i++) {
                     groundDetails.push({
-                        x: Math.random() * worldSize,
-                        y: Math.random() * worldSize,
-                        size: 1 + Math.random() * 3,
-                        opacity: 0.05 + Math.random() * 0.1,
-                        isDark: Math.random() > 0.5
+                        x: Math.random() * worldSize, y: Math.random() * worldSize,
+                        size: 1 + Math.random() * 3, opacity: 0.05 + Math.random() * 0.1,
+                        isDark: Math.random() > 0.5, isVent: isIndustrial && Math.random() > 0.96
                     });
                 }
             }
-            
             ctx.save();
             groundDetails.forEach(d => {
-                // Only draw if on screen
-                if (d.x > camera.x - 10 && d.x < camera.x + canvas.width + 10 &&
-                    d.y > camera.y - 10 && d.y < camera.y + canvas.height + 10) {
-                    ctx.fillStyle = d.isDark ? `rgba(0,0,0,${d.opacity})` : `rgba(255,255,255,${d.opacity * 0.3})`;
-                    ctx.beginPath();
-                    ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2);
-                    ctx.fill();
+                if (d.x < camera.x - 200 || d.x > camera.x + canvas.width + 200 || d.y < camera.y - 200 || d.y > camera.y + canvas.height + 200) return;
+                if (d.isVent) {
+                    ctx.fillStyle = '#111'; ctx.fillRect(d.x - 15, d.y - 15, 30, 30);
+                    ctx.strokeStyle = '#333'; ctx.strokeRect(d.x - 15, d.y - 15, 30, 30);
+                    if (Math.random() > 0.95) particles.push({ x: d.x, y: d.y, vx: (Math.random()-0.5)*0.3, vy: -1.0, life: 1.0, color: 'rgba(200,200,220,0.2)', size: 5+Math.random()*10 });
+                } else {
+                    ctx.globalAlpha = d.opacity; ctx.fillStyle = d.isDark ? '#000' : '#fff';
+                    ctx.beginPath(); ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2); ctx.fill();
                 }
             });
             ctx.restore();
         }
 
-        const blockSize = 350;
-        const streetWidth = 150;
-        const padding = 150;
-        const step = blockSize + streetWidth;
-
-        // 2. Draw Sidewalks (Curbs)
-        ctx.fillStyle = isIndustrial ? '#11111a' : '#1a1a25';
+        // 2. Sidewalks & Curbs
+        const blockSize = 350, streetWidth = 150, padding = 150, step = blockSize + streetWidth;
         for (let x = padding - 10; x < worldSize - padding; x += step) {
             for (let y = padding - 10; y < worldSize - padding; y += step) {
+                // Sidewalk Base
+                ctx.fillStyle = isIndustrial ? '#11111a' : '#1a1a25';
                 ctx.beginPath();
                 ctx.roundRect(x, y, blockSize + 20, blockSize + 20, 10);
                 ctx.fill();
-                // Subtle curb edge
-                ctx.strokeStyle = isIndustrial ? 'rgba(0, 242, 255, 0.08)' : 'rgba(255,255,255,0.03)';
-                ctx.stroke();
+                
+                // Caution Stripes for Industrial
+                if (isIndustrial) {
+                    ctx.save();
+                    ctx.strokeStyle = '#ffcc00'; ctx.lineWidth = 6;
+                    ctx.setLineDash([10, 10]);
+                    ctx.strokeRect(x, y, blockSize + 20, blockSize + 20);
+                    ctx.restore();
+                } else {
+                    ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+                    ctx.strokeRect(x, y, blockSize + 20, blockSize + 20);
+                }
 
-                // Industrial circuitry patterns on sidewalks
+                // Internal grid patterns
                 if (isIndustrial && ENABLE_PREMIUM_VISUALS) {
-                    ctx.strokeStyle = 'rgba(0, 242, 255, 0.04)';
-                    ctx.lineWidth = 1;
-                    for (let i = 20; i < blockSize; i += 40) {
-                        ctx.beginPath();
-                        ctx.moveTo(x + i, y + 10); ctx.lineTo(x + i, y + blockSize + 10);
-                        ctx.stroke();
-                        ctx.beginPath();
-                        ctx.moveTo(x + 10, y + i); ctx.lineTo(x + blockSize + 10, y + i);
-                        ctx.stroke();
+                    ctx.strokeStyle = 'rgba(0, 242, 255, 0.04)'; ctx.lineWidth = 1;
+                    for (let i = 40; i < blockSize; i += 80) {
+                        ctx.beginPath(); ctx.moveTo(x + i, y + 10); ctx.lineTo(x + i, y + blockSize + 10); ctx.stroke();
+                        ctx.beginPath(); ctx.moveTo(x + 10, y + i); ctx.lineTo(x + blockSize + 10, y + i); ctx.stroke();
                     }
                 }
             }
         }
 
-        // 3. Grid Lines (Subtle Scanning Grid)
-        ctx.strokeStyle = 'rgba(0, 242, 255, 0.03)';
-        ctx.lineWidth = 1;
+        // 3. Road Markings
+        ctx.strokeStyle = isIndustrial ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 200, 0, 0.1)';
+        ctx.setLineDash([20, 30]); ctx.lineWidth = 2;
         ctx.beginPath();
-        for (let x = 0; x <= worldSize; x += 100) {
-            ctx.moveTo(x, 0); ctx.lineTo(x, worldSize);
-            ctx.moveTo(0, x); ctx.lineTo(worldSize, x);
-        }
-        ctx.stroke();
+        for (let x = padding - streetWidth/2; x < worldSize; x += step) { ctx.moveTo(x, 0); ctx.lineTo(x, worldSize); }
+        for (let y = padding - streetWidth/2; y < worldSize; y += step) { ctx.moveTo(0, y); ctx.lineTo(worldSize, y); }
+        ctx.stroke(); ctx.setLineDash([]); 
 
-        // 4. Road Markings (Worn Yellow dashed lines)
-        ctx.strokeStyle = 'rgba(255, 200, 0, 0.15)';
-        ctx.setLineDash([20, 30]);
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        
-        for (let x = padding - streetWidth/2; x < worldSize; x += step) {
-            ctx.moveTo(x, 0); ctx.lineTo(x, worldSize);
-        }
-        for (let y = padding - streetWidth/2; y < worldSize; y += step) {
-            ctx.moveTo(0, y); ctx.lineTo(worldSize, y);
-        }
-        ctx.stroke();
-        ctx.setLineDash([]); 
-
-        // 5. Crosswalks (Worn Zebra crossings)
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
-        for (let x = padding + blockSize; x < worldSize - padding; x += step) {
-            for (let y = padding + blockSize; y < worldSize - padding; y += step) {
-                for (let i = 0; i < 5; i++) {
-                    // Add random wear to crosswalk bars
-                    if (Math.random() > 0.1) {
-                        ctx.fillRect(x + 15, y + 20 + i*25, streetWidth - 30, 10);
-                    }
-                }
-            }
-        }
     } else if (currentBiome === 'WASTELAND') {
-        // 1. Dust/Rust Base
         ctx.fillStyle = '#160e0a';
         ctx.fillRect(0, 0, worldSize, worldSize);
-
         if (ENABLE_PREMIUM_VISUALS) {
-            // Heat Shimmer (subtle wobble)
             const wobble = Math.sin(Date.now() * 0.003) * 1.5;
             ctx.translate(0, wobble);
-            
-            // Ground Textures
             if (groundDetails.length === 0) {
                 for (let i = 0; i < 700; i++) {
                     const r = Math.random();
                     groundDetails.push({
-                        x: Math.random() * worldSize,
-                        y: Math.random() * worldSize,
+                        x: Math.random() * worldSize, y: Math.random() * worldSize,
                         size: r < 0.1 ? 15 + Math.random() * 25 : (r < 0.3 ? 5 + Math.random() * 10 : 2 + Math.random() * 5),
                         opacity: 0.04 + Math.random() * 0.1,
                         type: r < 0.1 ? 'rock' : (r < 0.3 ? 'crack' : 'dust'),
@@ -1242,210 +1253,61 @@ function drawGrid() {
             }
             ctx.save();
             groundDetails.forEach(d => {
-                if (d.x > camera.x - 40 && d.x < camera.x + canvas.width + 40 &&
-                    d.y > camera.y - 40 && d.y < camera.y + canvas.height + 40) {
-                    if (d.type === 'rock') {
-                        ctx.fillStyle = '#1a100a';
-                        ctx.globalAlpha = d.opacity * 2;
-                        ctx.beginPath();
-                        ctx.moveTo(d.x, d.y - d.size);
-                        ctx.lineTo(d.x + d.size, d.y);
-                        ctx.lineTo(d.x, d.y + d.size);
-                        ctx.lineTo(d.x - d.size, d.y);
-                        ctx.closePath();
-                        ctx.fill();
-                        ctx.strokeStyle = 'rgba(255, 150, 50, 0.05)';
-                        ctx.stroke();
-                    } else if (d.type === 'crack') {
-                        ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
-                        ctx.lineWidth = 1;
-                        ctx.beginPath();
-                        ctx.moveTo(d.x - d.size, d.y);
-                        ctx.lineTo(d.x + d.size, d.y);
-                        ctx.stroke();
-                    } else {
-                        ctx.fillStyle = d.color;
-                        ctx.globalAlpha = d.opacity;
-                        ctx.beginPath();
-                        ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2);
-                        ctx.fill();
-                    }
+                if (d.x < camera.x - 40 || d.x > camera.x + canvas.width + 40 || d.y < camera.y - 40 || d.y > camera.y + canvas.height + 40) return;
+                if (d.type === 'rock') {
+                    ctx.fillStyle = '#1a100a'; ctx.globalAlpha = d.opacity * 2;
+                    ctx.beginPath(); ctx.moveTo(d.x, d.y - d.size); ctx.lineTo(d.x + d.size, d.y); ctx.lineTo(d.x, d.y + d.size); ctx.lineTo(d.x - d.size, d.y); ctx.closePath(); ctx.fill();
+                } else if (d.type === 'crack') {
+                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(d.x - d.size, d.y); ctx.lineTo(d.x + d.size, d.y); ctx.stroke();
+                } else {
+                    ctx.fillStyle = d.color; ctx.globalAlpha = d.opacity; ctx.beginPath(); ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2); ctx.fill();
                 }
             });
             ctx.restore();
-
-            // Cloud Shadows
-            ctx.save();
-            ctx.globalCompositeOperation = 'multiply';
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+            ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
             for (let i = 0; i < 3; i++) {
-                const cx = ((renderTime * 0.5) + (i * worldSize/3)) % worldSize;
-                const cy = ((renderTime * 0.3) + (i * worldSize/4)) % worldSize;
-                ctx.beginPath();
-                ctx.ellipse(cx, cy, 400, 300, Math.PI/4, 0, Math.PI * 2);
-                ctx.fill();
+                const cx = ((renderTime * 0.5) + (i * worldSize/3)) % worldSize, cy = ((renderTime * 0.3) + (i * worldSize/4)) % worldSize;
+                ctx.beginPath(); ctx.ellipse(cx, cy, 400, 300, Math.PI/4, 0, Math.PI * 2); ctx.fill();
             }
             ctx.restore();
-
-            // Scurrying Lizards
-            if (lizards.length === 0) {
-                for (let i = 0; i < 20; i++) {
-                    lizards.push({ x: Math.random() * worldSize, y: Math.random() * worldSize, vx: 0, vy: 0 });
-                }
-            }
+            if (lizards.length === 0) for (let i = 0; i < 20; i++) lizards.push({ x: Math.random() * worldSize, y: Math.random() * worldSize, vx: 0, vy: 0 });
             const me = gameState.players.find(p => p.id === myId);
             lizards.forEach(l => {
-                if (me) {
-                    const dist = Math.hypot(me.x - l.x, me.y - l.y);
-                    if (dist < 150) {
-                        const angle = Math.atan2(l.y - me.y, l.x - me.x);
-                        l.vx = Math.cos(angle) * 5;
-                        l.vy = Math.sin(angle) * 5;
-                    }
-                }
-                l.x += l.vx; l.y += l.vy;
-                l.vx *= 0.95; l.vy *= 0.95;
-                if (l.x > camera.x && l.x < camera.x + canvas.width && l.y > camera.y && l.y < camera.y + canvas.height) {
-                    ctx.fillStyle = '#4a3a1a';
-                    ctx.fillRect(l.x, l.y, 3, 2);
-                }
+                if (me) { const dist = Math.hypot(me.x - l.x, me.y - l.y); if (dist < 150) { const a = Math.atan2(l.y - me.y, l.x - me.x); l.vx = Math.cos(a)*5; l.vy = Math.sin(a)*5; } }
+                l.x += l.vx; l.y += l.vy; l.vx *= 0.95; l.vy *= 0.95;
+                if (l.x > camera.x && l.x < camera.x + canvas.width && l.y > camera.y && l.y < camera.y + canvas.height) { ctx.fillStyle = '#4a3a1a'; ctx.fillRect(l.x, l.y, 3, 2); }
             });
         }
-
-        // Wind streaks (Dynamic)
-        const windSpeed = 200 * windIntensity;
-        const windOffset = (renderTime * 0.2) % 300;
-        ctx.strokeStyle = `rgba(255, 255, 255, ${0.02 * windIntensity})`;
-        ctx.lineWidth = 1;
-        ctx.setLineDash([100, 200]);
-        ctx.beginPath();
-        for (let i = -300; i < worldSize + 300; i += 300) {
-            const y = i + windOffset;
-            ctx.moveTo(0, y);
-            ctx.lineTo(worldSize, y + 100);
-        }
-        ctx.stroke();
-        ctx.setLineDash([]);
     } else if (currentBiome === 'ICE') {
-        // 1. Frosty Deep Blue Base
-        ctx.fillStyle = '#08141c';
-        ctx.fillRect(0, 0, worldSize, worldSize);
-
+        ctx.fillStyle = '#08141c'; ctx.fillRect(0, 0, worldSize, worldSize);
         if (ENABLE_PREMIUM_VISUALS) {
-            if (groundDetails.length === 0) {
-                for (let i = 0; i < 400; i++) {
-                    groundDetails.push({
-                        x: Math.random() * worldSize,
-                        y: Math.random() * worldSize,
-                        size: 10 + Math.random() * 20,
-                        opacity: 0.05 + Math.random() * 0.1,
-                        type: Math.random() > 0.7 ? 'crack' : 'snow'
-                    });
-                }
-            }
+            if (groundDetails.length === 0) for (let i = 0; i < 400; i++) groundDetails.push({ x: Math.random() * worldSize, y: Math.random() * worldSize, size: 10 + Math.random() * 20, opacity: 0.05 + Math.random() * 0.1, type: Math.random() > 0.7 ? 'crack' : 'snow' });
             ctx.save();
             groundDetails.forEach(d => {
-                if (d.x > camera.x - 30 && d.x < camera.x + canvas.width + 30 &&
-                    d.y > camera.y - 30 && d.y < camera.y + canvas.height + 30) {
-                    if (d.type === 'snow') {
-                        ctx.fillStyle = '#fff';
-                        ctx.globalAlpha = d.opacity * 0.4;
-                        ctx.beginPath();
-                        ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2);
-                        ctx.fill();
-                    } else {
-                        ctx.strokeStyle = 'rgba(200, 240, 255, 0.15)';
-                        ctx.lineWidth = 1;
-                        ctx.beginPath();
-                        ctx.moveTo(d.x - d.size, d.y - d.size/2);
-                        ctx.lineTo(d.x + d.size, d.y + d.size/2);
-                        ctx.stroke();
-                    }
-                }
-            });
-            ctx.restore();
-        }
-    } else if (currentBiome === 'INDUSTRIAL') {
-        // 1. Concrete Grey Base
-        ctx.fillStyle = '#121214';
-        ctx.fillRect(0, 0, worldSize, worldSize);
-
-        if (ENABLE_PREMIUM_VISUALS) {
-            if (groundDetails.length === 0) {
-                for (let i = 0; i < 500; i++) {
-                    groundDetails.push({
-                        x: Math.random() * worldSize,
-                        y: Math.random() * worldSize,
-                        size: 5 + Math.random() * 15,
-                        opacity: 0.05 + Math.random() * 0.15,
-                        type: Math.random() > 0.5 ? 'stain' : 'line'
-                    });
-                }
-            }
-            ctx.save();
-            groundDetails.forEach(d => {
-                if (d.x > camera.x - 30 && d.x < camera.x + canvas.width + 30 &&
-                    d.y > camera.y - 30 && d.y < camera.y + canvas.height + 30) {
-                    if (d.type === 'stain') {
-                        ctx.fillStyle = '#000';
-                        ctx.globalAlpha = d.opacity;
-                        ctx.beginPath();
-                        ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2);
-                        ctx.fill();
-                    } else {
-                        ctx.fillStyle = 'rgba(255, 200, 0, 0.05)';
-                        ctx.fillRect(d.x, d.y, 40, 2);
-                    }
-                }
+                if (d.x < camera.x - 40 || d.x > camera.x + canvas.width + 40 || d.y < camera.y - 40 || d.y > camera.y + canvas.height + 40) return;
+                if (d.type === 'snow') { ctx.fillStyle = '#fff'; ctx.globalAlpha = d.opacity * 0.4; ctx.beginPath(); ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2); ctx.fill(); }
+                else { ctx.strokeStyle = 'rgba(200, 240, 255, 0.15)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(d.x - d.size, d.y - d.size/2); ctx.lineTo(d.x + d.size, d.y + d.size/2); ctx.stroke(); }
             });
             ctx.restore();
         }
     } else if (currentBiome === 'WETLAND') {
-        // 1. Murky Green Base
-        ctx.fillStyle = '#0a100a';
-        ctx.fillRect(0, 0, worldSize, worldSize);
-
+        ctx.fillStyle = '#0a100a'; ctx.fillRect(0, 0, worldSize, worldSize);
         if (ENABLE_PREMIUM_VISUALS) {
-            if (groundDetails.length === 0) {
-                for (let i = 0; i < 300; i++) {
-                    groundDetails.push({
-                        x: Math.random() * worldSize,
-                        y: Math.random() * worldSize,
-                        size: 15 + Math.random() * 25,
-                        opacity: 0.1 + Math.random() * 0.15,
-                        color: Math.random() > 0.5 ? '#1a2a1a' : '#0a1a0a'
-                    });
-                }
-            }
+            if (groundDetails.length === 0) for (let i = 0; i < 300; i++) groundDetails.push({ x: Math.random() * worldSize, y: Math.random() * worldSize, size: 15 + Math.random() * 25, opacity: 0.1 + Math.random() * 0.15, color: Math.random() > 0.5 ? '#1a2a1a' : '#0a1a0a' });
             ctx.save();
             groundDetails.forEach(d => {
-                if (d.x > camera.x - 40 && d.x < camera.x + canvas.width + 40 &&
-                    d.y > camera.y - 40 && d.y < camera.y + canvas.height + 40) {
-                    ctx.fillStyle = d.color;
-                    ctx.globalAlpha = d.opacity;
-                    ctx.beginPath();
-                    ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2);
-                    ctx.fill();
-                }
+                if (d.x < camera.x - 40 || d.x > camera.x + canvas.width + 40 || d.y < camera.y - 40 || d.y > camera.y + canvas.height + 40) return;
+                ctx.fillStyle = d.color; ctx.globalAlpha = d.opacity; ctx.beginPath(); ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2); ctx.fill();
             });
             ctx.restore();
         }
     } else {
-        // Default Grid
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)'; 
-        ctx.lineWidth = 1;
-        const startX = Math.max(0, Math.floor(camera.x / gridSize) * gridSize);
-        const endX = Math.min(worldSize, Math.ceil((camera.x + canvas.width) / gridSize) * gridSize);
-        const startY = Math.max(0, Math.floor(camera.y / gridSize) * gridSize);
-        const endY = Math.min(worldSize, Math.ceil((camera.y + canvas.height) / gridSize) * gridSize);
-
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)'; ctx.lineWidth = 1;
+        const startX = Math.max(0, Math.floor(camera.x / gridSize) * gridSize), endX = Math.min(worldSize, Math.ceil((camera.x + canvas.width) / gridSize) * gridSize);
+        const startY = Math.max(0, Math.floor(camera.y / gridSize) * gridSize), endY = Math.min(worldSize, Math.ceil((camera.y + canvas.height) / gridSize) * gridSize);
         ctx.beginPath();
-        for (let x = startX; x <= endX; x += gridSize) {
-            ctx.moveTo(x, startY); ctx.lineTo(x, endY);
-        }
-        for (let y = startY; y <= endY; y += gridSize) {
-            ctx.moveTo(startX, y); ctx.lineTo(endX, y);
-        }
+        for (let x = startX; x <= endX; x += gridSize) { ctx.moveTo(x, startY); ctx.lineTo(x, endY); }
+        for (let y = startY; y <= endY; y += gridSize) { ctx.moveTo(startX, y); ctx.lineTo(endX, y); }
         ctx.stroke();
     }
 }
@@ -1937,7 +1799,24 @@ function drawGuardians() {
         ctx.shadowBlur = 15 * pulse;
         ctx.shadowColor = '#00f2ff';
         
-        // Drone Body (Triangle)
+        // Scanning Laser (Gap fix/Visual upgrade)
+        const scanAngle = Math.sin(Date.now() * 0.002 + g.id) * 0.8;
+        ctx.save();
+        ctx.rotate(g.angle + scanAngle);
+        const laserGrad = ctx.createLinearGradient(0, 0, 300, 0);
+        laserGrad.addColorStop(0, 'rgba(255, 0, 0, 0.4)');
+        laserGrad.addColorStop(0.5, 'rgba(255, 0, 0, 0.1)');
+        laserGrad.addColorStop(1, 'rgba(255, 0, 0, 0)');
+        ctx.fillStyle = laserGrad;
+        ctx.beginPath();
+        ctx.moveTo(10, 0);
+        ctx.lineTo(300, -15);
+        ctx.lineTo(300, 15);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+
+        // Drone Body (Polished Triangle)
         ctx.rotate(g.angle);
         ctx.fillStyle = '#111';
         ctx.strokeStyle = '#00f2ff';
@@ -1945,10 +1824,19 @@ function drawGuardians() {
         ctx.beginPath();
         ctx.moveTo(30, 0);
         ctx.lineTo(-20, -20);
+        ctx.lineTo(-10, 0); // Inner notch
         ctx.lineTo(-20, 20);
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
+
+        // Thruster glow
+        ctx.fillStyle = '#00f2ff';
+        ctx.globalAlpha = 0.5 + Math.random() * 0.5;
+        ctx.beginPath();
+        ctx.arc(-15, 0, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1.0;
 
         // Eye / Lens
         ctx.fillStyle = '#ff3333';

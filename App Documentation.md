@@ -34,7 +34,7 @@ The core of the game engine lives on the **Node.js server**.
 Matches feature unique, randomly generated maps:
 - **URBAN**: Dense city grid with buildings and narrow streets.
 - **WASTELAND**: Post-apocalyptic terrain with radioactive pools, floating ash, and dynamic wind.
-- **INDUSTRIAL**: Concrete surfaces with electric hazards and factory blocks.
+- **INDUSTRIAL**: High-tech factory environment with concrete floors, pulsing neon power cables, and procedural steam vents.
 - **WETLAND**: Marshland with water pools and reduced movement speed.
 
 ### 2. Elemental Interactions (Alchemy)
@@ -47,15 +47,18 @@ The environment is reactive:
 - **Ice**: Reduces friction significantly, created by FROST_GUN or freezing WATER.
 - **Dirt**: Acts as an **insulator**, blocking ELECTRIC arcs.
 - **Scrap**: Provides linear automated scaling (+100% damage per 100 Scrap, -50% reload per 200 Scrap).
+- **Hazard Damage**: ALL environmental hazards (Fire, Acid, Gas, Electric) damage ALL players within their range, regardless of who created the hazard. Standing in your own fire or acid will cause damage.
 
 ### 3. Bot AI System
 The game features a server-side AI system:
 - **Replacement Logic**: Bots automatically fill empty slots in lobbies to maintain a 5v5 balance.
 - **Behavior**: Bots lead their shots, avoid hazards like FIRE and ELECTRIC puddles, and have stuck-recovery logic.
+- **Combat Evasion**: Bots can detect incoming projectiles and perform side-stepping maneuvers to dodge.
 
 ### 4. AI Guardians (Drones)
 - **Deployment**: Defensive drones spawn periodically near the map center.
 - **Engagement**: They orbit a fixed point and fire ELECTRIC pulses at any player that enters their range.
+- **Visuals**: Features a rotating red scanning laser and a pulsing thruster glow for high readability.
 - **Rewards**: Destroying a guardian yields high-density SCRAP drops.
 
 ### 5. Match Rules & Scoring

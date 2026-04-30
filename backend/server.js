@@ -324,32 +324,33 @@ class Lobby {
                 
                 if (mapType === 'URBAN') {
                     if (rand < 0.85) this.generateCityBlock(x, y, blockSize);
-                    else if (rand > 0.95) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.WATER, null, null, null, 250, 250);
+                    else if (rand > 0.95) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.WATER, null, null, null, 160, 160);
                 } 
                 else if (mapType === 'WASTELAND') {
                     if (rand < 0.35) this.generateCityBlock(x, y, blockSize); // Sparse buildings
-                    else if (rand < 0.55) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.OIL, 300000, null, null, 200, 200);
-                    else if (rand < 0.75) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.ACID, null, null, null, 250, 250);
-                    else if (rand < 0.85) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.DIRT, null, null, null, 300, 300);
+                    else if (rand < 0.55) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.OIL, 300000, null, null, 150, 150);
+                    else if (rand < 0.75) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.ACID, null, null, null, 180, 180);
+                    else if (rand < 0.85) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.DIRT, null, null, null, 200, 200);
                 }
                 else if (mapType === 'INDUSTRIAL') {
                     if (rand < 0.6) this.generateIndustrialComplex(x, y, blockSize);
                 }
                 else if (mapType === 'WETLAND') {
                     if (rand < 0.3) this.generateCityBlock(x, y, blockSize);
-                    else if (rand < 0.8) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.WATER, null, null, null, 300, 300);
-                    if (Math.random() > 0.7) this.spawnElement({ x: x + blockSize, y: y + blockSize }, MATERIALS.DIRT, null, null, null, 200, 200);
+                    else if (rand < 0.8) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.WATER, null, null, null, 220, 220);
+                    if (Math.random() > 0.7) this.spawnElement({ x: x + blockSize, y: y + blockSize }, MATERIALS.DIRT, null, null, null, 150, 150);
                 }
                 else if (mapType === 'ICE') {
                     if (rand < 0.2) this.generateCityBlock(x, y, blockSize);
-                    else if (rand < 0.8) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.ICE, null, null, null, 250, 250);
+                    else if (rand < 0.8) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.ICE, null, null, null, 180, 180);
                 }
             }
         }
 
         // Random scatters based on biome
         if (mapType === 'INDUSTRIAL') {
-            const puddleCount = Math.floor(this.worldSize / 400); 
+            // Balanced puddle count: roughly 1 per 600px of world dimension (e.g. 6-7 on a 4000px map)
+            const puddleCount = Math.floor(this.worldSize / 600); 
             for (let i = 0; i < puddleCount; i++) {
                 let spawned = false;
                 for (let attempts = 0; attempts < 15 && !spawned; attempts++) {
@@ -358,21 +359,21 @@ class Lobby {
                         y: 200 + Math.random() * (this.worldSize - 400) 
                     };
                     
-                    // Determine puddle type for variety: 50% Electric, 20% Acid, 15% Water, 15% Oil
                     const r = Math.random();
                     let pType = MATERIALS.ELECTRIC;
                     if (r > 0.5 && r <= 0.7) pType = MATERIALS.ACID;
                     else if (r > 0.7 && r <= 0.85) pType = MATERIALS.WATER;
                     else if (r > 0.85) pType = MATERIALS.OIL;
 
-                    // Distance check against same-type puddles
-                    const tooClose = Object.values(this.elements).some(e => 
-                        e.type === pType && 
-                        Vector.magnitude(Vector.sub(e.body.position, pos)) < 300
-                    );
+                    // Distance check: ensure better spacing (min 500px between same-type, 350px between any type)
+                    const tooClose = Object.values(this.elements).some(e => {
+                        const dist = Vector.magnitude(Vector.sub(e.body.position, pos));
+                        return (e.type === pType && dist < 500) || dist < 350;
+                    });
 
                     if (!tooClose) {
-                        const size = Math.random() > 0.4 ? 220 : 110;
+                        // Smaller, tighter hazards for industrial
+                        const size = 100 + Math.random() * 60; 
                         if (this.spawnElement(pos, pType, null, null, null, size, size)) {
                             spawned = true;
                         }
@@ -776,7 +777,6 @@ class Lobby {
                         if (isLarge) {
                             // Large puddles stay but give 5s grace period AFTER stun wears off
                             p.statusEffects.stunImmunity = now + 2000 + 5000;
-                        } else {
                             // Small puddles disappear/revert after one stun
                             if (element.originalType) {
                                 element.type = element.originalType;
@@ -789,7 +789,9 @@ class Lobby {
                     }
                 }
                 if ((element.type === MATERIALS.ICE || element.type === MATERIALS.OIL)) p.statusEffects.slip = now + 1000;
+                
                 if (element.type === MATERIALS.FIRE && !isInvulnerable) p.hp -= 0.5;
+                
                 if (element.type === MATERIALS.ACID && !isInvulnerable) {
                     p.hp -= 1.2;
                     // If tank is burning, trigger gas reaction!
@@ -1044,34 +1046,33 @@ class Lobby {
         const allElements = Object.values(this.elements);
         const currentEnvCount = allElements.filter(e => envTypes.includes(e.type)).length;
         
-        // Area-aware target: approx 5 puddles per 1M square pixels (1000x1000 area)
-        const areaTarget = Math.floor((this.worldSize * this.worldSize) / (1000 * 1000) * 5); 
-        const targetCount = Math.max(10, areaTarget);
+        // Optimized density: approx 4.5 puddles per 1M square pixels
+        const areaTarget = Math.floor((this.worldSize * this.worldSize) / (1000 * 1000) * 4.5); 
+        const targetCount = Math.max(11, areaTarget); // Increased minimum by 2 more as requested
         
         if (currentEnvCount < targetCount) {
-            // Attempt to find a non-clumped position
             let pos = null;
-            for (let i = 0; i < 15; i++) {
+            for (let i = 0; i < 20; i++) {
                 const testPos = {
                     x: 200 + Math.random() * (this.worldSize - 400),
                     y: 200 + Math.random() * (this.worldSize - 400)
                 };
                 
-                // Density check: check if too many puddles already exist in this local 600px region
-                const clumpCount = allElements.filter(e => {
+                // Density check: check if too many puddles exist in local 800px region (increased from 600)
+                const localElements = allElements.filter(e => {
                     if (!envTypes.includes(e.type)) return false;
                     const dx = e.body.position.x - testPos.x;
                     const dy = e.body.position.y - testPos.y;
-                    return (dx*dx + dy*dy) < 600*600;
-                }).length;
+                    return (dx*dx + dy*dy) < 800*800;
+                });
                 
-                if (clumpCount < 2) {
+                if (localElements.length < 1) { // Ensure even more space between hazards
                     pos = testPos;
                     break;
                 }
             }
             
-            if (!pos) return; // Skip replenishment if map is too crowded in tested areas
+            if (!pos) return;
             
             let pType;
             const biome = this.mapType;
@@ -1088,12 +1089,11 @@ class Lobby {
             } else if (biome === 'ICE') {
                 pType = MATERIALS.ICE;
             } else {
-                // URBAN / Default
                 pType = Math.random() > 0.6 ? MATERIALS.WATER : MATERIALS.OIL;
             }
             
-            const size = Math.random() > 0.5 ? 200 : 100;
-            // Spawn 1 element per replenishment call to keep it subtle
+            // Scaled size: random but smaller overall
+            const size = 80 + Math.random() * 80;
             this.spawnElement(pos, pType, null, null, null, size, size);
         }
     }
@@ -1211,6 +1211,21 @@ class Lobby {
                 return;
             }
 
+            // 0. Dodge Logic (Gap fix)
+            // Bots have a chance to evade incoming bullets if they are close
+            if (now > (bot.evadeUntil || 0)) {
+                const nearbyBullets = Object.values(this.bullets).filter(b => {
+                    if (b.customData.ownerId === bot.id) return false;
+                    const d = Vector.magnitude(Vector.sub(b.position, bot.body.position));
+                    return d < 250;
+                });
+
+                if (nearbyBullets.length > 0) {
+                    bot.evadeUntil = now + 500 + Math.random() * 300;
+                    bot.evadeDir = Math.random() > 0.5 ? 1 : -1;
+                }
+            }
+
             // 1. Objective Selection
             let target = null;
             let objectivePos = null;
@@ -1279,19 +1294,32 @@ class Lobby {
             bot.inputs.left = angleDiff < -0.2;
             bot.inputs.right = angleDiff > 0.2;
             
-            const dist = Vector.magnitude(Vector.sub(objectivePos, bot.body.position));
-            if (dist > 150) {
+            const distToObj = Vector.magnitude(Vector.sub(objectivePos, bot.body.position));
+            
+            // If evading, prioritize side movement
+            if (now < (bot.evadeUntil || 0)) {
+                bot.inputs = {
+                    up: Math.random() > 0.3, 
+                    down: false,
+                    left: bot.evadeDir > 0,
+                    right: bot.evadeDir < 0,
+                    shoot: distToObj < 600
+                };
+                return;
+            }
+
+            if (distToObj < 100) {
                 bot.inputs.up = Math.abs(angleDiff) < 1.2;
                 bot.inputs.down = false;
             } else {
                 bot.inputs.up = false;
-                bot.inputs.down = (target && dist < 100);
+                bot.inputs.down = (target && distToObj < 100);
             }
 
             // 4. Aim & Shoot
             if (target) {
                 bot.inputs.aimAngle = Math.atan2(target.body.position.y - bot.body.position.y, target.body.position.x - bot.body.position.x);
-                bot.inputs.shoot = dist < 1000;
+                bot.inputs.shoot = distToObj < 1000;
             } else {
                 bot.inputs.aimAngle = bot.body.angle;
                 bot.inputs.shoot = false;
