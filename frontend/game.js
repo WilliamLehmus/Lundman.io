@@ -80,7 +80,10 @@ let particles = []; // { x, y, vx, vy, life, color, size }
 let atmosphereParticles = []; // { x, y, size, vx, vy, speed, color }
 let environmentalObjects = []; // Dynamic objects like Tumbleweeds
 let lizards = []; // Scurrying desert life
+let ashParticles = []; // Atmospheric embers/ash for wasteland
 let groundDetails = []; // Cache for procedural cracks/stains
+let windIntensity = 1.0;
+let windPhase = 0;
 let lastBiome = null;
 let lastWorldSize = 0;
 let lastAtmoBiome = null;
@@ -279,6 +282,8 @@ function init() {
         mousePos.y = e.clientY;
         updateAimAngle();
     });
+
+
     requestAnimationFrame(renderLoop);
 }
 
@@ -1272,13 +1277,17 @@ function drawGrid() {
             });
         }
 
-        // Wind streaks
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)';
+        // Wind streaks (Dynamic)
+        const windSpeed = 200 * windIntensity;
+        const windOffset = (renderTime * 0.2) % 300;
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.02 * windIntensity})`;
+        ctx.lineWidth = 1;
         ctx.setLineDash([100, 200]);
         ctx.beginPath();
-        for (let i = 0; i < worldSize; i += 300) {
-            ctx.moveTo(0, i);
-            ctx.lineTo(worldSize, i + 100);
+        for (let i = -300; i < worldSize + 300; i += 300) {
+            const y = i + windOffset;
+            ctx.moveTo(0, y);
+            ctx.lineTo(worldSize, y + 100);
         }
         ctx.stroke();
         ctx.setLineDash([]);
@@ -1539,6 +1548,33 @@ function drawElements() {
                 }
                 ctx.restore();
             }
+
+            // Wasteland specific ruin effects (More prominent)
+            if (isWasteland && ENABLE_PREMIUM_VISUALS) {
+                // Rusted patches / Damage marks
+                ctx.fillStyle = 'rgba(0,0,0,0.2)';
+                for (let i = 0; i < 3; i++) {
+                    const dx = (Math.sin(e.id + i) * 0.4) * e.w;
+                    const dy = (Math.cos(e.id * 2 + i) * 0.4) * e.h;
+                    ctx.beginPath();
+                    ctx.arc(e.x + dx, e.y + dy, 10 + Math.random() * 10, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // Smoke from roof unit (More frequent)
+                if (e.id % 2 === 0 && Math.random() > 0.92) {
+                    particles.push({
+                        x: e.x + (Math.random()-0.5)*20, y: e.y - e.h/2 + 20,
+                        vx: (Math.random() - 0.5) * 0.5 + windIntensity,
+                        vy: -1.5 - Math.random() * 2,
+                        life: 1.2, color: 'rgba(70,70,70,0.4)', size: 8 + Math.random() * 12
+                    });
+                }
+                // Sparks from broken signs (More frequent + larger)
+                if (e.id % 3 === 0 && Math.random() > 0.96) {
+                    spawnParticles(e.x + (Math.random()-0.5)*e.w, e.y - e.h/2, '#ffffaa', 3, 0.8);
+                }
+            }
         } else if (e.type === MATERIALS.SCRAP) {
             // Draw Scrap as a rotating gold gear/nut
             ctx.translate(e.x, e.y);
@@ -1680,6 +1716,73 @@ function drawElements() {
                     }
                 }
                 ctx.stroke();
+                ctx.restore();
+            }
+
+            // Acid / Radioactive Pools
+            if (e.type === MATERIALS.ACID) {
+                ctx.save();
+                const pulse = 0.7 + Math.sin(renderTime * 0.005 + e.id) * 0.3;
+                ctx.shadowBlur = 15 * pulse;
+                ctx.shadowColor = '#00ff00';
+                
+                // Core puddle
+                ctx.fillStyle = 'rgba(50, 200, 50, 0.3)';
+                ctx.beginPath();
+                ctx.arc(e.x, e.y, e.w/2, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Pulsing glow
+                ctx.fillStyle = `rgba(100, 255, 0, ${0.1 * pulse})`;
+                ctx.beginPath();
+                ctx.arc(e.x, e.y, e.w/2 + 10, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Bubbles
+                ctx.fillStyle = 'rgba(200, 255, 150, 0.5)';
+                for (let i = 0; i < 4; i++) {
+                    const phase = renderTime * 0.01 + e.id + i * 2;
+                    const bx = e.x + Math.cos(phase * 0.7) * (e.w/3);
+                    const by = e.y + Math.sin(phase * 1.3) * (e.h/3);
+                    const bSize = (Math.sin(phase * 2) + 1) * 3;
+                    if (bSize > 0.5) {
+                        ctx.beginPath();
+                        ctx.arc(bx, by, bSize, 0, Math.PI * 2);
+                        ctx.fill();
+                        // Tiny highlight on bubble
+                        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+                        ctx.beginPath();
+                        ctx.arc(bx - bSize/3, by - bSize/3, bSize/4, 0, Math.PI*2);
+                        ctx.fill();
+                        ctx.fillStyle = 'rgba(200, 255, 150, 0.5)'; // Reset
+                    }
+                }
+                ctx.restore();
+            }
+
+            // Gas clouds
+            if (e.type === MATERIALS.GAS) {
+                ctx.save();
+                const pulse = Math.sin(renderTime * 0.003 + e.id) * 0.1;
+                ctx.globalAlpha = 0.4 + pulse;
+                const gGrad = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, e.w/2);
+                gGrad.addColorStop(0, 'rgba(100, 200, 50, 0.5)');
+                gGrad.addColorStop(0.6, 'rgba(100, 200, 50, 0.2)');
+                gGrad.addColorStop(1, 'rgba(100, 200, 50, 0)');
+                ctx.fillStyle = gGrad;
+                ctx.beginPath();
+                ctx.arc(e.x, e.y, e.w/2, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Wisps
+                ctx.strokeStyle = 'rgba(150, 255, 100, 0.1)';
+                ctx.lineWidth = 2;
+                for (let i = 0; i < 3; i++) {
+                    ctx.beginPath();
+                    const rot = renderTime * 0.001 + i * 2;
+                    ctx.ellipse(e.x, e.y, e.w/3, e.h/4, rot, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
                 ctx.restore();
             }
         }
@@ -1953,21 +2056,42 @@ function updateAtmosphere(dt) {
         lastAtmoBiome = currentBiome;
     }
 
-    if (atmosphereParticles.length < 80) {
-        const pColor = currentBiome === 'WASTELAND' ? 'rgba(255, 150, 50, 0.1)' : 
-                       (currentBiome === 'ICE' ? 'rgba(200, 240, 255, 0.15)' : 'rgba(0, 242, 255, 0.15)');
+    // Dynamic wind logic
+    windPhase += 0.01 * dt;
+    windIntensity = 1.0 + Math.sin(windPhase) * 0.5 + (Math.random() > 0.99 ? 1.5 : 0); // Sudden gusts
+
+    if (atmosphereParticles.length < 120) {
+        const pColor = currentBiome === 'WASTELAND' ? 'rgba(255, 150, 50, 0.15)' : 
+                       (currentBiome === 'ICE' ? 'rgba(200, 240, 255, 0.2)' : 'rgba(0, 242, 255, 0.2)');
         
-        for (let i = 0; i < 80; i++) {
+        for (let i = 0; i < 120; i++) {
             atmosphereParticles.push({
                 x: Math.random() * worldSize,
                 y: Math.random() * worldSize,
-                size: 0.5 + Math.random() * 2,
-                vx: (Math.random() - 0.5) * 0.5 + (currentBiome === 'WASTELAND' ? 0.3 : 0), // Slight wind drift in wasteland
-                vy: (Math.random() - 0.5) * 0.5,
-                color: Math.random() > 0.7 ? pColor : 'rgba(255, 255, 255, 0.05)'
+                size: 0.5 + Math.random() * 2.5,
+                vx: (Math.random() - 0.5) * 0.5 + (currentBiome === 'WASTELAND' ? 0.8 * windIntensity : 0),
+                vy: (Math.random() - 0.5) * 0.5 + (currentBiome === 'WASTELAND' ? 0.2 * windIntensity : 0),
+                color: Math.random() > 0.7 ? pColor : 'rgba(255, 255, 255, 0.08)'
             });
         }
     }
+
+    // Ash Particles (Embers) for Wasteland
+    if (currentBiome === 'WASTELAND' && ashParticles.length < 40) {
+        if (Math.random() > 0.9) {
+            ashParticles.push({
+                x: Math.random() * worldSize,
+                y: worldSize + 50,
+                vx: (Math.random() - 0.5) * 2 + (1.5 * windIntensity),
+                vy: -Math.random() * 3 - 2,
+                size: 2 + Math.random() * 3,
+                life: 1.0,
+                rotation: Math.random() * Math.PI * 2,
+                rotVel: (Math.random() - 0.5) * 0.2
+            });
+        }
+    }
+
     atmosphereParticles.forEach(p => {
         p.x += p.vx * dt;
         p.y += p.vy * dt;
@@ -1976,23 +2100,33 @@ function updateAtmosphere(dt) {
         if (p.y < 0) p.y = worldSize;
         if (p.y > worldSize) p.y = 0;
     });
+
+    ashParticles.forEach((p, i) => {
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.rotation += p.rotVel * dt;
+        p.life -= 0.005 * dt;
+        if (p.life <= 0 || p.y < -100) ashParticles.splice(i, 1);
+    });
 }
 
 function updateEnvironmentalObjects(dt) {
     const currentBiome = gameState.zones && gameState.zones[0] ? gameState.zones[0].type : 'RANDOM';
     const worldSize = gameState.worldSize || 4000;
 
-    if (currentBiome === 'WASTELAND' && environmentalObjects.length < 12) {
+    if (currentBiome === 'WASTELAND' && environmentalObjects.length < 15) {
         if (Math.random() > 0.98) {
+            const type = Math.random() > 0.3 ? 'tumbleweed' : 'debris';
             environmentalObjects.push({
                 x: -100,
                 y: Math.random() * worldSize,
-                size: 10 + Math.random() * 15,
-                vx: 3 + Math.random() * 5,
+                size: type === 'tumbleweed' ? 10 + Math.random() * 15 : 5 + Math.random() * 10,
+                vx: (3 + Math.random() * 5) * windIntensity,
                 vy: (Math.random() - 0.5) * 2,
-                angle: 0,
+                angle: Math.random() * Math.PI * 2,
                 rotationSpeed: 0.1 + Math.random() * 0.2,
-                type: 'tumbleweed'
+                type: type,
+                color: type === 'debris' ? (Math.random() > 0.5 ? '#666' : '#8b4513') : '#3a2a1a'
             });
         }
     }
@@ -2016,12 +2150,25 @@ function drawEnvironmentalObjects() {
             ctx.rotate(obj.angle);
             
             if (obj.type === 'tumbleweed') {
-                ctx.strokeStyle = '#3a2a1a';
+                ctx.strokeStyle = obj.color;
                 ctx.lineWidth = 1.5;
                 ctx.beginPath();
                 for (let i = 0; i < 5; i++) {
                     ctx.ellipse(0, 0, obj.size, obj.size * 0.7, (i * Math.PI)/5, 0, Math.PI * 2);
                 }
+                ctx.stroke();
+            } else if (obj.type === 'debris') {
+                // Floating scrap metal or paper
+                ctx.fillStyle = obj.color;
+                ctx.globalAlpha = 0.6;
+                ctx.beginPath();
+                ctx.moveTo(-obj.size, -obj.size/2);
+                ctx.lineTo(obj.size, -obj.size);
+                ctx.lineTo(obj.size/2, obj.size);
+                ctx.lineTo(-obj.size, obj.size/2);
+                ctx.closePath();
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(255,255,255,0.1)';
                 ctx.stroke();
             }
             ctx.restore();
@@ -2051,6 +2198,22 @@ function drawAtmosphere() {
             ctx.beginPath();
             ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
             ctx.fill();
+        }
+    });
+
+    // Draw Ash Embers
+    ashParticles.forEach(p => {
+        if (p.x > camera.x - 50 && p.x < camera.x + canvas.width + 50 &&
+            p.y > camera.y - 50 && p.y < camera.y + canvas.height + 50) {
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate(p.rotation);
+            ctx.globalAlpha = p.life;
+            ctx.fillStyle = '#ff6600';
+            ctx.shadowBlur = 5;
+            ctx.shadowColor = '#ff3300';
+            ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size);
+            ctx.restore();
         }
     });
     ctx.restore();
@@ -2309,4 +2472,14 @@ if (mobileWeaponBtn) {
 }
 
 init();
+
+// Hidden Dev Command (Globally accessible)
+window.activateDevTank = () => {
+    if (typeof socket !== 'undefined' && socket.connected) {
+        console.log("%c [DEV] Switching to Dev Tank... ", "background: #222; color: #00ff00; font-weight: bold;");
+        socket.emit('change-chassis', 'DEV');
+    } else {
+        console.error("[DEV] Socket not connected. Join a lobby first.");
+    }
+};
 

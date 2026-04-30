@@ -25,6 +25,8 @@ export const MATERIAL_PROPERTIES = {
     [MATERIALS.SCRAP]: { w: 20, h: 20, color: '#ffd700' },
     [MATERIALS.BUILDING]: { w: 100, h: 100, color: '#333' },
     [MATERIALS.DIRT]: { w: 40, h: 40, color: '#554433' },
+    [MATERIALS.ACID]: { w: 100, h: 100, color: 'rgba(0, 255, 0, 0.4)' },
+    [MATERIALS.GAS]: { w: 150, h: 150, color: 'rgba(100, 200, 50, 0.4)' },
     [MATERIALS.BARREL_EXPLOSIVE]: { w: 35, h: 45, color: '#ff4444', hp: 20 },
     [MATERIALS.BARREL_OIL]: { w: 35, h: 45, color: '#ffcc00', hp: 20 },
     [MATERIALS.CRATE]: { w: 45, h: 45, color: '#8b4513', hp: 30 }
@@ -60,10 +62,18 @@ export const CHASSIS = {
     ARTILLERY: {
         name: 'Artillery',
         hp: 60,
-        speed: 0.004, // Speed increased from 0.003
-        turnSpeed: 0.04, // Turn speed increased from 0.03
+        speed: 0.004,
+        turnSpeed: 0.04,
         mass: 15,
         weapons: ['STANDARD', 'TESLA', 'WATER_CANNON', 'FROST_GUN']
+    },
+    DEV: {
+        name: 'Dev Tank (Admin)',
+        hp: 200,
+        speed: 0.018,
+        turnSpeed: 0.15,
+        mass: 10,
+        weapons: ['STANDARD', 'HEAVY_GUN', 'FLAMETHROWER', 'WATER_CANNON', 'TESLA', 'FROST_GUN', 'DIRT_GUN']
     }
 };
 

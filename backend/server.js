@@ -324,9 +324,10 @@ class Lobby {
                     else if (rand > 0.95) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.WATER, null, null, null, 250, 250);
                 } 
                 else if (mapType === 'WASTELAND') {
-                    if (rand < 0.4) this.generateCityBlock(x, y, blockSize); // Sparse buildings
-                    else if (rand < 0.7) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.OIL, 300000, null, null, 200, 200);
-                    else if (rand < 0.8) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.DIRT, null, null, null, 300, 300);
+                    if (rand < 0.35) this.generateCityBlock(x, y, blockSize); // Sparse buildings
+                    else if (rand < 0.55) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.OIL, 300000, null, null, 200, 200);
+                    else if (rand < 0.75) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.ACID, null, null, null, 250, 250);
+                    else if (rand < 0.85) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.DIRT, null, null, null, 300, 300);
                 }
                 else if (mapType === 'INDUSTRIAL') {
                     if (rand < 0.7) this.generateCityBlock(x, y, blockSize);
@@ -438,7 +439,7 @@ class Lobby {
             id,
             body,
             type: MATERIALS.BUILDING,
-            hp: 200,
+            hp: 800,
             w, h
         };
         Composite.add(this.engine.world, body);
@@ -516,7 +517,7 @@ class Lobby {
                         victim.statusEffects.slow = Date.now() + 2500;
                     }
                     if (bulletData.type === MATERIALS.FIRE) {
-                        victim.statusEffects.burn = Date.now() + 500;
+                        victim.statusEffects.burn = Date.now() + 2000;
                     }
 
                     if (victim.hp < victim.maxHp * 0.5) {
@@ -539,6 +540,9 @@ class Lobby {
                 const isIceVSWater = (bulletData.type === MATERIALS.ICE && element.type === MATERIALS.WATER) ||
                                     (bulletData.type === MATERIALS.WATER && element.type === MATERIALS.ICE);
                 const isElectricVSWater = (bulletData.type === MATERIALS.ELECTRIC && element.type === MATERIALS.WATER);
+                const isAcidVSWater = (bulletData.type === MATERIALS.ACID && element.type === MATERIALS.WATER) || 
+                                     (bulletData.type === MATERIALS.WATER && element.type === MATERIALS.ACID);
+                const isFireVSAcid = (bulletData.type === MATERIALS.FIRE && element.type === MATERIALS.ACID);
 
                 if (isFireVSOil) {
                     const pos = { x: element.body.position.x, y: element.body.position.y };
@@ -576,6 +580,23 @@ class Lobby {
                     element.type = MATERIALS.ICE;
                     element.originalType = MATERIALS.WATER;
                     element.expiresAt = Date.now() + 5000; // Frozen for 5 seconds
+                    this.destroyBullet(bullet.id);
+                    return;
+                }
+
+                if (isAcidVSWater) {
+                    // Dilution effect
+                    if (element.type === MATERIALS.ACID) {
+                        this.destroyElement(element.id);
+                    }
+                    this.destroyBullet(bullet.id);
+                    return;
+                }
+
+                if (isFireVSAcid) {
+                    // Fire + Acid = GAS cloud (Area denial)
+                    this.spawnElement(element.body.position, MATERIALS.GAS, 6000, null, bulletData.ownerId, element.w * 1.5, element.h * 1.5);
+                    this.destroyElement(element.id);
                     this.destroyBullet(bullet.id);
                     return;
                 }
@@ -632,20 +653,26 @@ class Lobby {
         const bullet = bodyA.label === 'bullet' ? bodyA : (bodyB.label === 'bullet' ? bodyB : null);
 
         // Bullet vs Puddle Alchemy is now handled in processBulletCollision for consistency
-        if (!bullet && elementA && elementB) {
-            // Puddle vs Puddle Alchemy (e.g. Fire puddle hits Ice puddle)
+        if (elementA && elementB) {
+            // Fire vs Ice -> Destroy both
             if ((elementA.type === MATERIALS.FIRE && elementB.type === MATERIALS.ICE) ||
                 (elementB.type === MATERIALS.FIRE && elementA.type === MATERIALS.ICE)) {
                 this.destroyElement(elementA.id);
                 this.destroyElement(elementB.id);
             }
-        }
 
-        if (elementA && elementB) {
-            if ((elementA.type === MATERIALS.FIRE && elementB.type === MATERIALS.ICE) ||
-                (elementB.type === MATERIALS.FIRE && elementA.type === MATERIALS.ICE)) {
+            // Fire vs Acid -> GAS
+            if ((elementA.type === MATERIALS.FIRE && elementB.type === MATERIALS.ACID) ||
+                (elementB.type === MATERIALS.FIRE && elementA.type === MATERIALS.ACID)) {
+                const pos = { 
+                    x: (elementA.body.position.x + elementB.body.position.x)/2, 
+                    y: (elementA.body.position.y + elementB.body.position.y)/2 
+                };
+                const w = Math.max(elementA.w, elementB.w);
+                const h = Math.max(elementA.h, elementB.h);
                 this.destroyElement(elementA.id);
                 this.destroyElement(elementB.id);
+                this.spawnElement(pos, MATERIALS.GAS, 6000, null, null, w * 1.5, h * 1.5);
             }
         }
 
@@ -680,7 +707,16 @@ class Lobby {
                     }
                 }
                 if ((element.type === MATERIALS.ICE || element.type === MATERIALS.OIL)) p.statusEffects.slip = now + 1000;
-                if (element.type === MATERIALS.FIRE && element.ownerId !== p.id && !isInvulnerable) p.hp -= 0.5;
+                if (element.type === MATERIALS.FIRE && !isInvulnerable) p.hp -= 0.5;
+                if (element.type === MATERIALS.ACID && !isInvulnerable) {
+                    p.hp -= 1.2;
+                    // If tank is burning, trigger gas reaction!
+                    if (now < p.statusEffects.burn) {
+                        this.spawnElement(element.body.position, MATERIALS.GAS, 6000, null, p.id, element.w * 1.5, element.h * 1.5);
+                        this.destroyElement(element.id);
+                    }
+                }
+                if (element.type === MATERIALS.GAS && !isInvulnerable) p.hp -= 0.6;
                 if (element.type === MATERIALS.STEAM) p.hidden = true;
                 if (element.type === MATERIALS.SCRAP) {
                     p.scrap = Math.min(p.scrap + 10, 500);
@@ -1405,20 +1441,35 @@ io.on('connection', (socket) => {
 
     socket.on('change-chassis', (chassisType) => {
         const lobby = lobbies[socket.lobbyId];
-        if (lobby && lobby.players[socket.id] && !lobby.active) {
+        if (lobby && lobby.players[socket.id]) {
             const p = lobby.players[socket.id];
-            if (CHASSIS[chassisType]) {
-                const config = CHASSIS[chassisType];
-                p.chassis = chassisType;
-                p.hp = config.hp;
-                p.maxHp = p.hp;
-                p.slots = config.weapons;
-                p.currentSlot = 0;
-                
-                io.to(lobby.id).emit('lobby-update', {
-                    id: lobby.id,
-                    players: Object.values(lobby.players).map(p => ({ username: p.username, team: p.team, id: p.id, chassis: p.chassis }))
-                });
+            
+            // Allow normal switch only if not active, but ALWAYS allow DEV switch for testers
+            const isDevSwitch = (chassisType === 'DEV');
+            if (!lobby.active || isDevSwitch) {
+                if (CHASSIS[chassisType]) {
+                    const config = CHASSIS[chassisType];
+                    p.chassis = chassisType;
+                    p.hp = config.hp;
+                    p.maxHp = p.hp;
+                    p.slots = config.weapons;
+                    p.currentSlot = 0;
+                    
+                    // Update physics body if it exists
+                    if (p.body) {
+                        Body.setMass(p.body, config.mass);
+                    }
+                    
+                    if (!lobby.active) {
+                        io.to(lobby.id).emit('lobby-update', {
+                            id: lobby.id,
+                            players: Object.values(lobby.players).map(p => ({ username: p.username, team: p.team, id: p.id, chassis: p.chassis }))
+                        });
+                    } else {
+                        // Notify match that a player changed (for health bars etc)
+                        io.to(lobby.id).emit('player-event', { text: `${p.username.toUpperCase()} ACTIVATED DEV MODE`, color: '#00ff00' });
+                    }
+                }
             }
         }
     });
