@@ -75,6 +75,9 @@ class Lobby {
         this.scoreCap = 20;
         this.scores = { blue: 0, pink: 0 };
         this.gameOver = false;
+        this.guardians = {};
+        this.lastGuardianId = 0;
+        this.nextGuardianSpawn = 0;
         this.lastTimeTick = Date.now();
         this.worldSize = 2500; // Default until match starts
         this.walls = [];
@@ -200,7 +203,7 @@ class Lobby {
             scrap: 0,
             kills: 0,
             deaths: 0,
-            statusEffects: { stun: 0, slip: 0, slow: 0, burn: 0, wet: 0, stunImmunity: 0 },
+            statusEffects: { stun: 0, slip: 0, slow: 0, burn: 0, wet: 0, stunImmunity: 0, revealed: 0 },
             inputs: { up: false, down: false, left: false, right: false, shoot: false, aimAngle: 0 },
             lastBuffLevel: 0
         };
@@ -257,7 +260,7 @@ class Lobby {
             scrap: 0,
             kills: 0,
             deaths: 0,
-            statusEffects: { stun: 0, slip: 0, slow: 0, burn: 0 },
+            statusEffects: { stun: 0, slip: 0, slow: 0, burn: 0, wet: 0, stunImmunity: 0, revealed: 0 },
             inputs: { up: false, down: false, left: false, right: false, shoot: false, aimAngle: 0 },
             isBot: true,
             botDifficulty: difficulty,
@@ -381,26 +384,30 @@ class Lobby {
         // Removed initial random scatter of scrap/materials at match start as requested.
         // Elements should now primarily come from crates, barrels, or active gameplay.
 
-        // --- NEW: Global Props Scatter (Barrels & Crates) ---
-        // This ensures props are more spread out and less clustered around buildings
-        const propScatterCount = Math.floor(this.worldSize / 60); 
-        for (let i = 0; i < propScatterCount; i++) {
-            const pos = { 
-                x: 100 + Math.random() * (this.worldSize - 200), 
-                y: 100 + Math.random() * (this.worldSize - 200) 
-            };
-            
-            // Check if we are spawning on top of an existing building or player
-            // spawnElement already handles building overlap check, but we can do a distance check for players
-            const rand = Math.random();
-            let pType;
-            // Increased barrel rates as requested by the user
-            if (rand < 0.35) pType = MATERIALS.BARREL_EXPLOSIVE;
-            else if (rand < 0.70) pType = MATERIALS.BARREL_OIL;
-            else pType = MATERIALS.CRATE;
-            
-            const props = MATERIAL_PROPERTIES[pType];
-            this.spawnElement(pos, pType, null, props.hp);
+        // --- NEW: Grid-based Global Props Scatter (Barrels & Crates) ---
+        // Divides the map into a grid to ensure even distribution without clustering
+        const cellSize = 350; 
+        for (let gx = cellSize; gx < this.worldSize - cellSize; gx += cellSize) {
+            for (let gy = cellSize; gy < this.worldSize - cellSize; gy += cellSize) {
+                // Skip if too close to center (Guardian zone)
+                const distToCenter = Math.hypot(gx - this.worldSize/2, gy - this.worldSize/2);
+                if (distToCenter < 500) continue;
+
+                // Random offset within the cell to avoid a sterile grid look
+                const pos = { 
+                    x: gx + (Math.random() - 0.5) * (cellSize * 0.7), 
+                    y: gy + (Math.random() - 0.5) * (cellSize * 0.7) 
+                };
+                
+                const rand = Math.random();
+                let pType;
+                if (rand < 0.35) pType = MATERIALS.BARREL_EXPLOSIVE;
+                else if (rand < 0.70) pType = MATERIALS.BARREL_OIL;
+                else pType = MATERIALS.CRATE;
+                
+                const props = MATERIAL_PROPERTIES[pType];
+                this.spawnElement(pos, pType, null, props.hp);
+            }
         }
     }
     generateIndustrialComplex(bx, by, size) {
@@ -506,6 +513,19 @@ class Lobby {
 
     processBulletCollision(bullet, target) {
         const bulletData = bullet.customData;
+
+        // Insulation: Electricity cannot pass through Dirt mounds
+        if (bulletData.type === MATERIALS.ELECTRIC && target.label && target.label.startsWith('tank-')) {
+            const dirtBodies = Object.values(this.elements).filter(e => e.type === MATERIALS.DIRT).map(e => e.body);
+            if (dirtBodies.length > 0) {
+                const hits = Query.ray(dirtBodies, bullet.position, target.position);
+                if (hits.length > 0) {
+                    this.destroyBullet(bullet.id);
+                    return;
+                }
+            }
+        }
+
         if (target.label && target.label.startsWith('tank-')) {
             const targetId = target.label.split('tank-')[1];
             if (targetId !== bulletData.ownerId) {
@@ -538,6 +558,9 @@ class Lobby {
                         const inWater = Object.values(this.elements).some(e => e.type === MATERIALS.WATER && Query.point([e.body], victim.body.position).length > 0);
                         const isWet = Date.now() < victim.statusEffects.wet;
                         victim.statusEffects.stun = Date.now() + (inWater || isWet ? 2500 : 1000);
+                        // Reveal Mechanic: Electricity reveals stealth targets
+                        victim.hidden = false;
+                        victim.statusEffects.revealed = Date.now() + 2000;
                     }
                     if (bulletData.type === MATERIALS.WATER) {
                         victim.statusEffects.wet = Date.now() + 4000;
@@ -559,9 +582,33 @@ class Lobby {
             }
         }
         
+        if (target.label && target.label.startsWith('guardian-')) {
+            const gId = target.label.split('guardian-')[1];
+            const guardian = this.guardians[gId];
+            if (guardian) {
+                const damage = bulletData.type === MATERIALS.METAL ? bulletData.damage * 1.5 : bulletData.damage;
+                guardian.hp -= damage;
+                
+                // Knockback
+                const forceDir = Vector.normalise(bullet.velocity);
+                Body.applyForce(guardian.body, guardian.body.position, Vector.mult(forceDir, bulletData.impact));
+
+                this.destroyBullet(bullet.id);
+                if (guardian.hp <= 0) this.destroyGuardian(gId, bulletData.ownerId);
+            }
+        }
+        
         if (target.label === 'element') {
             const element = this.elements[target.elementId];
             if (element) {
+                // Kinetic Shatter: Metal vs Ice puddles
+                if (bulletData.type === MATERIALS.METAL && element.type === MATERIALS.ICE) {
+                    this.destroyElement(element.id);
+                    this.destroyBullet(bullet.id);
+                    // Spawn ice shards (particles)
+                    io.to(this.id).emit('collision-effect', { x: bullet.position.x, y: bullet.position.y, type: 'ICE_SHATTER' });
+                    return;
+                }
                 // Bidirectional Alchemy
                 const isFireVSWater = (bulletData.type === MATERIALS.FIRE && element.type === MATERIALS.WATER) || 
                                      (bulletData.type === MATERIALS.WATER && element.type === MATERIALS.FIRE);
@@ -637,12 +684,18 @@ class Lobby {
                     MATERIALS.BUILDING, 
                     MATERIALS.BARREL_EXPLOSIVE, 
                     MATERIALS.BARREL_OIL, 
-                    MATERIALS.CRATE
+                    MATERIALS.CRATE,
+                    MATERIALS.DIRT
                 ].includes(element.type);
 
                 if (isSolid) {
                     if (element.hp != null) {
-                        element.hp -= bulletData.damage;
+                        let damage = bulletData.damage;
+                        // Kinetic Bonus: Metal vs Dirt/Building
+                        if (bulletData.type === MATERIALS.METAL && (element.type === MATERIALS.DIRT || element.type === MATERIALS.BUILDING)) {
+                            damage *= 2.0;
+                        }
+                        element.hp -= damage;
                         if (element.hp <= 0) {
                             if (element.type === MATERIALS.BUILDING) {
                                 for (let i = 0; i < 10; i++) {
@@ -746,7 +799,10 @@ class Lobby {
                     }
                 }
                 if (element.type === MATERIALS.GAS && !isInvulnerable) p.hp -= 0.6;
-                if (element.type === MATERIALS.STEAM) p.hidden = true;
+                if (element.type === MATERIALS.STEAM) {
+                    const isRevealed = p.statusEffects.revealed && now < p.statusEffects.revealed;
+                    if (!isRevealed) p.hidden = true;
+                }
                 if (element.type === MATERIALS.SCRAP) {
                     p.scrap = Math.min(p.scrap + 10, 500);
                     this.destroyElement(element.id);
@@ -792,7 +848,7 @@ class Lobby {
 
     spawnElement(pos, type, duration = null, hp = null, ownerId = null, customW = null, customH = null) {
         // Prevent spawning elements inside buildings
-        const solidTypes = [MATERIALS.BUILDING, MATERIALS.CRATE, MATERIALS.BARREL_EXPLOSIVE, MATERIALS.BARREL_OIL];
+        const solidTypes = [MATERIALS.BUILDING, MATERIALS.CRATE, MATERIALS.BARREL_EXPLOSIVE, MATERIALS.BARREL_OIL, MATERIALS.DIRT];
         if (type !== MATERIALS.BUILDING) {
             const config = MATERIAL_PROPERTIES[type] || { w: 30, h: 30 };
             const ew = customW || config.w;
@@ -856,6 +912,10 @@ class Lobby {
 
         const id = ++this.lastElementId;
         const isSolid = solidTypes.includes(type);
+        
+        // Auto-assign HP to Dirt if not provided
+        if (type === MATERIALS.DIRT && hp === null) hp = 150;
+
         const body = Bodies.rectangle(pos.x, pos.y, w, h, {
             label: 'element',
             isStatic: true,
@@ -919,11 +979,17 @@ class Lobby {
         player.hp = player.maxHp;
         player.deaths++;
 
+        let isOpponentKill = false;
+
         if (killerId && this.players[killerId]) {
-            this.players[killerId].kills++;
-            
             const killer = this.players[killerId];
             const victim = player;
+            
+            // Only count as opponent kill if teams are different
+            if (killer.team !== victim.team) {
+                killer.kills++;
+                isOpponentKill = true;
+            }
             
             io.to(this.id).emit('kill-feed', {
                 killer: killer.username,
@@ -932,10 +998,28 @@ class Lobby {
                 killerTeam: killer.team,
                 victimTeam: victim.team
             });
+        } else if (killerId && killerId.startsWith('guardian-')) {
+             // Drone kill
+             io.to(this.id).emit('kill-feed', {
+                killer: 'GUARDIAN',
+                victim: player.username,
+                weapon: weaponType,
+                killerTeam: 'neutral',
+                victimTeam: player.team
+            });
+        } else {
+            // Environment kill (Acid, Fire, etc)
+            io.to(this.id).emit('kill-feed', {
+                killer: 'WORLD',
+                victim: player.username,
+                weapon: weaponType,
+                killerTeam: 'neutral',
+                victimTeam: player.team
+            });
         }
 
-        const otherTeam = player.team === 'blue' ? 'pink' : 'blue';
-        if (!this.gameOver) {
+        if (isOpponentKill && !this.gameOver) {
+            const otherTeam = player.team === 'blue' ? 'pink' : 'blue';
             this.scores[otherTeam]++;
             this.checkMatchEnd();
         }
@@ -957,17 +1041,37 @@ class Lobby {
 
     replenishElements() {
         const envTypes = [MATERIALS.WATER, MATERIALS.OIL, MATERIALS.ELECTRIC, MATERIALS.ACID, MATERIALS.ICE];
-        const elements = Object.values(this.elements);
-        const currentEnvCount = elements.filter(e => envTypes.includes(e.type)).length;
+        const allElements = Object.values(this.elements);
+        const currentEnvCount = allElements.filter(e => envTypes.includes(e.type)).length;
         
-        // Dynamic target: approx 1 puddle per 400px of world size
-        const targetCount = Math.floor(this.worldSize / 400); 
+        // Area-aware target: approx 5 puddles per 1M square pixels (1000x1000 area)
+        const areaTarget = Math.floor((this.worldSize * this.worldSize) / (1000 * 1000) * 5); 
+        const targetCount = Math.max(10, areaTarget);
         
         if (currentEnvCount < targetCount) {
-            const pos = {
-                x: 150 + Math.random() * (this.worldSize - 300),
-                y: 150 + Math.random() * (this.worldSize - 300)
-            };
+            // Attempt to find a non-clumped position
+            let pos = null;
+            for (let i = 0; i < 15; i++) {
+                const testPos = {
+                    x: 200 + Math.random() * (this.worldSize - 400),
+                    y: 200 + Math.random() * (this.worldSize - 400)
+                };
+                
+                // Density check: check if too many puddles already exist in this local 600px region
+                const clumpCount = allElements.filter(e => {
+                    if (!envTypes.includes(e.type)) return false;
+                    const dx = e.body.position.x - testPos.x;
+                    const dy = e.body.position.y - testPos.y;
+                    return (dx*dx + dy*dy) < 600*600;
+                }).length;
+                
+                if (clumpCount < 2) {
+                    pos = testPos;
+                    break;
+                }
+            }
+            
+            if (!pos) return; // Skip replenishment if map is too crowded in tested areas
             
             let pType;
             const biome = this.mapType;
@@ -1005,9 +1109,15 @@ class Lobby {
                 
                 // Puddle Replenishment (Check every second, but only spawn if needed)
                 this.replenishElements();
+
+                // Periodic Guardian Spawn (with cooldown)
+                if (this.active && Object.keys(this.guardians).length < 2 && now > (this.nextGuardianSpawn || 0)) {
+                    this.spawnGuardian();
+                }
             }
 
             this.processBots(now);
+            this.processGuardians(now);
             Object.values(this.players).forEach(p => {
                 // Scrap Buff Feedback
                 const buffLevel = Math.floor(p.scrap / 100);
@@ -1068,9 +1178,9 @@ class Lobby {
         const baseWeapon = WEAPON_MODULES[moduleName];
         const now = Date.now();
         
-        // Scrap Bonus: +20% damage and +10% fire rate per 100 scrap
-        const scrapBuff = 1 + (p.scrap / 500); 
-        const reloadTime = baseWeapon.reload / (1 + (p.scrap / 1000));
+        // Scrap Bonus: +100% damage per 100 scrap; -50% reload per 200 scrap
+        const scrapBuff = 1 + (p.scrap / 100); 
+        const reloadTime = baseWeapon.reload / (1 + (p.scrap / 200));
 
         if (now - p.lastShot > reloadTime) {
             // Apply damage bonus in the fire call
@@ -1084,7 +1194,16 @@ class Lobby {
         if (bots.length === 0) return;
 
         // Optimization: Get obstacles once per frame
-        const obstacles = Composite.allBodies(this.engine.world).filter(b => !b.isSensor && b.label !== 'bullet');
+        const obstacles = Composite.allBodies(this.engine.world).filter(b => {
+            if (b.label === 'bullet') return false;
+            if (!b.isSensor) return true;
+            // Bots also "see" hazardous sensors as obstacles to avoid them
+            if (b.label === 'element') {
+                const e = this.elements[b.elementId];
+                if (e && [MATERIALS.FIRE, MATERIALS.ELECTRIC, MATERIALS.ACID, MATERIALS.GAS].includes(e.type)) return true;
+            }
+            return false;
+        });
 
         bots.forEach(bot => {
             if (bot.hp <= 0 || bot.isActive === false) {
@@ -1199,6 +1318,123 @@ class Lobby {
         });
     }
 
+    spawnGuardian() {
+        const id = ++this.lastGuardianId;
+        const orbitCenter = { x: this.worldSize / 2, y: this.worldSize / 2 };
+        const orbitRadius = 400 + Math.random() * 300;
+        const startAngle = Math.random() * Math.PI * 2;
+        
+        const pos = {
+            x: orbitCenter.x + Math.cos(startAngle) * orbitRadius,
+            y: orbitCenter.y + Math.sin(startAngle) * orbitRadius
+        };
+
+        const body = Bodies.circle(pos.x, pos.y, 25, {
+            frictionAir: 0.05,
+            mass: 5,
+            label: `guardian-${id}`,
+            restitution: 0.5
+        });
+
+        this.guardians[id] = {
+            id,
+            body,
+            hp: 200,
+            maxHp: 200,
+            orbitCenter,
+            orbitRadius,
+            angle: startAngle,
+            lastShot: 0,
+            speed: 0.005 + Math.random() * 0.005
+        };
+
+        Composite.add(this.engine.world, body);
+        io.to(this.id).emit('player-event', { text: 'GUARDIAN DRONE DETECTED', color: '#ffcc00' });
+    }
+
+    destroyGuardian(id, killerId) {
+        const g = this.guardians[id];
+        if (g) {
+            // Drop lots of scrap
+            for (let i = 0; i < 15; i++) {
+                this.spawnElement({
+                    x: g.body.position.x + (Math.random() - 0.5) * 60,
+                    y: g.body.position.y + (Math.random() - 0.5) * 60
+                }, MATERIALS.SCRAP, 60000);
+            }
+            
+            if (killerId && this.players[killerId]) {
+                io.to(this.id).emit('player-event', { text: `${this.players[killerId].username} DESTROYED A GUARDIAN`, color: '#00ff00' });
+            }
+
+            Composite.remove(this.engine.world, g.body);
+            delete this.guardians[id];
+            
+            // Cooldown: wait 45 seconds before allowing another spawn
+            this.nextGuardianSpawn = Date.now() + 45000;
+        }
+    }
+
+    processGuardians(now) {
+        Object.values(this.guardians).forEach(g => {
+            // 1. Orbit Movement
+            g.angle += g.speed;
+            const targetX = g.orbitCenter.x + Math.cos(g.angle) * g.orbitRadius;
+            const targetY = g.orbitCenter.y + Math.sin(g.angle) * g.orbitRadius;
+            
+            const force = Vector.mult(Vector.normalise(Vector.sub({ x: targetX, y: targetY }, g.body.position)), 0.005);
+            Body.applyForce(g.body, g.body.position, force);
+
+            // 2. Targeting
+            let target = null;
+            let minDist = 800;
+            Object.values(this.players).forEach(p => {
+                if (p.hp > 0 && !p.hidden) {
+                    const d = Vector.magnitude(Vector.sub(p.body.position, g.body.position));
+                    if (d < minDist) {
+                        minDist = d;
+                        target = p;
+                    }
+                }
+            });
+
+            if (target && now - g.lastShot > 1500) {
+                const aimAngle = Math.atan2(target.body.position.y - g.body.position.y, target.body.position.x - g.body.position.x);
+                this.fireGuardianPulse(g, aimAngle);
+                g.lastShot = now;
+            }
+        });
+    }
+
+    fireGuardianPulse(g, angle) {
+        const bulletId = ++this.lastBulletId;
+        const pos = {
+            x: g.body.position.x + Math.cos(angle) * 40,
+            y: g.body.position.y + Math.sin(angle) * 40
+        };
+        const bullet = Bodies.circle(pos.x, pos.y, 8, {
+            label: 'bullet',
+            frictionAir: 0,
+            mass: 0.1
+        });
+        bullet.id = bulletId;
+        bullet.customData = {
+            ownerId: `guardian-${g.id}`,
+            damage: 15,
+            impact: 0.02,
+            type: MATERIALS.ELECTRIC,
+            weapon: 'GUARDIAN_PULSE',
+            expiresAt: Date.now() + 1500
+        };
+        Body.setVelocity(bullet, {
+            x: Math.cos(angle) * 12,
+            y: Math.sin(angle) * 12
+        });
+        this.bullets[bulletId] = bullet;
+        Composite.add(this.engine.world, bullet);
+    }
+
+
     fire(p, weapon, moduleName = 'UNKNOWN', scrapBuff = 1) {
         const id = ++this.lastBulletId;
         const fireDist = weapon.type === MATERIALS.DIRT ? 80 : 45;
@@ -1267,6 +1503,10 @@ class Lobby {
                 burning: p.statusEffects.burn > Date.now(),
                 wet: p.statusEffects.wet > Date.now(),
                 invulnerable: p.invulnerableUntil && Date.now() < p.invulnerableUntil
+            })),
+            guardians: Object.values(this.guardians).map(g => ({
+                id: g.id, x: g.body.position.x, y: g.body.position.y,
+                angle: g.angle, hp: g.hp, maxHp: g.maxHp
             })),
             bullets: Object.values(this.bullets).map(b => ({
                 id: b.id, x: b.position.x, y: b.position.y,

@@ -125,6 +125,10 @@ socket.on('kill-feed', (data) => {
 socket.on('collision-effect', (data) => {
     // Spawn hit particles at the exact collision point
     const isTank = data.targetLabel && data.targetLabel.startsWith('tank-');
+    if (data.type === 'ICE_SHATTER') {
+        spawnParticles(data.x, data.y, '#aaddff', 15, 2.0);
+        return;
+    }
     const hitColor = data.targetLabel === 'element' ? '#fff' : (isTank ? '#ff0000' : '#ffcc00');
     spawnParticles(data.x, data.y, hitColor, 8);
     
@@ -695,6 +699,7 @@ function renderLoop(now) {
         ctx.strokeRect(0, 0, gameState.worldSize, gameState.worldSize);
 
         drawElements();
+        drawGuardians();
         updateBulletTrails();
         drawBulletTrails();
         drawBullets();
@@ -1450,6 +1455,7 @@ function interpolateState(dt) {
 
     gameState.bullets   = serverState.bullets;
     gameState.elements  = serverState.elements;
+    gameState.guardians = serverState.guardians;
     gameState.zones     = serverState.zones;
     gameState.worldSize = serverState.worldSize;
 
@@ -1910,6 +1916,55 @@ function drawElements() {
                 ctx.restore();
             }
         }
+        ctx.restore();
+    });
+}
+
+function drawGuardians() {
+    if (!gameState.guardians) return;
+    gameState.guardians.forEach(g => {
+        ctx.save();
+        ctx.translate(g.x, g.y);
+        
+        // Shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        ctx.beginPath();
+        ctx.arc(5, 5, 25, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Pulsing Glow
+        const pulse = 0.8 + Math.sin(Date.now() * 0.01) * 0.2;
+        ctx.shadowBlur = 15 * pulse;
+        ctx.shadowColor = '#00f2ff';
+        
+        // Drone Body (Triangle)
+        ctx.rotate(g.angle);
+        ctx.fillStyle = '#111';
+        ctx.strokeStyle = '#00f2ff';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(30, 0);
+        ctx.lineTo(-20, -20);
+        ctx.lineTo(-20, 20);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Eye / Lens
+        ctx.fillStyle = '#ff3333';
+        ctx.beginPath();
+        ctx.arc(10, 0, 4, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Health bar
+        ctx.restore();
+        ctx.save();
+        ctx.translate(g.x, g.y);
+        const hpPerc = g.hp / g.maxHp;
+        ctx.fillStyle = '#333';
+        ctx.fillRect(-25, -45, 50, 6);
+        ctx.fillStyle = hpPerc > 0.5 ? '#00ff00' : (hpPerc > 0.2 ? '#ffff00' : '#ff0000');
+        ctx.fillRect(-25, -45, 50 * hpPerc, 6);
         ctx.restore();
     });
 }

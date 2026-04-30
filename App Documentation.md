@@ -43,13 +43,27 @@ The environment is reactive:
 - **Water**: Extinguishes FIRE, creates STEAM, can be electrified by TESLA. Dilutes ACID.
 - **Acid**: Corrosive green pools that damage tanks over time. Reacts with FIRE to create GAS.
 - **Gas**: Toxic cloud created by chemical reactions. Causes area-denial damage.
-- **Electric**: Stuns tanks, spreads through WATER pools.
+- **Electric**: Stuns tanks, spreads through WATER pools. **Reveals** tanks hidden in STEAM.
 - **Ice**: Reduces friction significantly, created by FROST_GUN or freezing WATER.
+- **Dirt**: Acts as an **insulator**, blocking ELECTRIC arcs.
+- **Scrap**: Provides linear automated scaling (+100% damage per 100 Scrap, -50% reload per 200 Scrap).
 
 ### 3. Bot AI System
 The game features a server-side AI system:
 - **Replacement Logic**: Bots automatically fill empty slots in lobbies to maintain a 5v5 balance.
 - **Behavior**: Bots lead their shots, avoid hazards like FIRE and ELECTRIC puddles, and have stuck-recovery logic.
+
+### 4. AI Guardians (Drones)
+- **Deployment**: Defensive drones spawn periodically near the map center.
+- **Engagement**: They orbit a fixed point and fire ELECTRIC pulses at any player that enters their range.
+- **Rewards**: Destroying a guardian yields high-density SCRAP drops.
+
+### 5. Match Rules & Scoring
+- **Point Conditions**: Points are ONLY awarded for kills on players of the **opposing team**.
+- **Neutral Deaths**: Deaths caused by AI Guardians, World Hazards (Acid/Fire), or Self-Damage do NOT grant points to the other team.
+- **Kill Feed Labels**:
+    - `GUARDIAN`: Indicates death by a defensive drone.
+    - `WORLD`: Indicates death by environmental hazards.
 
 ---
 
