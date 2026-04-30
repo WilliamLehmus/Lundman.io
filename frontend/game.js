@@ -65,7 +65,7 @@ const p2HpBar = document.getElementById('p2-hp');
 const p1CooldownBar = document.getElementById('p1-cooldown');
 const p2CooldownBar = document.getElementById('p2-cooldown');
 
-// Game State — server (authoritative) vs rendered (interpolated)
+// Game State - server (authoritative) vs rendered (interpolated)
 let serverState = { players: [], bullets: [], elements: [], zones: [] };
 let gameState   = { players: [], bullets: [], elements: [], zones: [] };
 let lastScrap = 0;
@@ -238,7 +238,7 @@ const WEAPON_NAMES = {
     DIRT_GUN: 'Dirt Gun', TESLA: 'Tesla Coil', FROST_GUN: 'Frost Gun'
 };
 const WEAPON_ABBR = {
-    STANDARD: 'GUN', FLAMETHROWER: 'FIRE', WATER_CANNON: 'H₂O',
+    STANDARD: 'GUN', FLAMETHROWER: 'FIRE', WATER_CANNON: 'H\u2082O',
     DIRT_GUN: 'DIRT', TESLA: 'ARC', FROST_GUN: 'ICE'
 };
 const TRAIL_LENGTHS  = { metal: 6, fire: 4, water: 3, dirt: 3, electric: 8, ice: 7 };
@@ -927,25 +927,25 @@ function drawTank(p) {
         if (p.stunned) {
             ctx.fillStyle = '#ffff00';
             ctx.font = '700 16px Outfit';
-            ctx.fillText('⚡ STUNNED', 0, yOffset);
+            ctx.fillText('\u26A1 STUNNED', 0, yOffset);
             yOffset -= 20;
         }
         if (p.slowed) {
             ctx.fillStyle = '#00aaff';
             ctx.font = '700 16px Outfit';
-            ctx.fillText('❄️ SLOWED', 0, yOffset);
+            ctx.fillText('\u2744\uFE0F SLOWED', 0, yOffset);
             yOffset -= 20;
         }
         if (p.burning) {
             ctx.fillStyle = '#ff4400';
             ctx.font = '700 16px Outfit';
-            ctx.fillText('🔥 BURNING', 0, yOffset);
+            ctx.fillText('\uD83D\uDD25 BURNING', 0, yOffset);
             yOffset -= 20;
         }
         if (p.wet) {
             ctx.fillStyle = '#0088ff';
             ctx.font = '700 16px Outfit';
-            ctx.fillText('💧 WET', 0, yOffset);
+            ctx.fillText('\uD83D\uDCA7 WET', 0, yOffset);
             yOffset -= 20;
         }
         
@@ -955,11 +955,11 @@ function drawTank(p) {
             if (buffLevel >= 5) {
                 ctx.fillStyle = '#ffcc00';
                 ctx.font = '900 16px Outfit';
-                ctx.fillText('⭐ MAX BUFF', 0, yOffset);
+                ctx.fillText('\u2B50 MAX BUFF', 0, yOffset);
             } else if (buffLevel >= 1) {
                 ctx.fillStyle = '#00ffaa';
                 ctx.font = '700 14px Outfit';
-                ctx.fillText(`🔷 LVL ${buffLevel} BUFF`, 0, yOffset);
+                ctx.fillText(`\uD83D\uDD33 LVL ${buffLevel} BUFF`, 0, yOffset);
             }
         }
         ctx.restore();

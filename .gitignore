@@ -6,3 +6,5 @@ yarn-debug.log*
 yarn-error.log*
 .gemini/
 dist/
+frontend/dist/
+crash.log
