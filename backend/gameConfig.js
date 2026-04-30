@@ -27,6 +27,7 @@ export const MATERIAL_PROPERTIES = {
     [MATERIALS.DIRT]: { w: 40, h: 40, color: '#554433' },
     [MATERIALS.ACID]: { w: 100, h: 100, color: 'rgba(0, 255, 0, 0.4)' },
     [MATERIALS.GAS]: { w: 150, h: 150, color: 'rgba(100, 200, 50, 0.4)' },
+    [MATERIALS.ELECTRIC]: { w: 120, h: 120, color: 'rgba(0, 242, 255, 0.3)' },
     [MATERIALS.BARREL_EXPLOSIVE]: { w: 35, h: 45, color: '#ff4444', hp: 20 },
     [MATERIALS.BARREL_OIL]: { w: 35, h: 45, color: '#ffcc00', hp: 20 },
     [MATERIALS.CRATE]: { w: 45, h: 45, color: '#8b4513', hp: 30 }

@@ -1093,10 +1093,26 @@ function drawGrid() {
         lastWorldSize = worldSize;
     }
 
-    if (currentBiome === 'URBAN') {
-        // 1. Darker Base Asphalt
-        ctx.fillStyle = '#08080c';
+    if (currentBiome === 'URBAN' || currentBiome === 'INDUSTRIAL') {
+        const isIndustrial = currentBiome === 'INDUSTRIAL';
+        // 1. Base floor (Asphalt for Urban, Concrete for Industrial)
+        ctx.fillStyle = isIndustrial ? '#1e1e24' : '#08080c';
         ctx.fillRect(0, 0, worldSize, worldSize);
+
+        // Industrial Concrete Plate Lines
+        if (isIndustrial) {
+            ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+            ctx.lineWidth = 2;
+            const plateSize = 200;
+            ctx.beginPath();
+            for (let x = 0; x < worldSize; x += plateSize) {
+                ctx.moveTo(x, 0); ctx.lineTo(x, worldSize);
+            }
+            for (let y = 0; y < worldSize; y += plateSize) {
+                ctx.moveTo(0, y); ctx.lineTo(worldSize, y);
+            }
+            ctx.stroke();
+        }
 
         // 1.1 Procedural Ground Detail (Grit & Stains)
         if (ENABLE_PREMIUM_VISUALS) {
@@ -1132,15 +1148,29 @@ function drawGrid() {
         const step = blockSize + streetWidth;
 
         // 2. Draw Sidewalks (Curbs)
-        ctx.fillStyle = '#1a1a25';
+        ctx.fillStyle = isIndustrial ? '#11111a' : '#1a1a25';
         for (let x = padding - 10; x < worldSize - padding; x += step) {
             for (let y = padding - 10; y < worldSize - padding; y += step) {
                 ctx.beginPath();
                 ctx.roundRect(x, y, blockSize + 20, blockSize + 20, 10);
                 ctx.fill();
                 // Subtle curb edge
-                ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+                ctx.strokeStyle = isIndustrial ? 'rgba(0, 242, 255, 0.08)' : 'rgba(255,255,255,0.03)';
                 ctx.stroke();
+
+                // Industrial circuitry patterns on sidewalks
+                if (isIndustrial && ENABLE_PREMIUM_VISUALS) {
+                    ctx.strokeStyle = 'rgba(0, 242, 255, 0.04)';
+                    ctx.lineWidth = 1;
+                    for (let i = 20; i < blockSize; i += 40) {
+                        ctx.beginPath();
+                        ctx.moveTo(x + i, y + 10); ctx.lineTo(x + i, y + blockSize + 10);
+                        ctx.stroke();
+                        ctx.beginPath();
+                        ctx.moveTo(x + 10, y + i); ctx.lineTo(x + blockSize + 10, y + i);
+                        ctx.stroke();
+                    }
+                }
             }
         }
 
@@ -1456,6 +1486,7 @@ function drawElements() {
     if (!gameState.elements) return;
     const currentBiome = gameState.zones && gameState.zones[0] ? gameState.zones[0].type : 'RANDOM';
     const isWasteland = currentBiome === 'WASTELAND';
+    const isIndustrial = currentBiome === 'INDUSTRIAL';
 
     gameState.elements.forEach(e => {
         ctx.save();
@@ -1473,6 +1504,9 @@ function drawElements() {
             if (isWasteland) {
                 bGradient.addColorStop(0, '#3a2a1a'); // Rusted Top
                 bGradient.addColorStop(1, '#1a100a'); // Dark Bottom
+            } else if (isIndustrial) {
+                bGradient.addColorStop(0, '#2a2a3a'); // Metallic Top
+                bGradient.addColorStop(1, '#0a0a15'); // Dark Bottom
             } else {
                 bGradient.addColorStop(0, '#252535'); // Top (lighter)
                 bGradient.addColorStop(1, '#151520'); // Bottom (darker)
@@ -1500,6 +1534,58 @@ function drawElements() {
                 // Fan details
                 ctx.beginPath();
                 ctx.arc(e.x, e.y, 15, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+            }
+
+            // 3. Industrial / Factory Details
+            if (isIndustrial && ENABLE_PREMIUM_VISUALS) {
+                // Hazard Stripes (Yellow/Black) at the base
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(e.x - e.w/2, e.y + e.h/2 - 12, e.w, 12);
+                ctx.clip();
+                const stripeW = 15;
+                for (let sx = e.x - e.w/2 - 20; sx < e.x + e.w/2 + 20; sx += stripeW * 2) {
+                    ctx.fillStyle = '#ffcc00';
+                    ctx.beginPath();
+                    ctx.moveTo(sx, e.y + e.h/2 - 15);
+                    ctx.lineTo(sx + stripeW, e.y + e.h/2 - 15);
+                    ctx.lineTo(sx + stripeW - 10, e.y + e.h/2 + 5);
+                    ctx.lineTo(sx - 10, e.y + e.h/2 + 5);
+                    ctx.fill();
+                    ctx.fillStyle = '#111';
+                    ctx.beginPath();
+                    ctx.moveTo(sx + stripeW, e.y + e.h/2 - 15);
+                    ctx.lineTo(sx + stripeW * 2, e.y + e.h/2 - 15);
+                    ctx.lineTo(sx + stripeW * 2 - 10, e.y + e.h/2 + 5);
+                    ctx.lineTo(sx + stripeW - 10, e.y + e.h/2 + 5);
+                    ctx.fill();
+                }
+                ctx.restore();
+
+                // Vertical Metal Pipes
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 5;
+                ctx.beginPath();
+                ctx.moveTo(e.x - e.w/2 + 8, e.y - e.h/2);
+                ctx.lineTo(e.x - e.w/2 + 8, e.y + e.h/2 - 12);
+                ctx.stroke();
+                
+                // Rivets/Bolts along the pipe
+                ctx.fillStyle = 'rgba(255,255,255,0.15)';
+                for (let ry = -e.h/2 + 20; ry < e.h/2 - 20; ry += 35) {
+                    ctx.beginPath();
+                    ctx.arc(e.x - e.w/2 + 8, e.y + ry, 2.5, 0, Math.PI*2);
+                    ctx.fill();
+                }
+
+                // Panel lines for metallic feel
+                ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(e.x, e.y - e.h/2); ctx.lineTo(e.x, e.y + e.h/2 - 12);
+                ctx.moveTo(e.x - e.w/2, e.y); ctx.lineTo(e.x + e.w/2, e.y);
                 ctx.stroke();
             }
 
@@ -1512,9 +1598,15 @@ function drawElements() {
                 for (let wy = e.y - e.h/2 + 15; wy < e.y + e.h/2 - 10; wy += winSpacingY) {
                     const isLit = (Math.floor(wx * 0.7 + wy * 1.3 + e.id)) % 6 > (isWasteland ? 5 : 3);
                     if (isLit) {
-                        ctx.fillStyle = isWasteland ? `rgba(255, 150, 50, ${0.2 * flicker})` : `rgba(255, 240, 150, ${0.3 * flicker})`;
-                        ctx.shadowBlur = isWasteland ? 2 : 5;
-                        ctx.shadowColor = isWasteland ? '#ff6600' : 'rgba(255, 240, 150, 0.5)';
+                        if (isIndustrial) {
+                            ctx.fillStyle = `rgba(0, 242, 255, ${0.4 * flicker})`;
+                            ctx.shadowBlur = 8;
+                            ctx.shadowColor = '#00f2ff';
+                        } else {
+                            ctx.fillStyle = isWasteland ? `rgba(255, 150, 50, ${0.2 * flicker})` : `rgba(255, 240, 150, ${0.3 * flicker})`;
+                            ctx.shadowBlur = isWasteland ? 2 : 5;
+                            ctx.shadowColor = isWasteland ? '#ff6600' : 'rgba(255, 240, 150, 0.5)';
+                        }
                         ctx.fillRect(wx, wy, winSize, winSize);
                         ctx.shadowBlur = 0;
                     } else {
@@ -1526,9 +1618,19 @@ function drawElements() {
 
             // Neon Signs on random buildings
             if (e.id % 5 === 0) {
-                const neonColors = isWasteland ? ['#ff5500', '#ff0000', '#aa6600', '#666'] : ['#ff00ff', '#00f2ff', '#ffff00', '#ff0000'];
+                const isIndustrial = currentBiome === 'INDUSTRIAL';
+                let neonColors = ['#ff00ff', '#00f2ff', '#ffff00', '#ff0000'];
+                let texts = ['HOTEL', 'BAR', 'CLUB', 'REPAIR', 'TANK', 'NEON'];
+                
+                if (isWasteland) {
+                    neonColors = ['#ff5500', '#ff0000', '#aa6600', '#666'];
+                    texts = ['DEAD', 'LOST', 'VOID', 'RUST', 'STOP', 'WAR'];
+                } else if (isIndustrial) {
+                    neonColors = ['#00f2ff', '#00ffff', '#ffff00', '#55ff00'];
+                    texts = ['POWER', 'TECH', 'CORE', 'GRID', 'FLOW', 'HVAC'];
+                }
+                
                 const nColor = neonColors[e.id % neonColors.length];
-                const texts = isWasteland ? ['DEAD', 'LOST', 'VOID', 'RUST', 'STOP', 'WAR'] : ['HOTEL', 'BAR', 'CLUB', 'REPAIR', 'TANK', 'NEON'];
                 const text = texts[e.id % texts.length];
                 
                 ctx.save();
@@ -1560,6 +1662,29 @@ function drawElements() {
                     ctx.arc(e.x + dx, e.y + dy, 10 + Math.random() * 10, 0, Math.PI * 2);
                     ctx.fill();
                 }
+            }
+
+            // Industrial specific effects (Power arcs)
+            if (isIndustrial && ENABLE_PREMIUM_VISUALS) {
+                if (Math.random() > 0.98) {
+                    ctx.save();
+                    ctx.strokeStyle = '#fff';
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = '#00f2ff';
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    let sx = e.x + (Math.random()-0.5)*e.w*0.8;
+                    let sy = e.y - e.h/2;
+                    ctx.moveTo(sx, sy);
+                    for (let i=0; i<4; i++) {
+                        sx += (Math.random()-0.5)*30;
+                        sy -= Math.random()*20;
+                        ctx.lineTo(sx, sy);
+                    }
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            }
 
                 // Smoke from roof unit (More frequent)
                 if (e.id % 2 === 0 && Math.random() > 0.92) {
@@ -1574,7 +1699,6 @@ function drawElements() {
                 if (e.id % 3 === 0 && Math.random() > 0.96) {
                     spawnParticles(e.x + (Math.random()-0.5)*e.w, e.y - e.h/2, '#ffffaa', 3, 0.8);
                 }
-            }
         } else if (e.type === MATERIALS.SCRAP) {
             // Draw Scrap as a rotating gold gear/nut
             ctx.translate(e.x, e.y);

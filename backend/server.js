@@ -330,7 +330,7 @@ class Lobby {
                     else if (rand < 0.85) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.DIRT, null, null, null, 300, 300);
                 }
                 else if (mapType === 'INDUSTRIAL') {
-                    if (rand < 0.7) this.generateCityBlock(x, y, blockSize);
+                    if (rand < 0.6) this.generateIndustrialComplex(x, y, blockSize);
                 }
                 else if (mapType === 'WETLAND') {
                     if (rand < 0.3) this.generateCityBlock(x, y, blockSize);
@@ -346,24 +346,34 @@ class Lobby {
 
         // Random scatters based on biome
         if (mapType === 'INDUSTRIAL') {
-            // Balanced Electric Puddles for Industrial
-            const puddleCount = Math.floor(this.worldSize / 300); 
+            const puddleCount = Math.floor(this.worldSize / 400); 
             for (let i = 0; i < puddleCount; i++) {
-                const pos = { 
-                    x: 200 + Math.random() * (this.worldSize - 400), 
-                    y: 200 + Math.random() * (this.worldSize - 400) 
-                };
-                
-                // Distance check: Keep electric puddles at least 450px apart
-                const tooClose = Object.values(this.elements).some(e => 
-                    e.type === MATERIALS.ELECTRIC && 
-                    Vector.magnitude(Vector.sub(e.body.position, pos)) < 450
-                );
-                
-                if (!tooClose) {
-                    const isLarge = Math.random() > 0.4;
-                    const size = isLarge ? 250 : 100;
-                    this.spawnElement(pos, MATERIALS.ELECTRIC, null, null, null, size, size);
+                let spawned = false;
+                for (let attempts = 0; attempts < 15 && !spawned; attempts++) {
+                    const pos = { 
+                        x: 200 + Math.random() * (this.worldSize - 400), 
+                        y: 200 + Math.random() * (this.worldSize - 400) 
+                    };
+                    
+                    // Determine puddle type for variety: 50% Electric, 20% Acid, 15% Water, 15% Oil
+                    const r = Math.random();
+                    let pType = MATERIALS.ELECTRIC;
+                    if (r > 0.5 && r <= 0.7) pType = MATERIALS.ACID;
+                    else if (r > 0.7 && r <= 0.85) pType = MATERIALS.WATER;
+                    else if (r > 0.85) pType = MATERIALS.OIL;
+
+                    // Distance check against same-type puddles
+                    const tooClose = Object.values(this.elements).some(e => 
+                        e.type === pType && 
+                        Vector.magnitude(Vector.sub(e.body.position, pos)) < 300
+                    );
+
+                    if (!tooClose) {
+                        const size = Math.random() > 0.4 ? 220 : 110;
+                        if (this.spawnElement(pos, pType, null, null, null, size, size)) {
+                            spawned = true;
+                        }
+                    }
                 }
             }
         }
@@ -393,6 +403,25 @@ class Lobby {
             this.spawnElement(pos, pType, null, props.hp);
         }
     }
+    generateIndustrialComplex(bx, by, size) {
+        // Large factory-style buildings
+        const bw = size * (0.7 + Math.random() * 0.4);
+        const bh = size * (0.5 + Math.random() * 0.3);
+        this.spawnBuilding({ x: bx + size/2, y: by + size/2 }, bw, bh);
+
+        // Add industrial machinery/props clustered around factory
+        const propCount = 2 + Math.floor(Math.random() * 3);
+        for (let i = 0; i < propCount; i++) {
+            const side = Math.random() > 0.5 ? 1 : -1;
+            const pos = {
+                x: bx + size/2 + (bw/2 + 30) * side,
+                y: by + size/2 + (Math.random() - 0.5) * bh
+            };
+            const pType = Math.random() > 0.5 ? MATERIALS.BARREL_OIL : MATERIALS.CRATE;
+            this.spawnElement(pos, pType, null, MATERIAL_PROPERTIES[pType].hp);
+        }
+    }
+
     generateCityBlock(bx, by, size) {
         // Main Building
         const bw = size * (0.6 + Math.random() * 0.3);
@@ -765,12 +794,20 @@ class Lobby {
         // Prevent spawning elements inside buildings
         const solidTypes = [MATERIALS.BUILDING, MATERIALS.CRATE, MATERIALS.BARREL_EXPLOSIVE, MATERIALS.BARREL_OIL];
         if (type !== MATERIALS.BUILDING) {
+            const config = MATERIAL_PROPERTIES[type] || { w: 30, h: 30 };
+            const ew = customW || config.w;
+            const eh = customH || config.h;
+
             const buildings = Object.values(this.elements)
                 .filter(e => e.type === MATERIALS.BUILDING)
                 .map(e => e.body);
             
-            const isInside = Query.point(buildings, pos).length > 0;
-            if (isInside) return null;
+            // Dimension-aware overlap check
+            const overlaps = Query.region(buildings, {
+                min: { x: pos.x - ew/2, y: pos.y - eh/2 },
+                max: { x: pos.x + ew/2, y: pos.y + eh/2 }
+            });
+            if (overlaps.length > 0) return null;
 
             // NEW: Sidewalk check for URBAN biome
             if (this.mapType === 'URBAN') {
@@ -918,6 +955,45 @@ class Lobby {
         Body.setVelocity(player.body, { x: 0, y: 0 });
     }
 
+    replenishElements() {
+        const envTypes = [MATERIALS.WATER, MATERIALS.OIL, MATERIALS.ELECTRIC, MATERIALS.ACID, MATERIALS.ICE];
+        const elements = Object.values(this.elements);
+        const currentEnvCount = elements.filter(e => envTypes.includes(e.type)).length;
+        
+        // Dynamic target: approx 1 puddle per 400px of world size
+        const targetCount = Math.floor(this.worldSize / 400); 
+        
+        if (currentEnvCount < targetCount) {
+            const pos = {
+                x: 150 + Math.random() * (this.worldSize - 300),
+                y: 150 + Math.random() * (this.worldSize - 300)
+            };
+            
+            let pType;
+            const biome = this.mapType;
+            if (biome === 'WASTELAND') {
+                pType = Math.random() > 0.6 ? MATERIALS.ACID : MATERIALS.OIL;
+            } else if (biome === 'INDUSTRIAL') {
+                const r = Math.random();
+                if (r < 0.5) pType = MATERIALS.ELECTRIC;
+                else if (r < 0.7) pType = MATERIALS.ACID;
+                else if (r < 0.85) pType = MATERIALS.WATER;
+                else pType = MATERIALS.OIL;
+            } else if (biome === 'WETLAND') {
+                pType = MATERIALS.WATER;
+            } else if (biome === 'ICE') {
+                pType = MATERIALS.ICE;
+            } else {
+                // URBAN / Default
+                pType = Math.random() > 0.6 ? MATERIALS.WATER : MATERIALS.OIL;
+            }
+            
+            const size = Math.random() > 0.5 ? 200 : 100;
+            // Spawn 1 element per replenishment call to keep it subtle
+            this.spawnElement(pos, pType, null, null, null, size, size);
+        }
+    }
+
     update() {
         const now = Date.now();
 
@@ -926,6 +1002,9 @@ class Lobby {
                 this.matchTimer--;
                 this.lastTimeTick = now;
                 if (this.matchTimer <= 0) this.checkMatchEnd();
+                
+                // Puddle Replenishment (Check every second, but only spawn if needed)
+                this.replenishElements();
             }
 
             this.processBots(now);
