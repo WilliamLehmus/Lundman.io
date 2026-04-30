@@ -1291,14 +1291,75 @@ function drawGrid() {
             ctx.restore();
         }
     } else if (currentBiome === 'WETLAND') {
-        ctx.fillStyle = '#0a100a'; ctx.fillRect(0, 0, worldSize, worldSize);
+        // Murky Dark Swamp Water
+        ctx.fillStyle = '#080d08';
+        ctx.fillRect(0, 0, worldSize, worldSize);
+        
         if (ENABLE_PREMIUM_VISUALS) {
-            if (groundDetails.length === 0) for (let i = 0; i < 300; i++) groundDetails.push({ x: Math.random() * worldSize, y: Math.random() * worldSize, size: 15 + Math.random() * 25, opacity: 0.1 + Math.random() * 0.15, color: Math.random() > 0.5 ? '#1a2a1a' : '#0a1a0a' });
+            if (groundDetails.length === 0) {
+                for (let i = 0; i < 400; i++) {
+                    const r = Math.random();
+                    groundDetails.push({
+                        x: Math.random() * worldSize, y: Math.random() * worldSize,
+                        size: r < 0.2 ? 10 + Math.random() * 15 : (r < 0.5 ? 20 + Math.random() * 30 : 2 + Math.random() * 5),
+                        opacity: 0.1 + Math.random() * 0.2,
+                        type: r < 0.2 ? 'lily' : (r < 0.5 ? 'mud' : 'bubble'),
+                        color: r < 0.2 ? '#2d4d2d' : '#1a221a',
+                        phase: Math.random() * Math.PI * 2
+                    });
+                }
+            }
             ctx.save();
             groundDetails.forEach(d => {
-                if (d.x < camera.x - 40 || d.x > camera.x + canvas.width + 40 || d.y < camera.y - 40 || d.y > camera.y + canvas.height + 40) return;
-                ctx.fillStyle = d.color; ctx.globalAlpha = d.opacity; ctx.beginPath(); ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2); ctx.fill();
+                if (d.x < camera.x - 50 || d.x > camera.x + canvas.width + 50 || d.y < camera.y - 50 || d.y > camera.y + canvas.height + 50) return;
+                
+                if (d.type === 'lily') {
+                    // Lily Pad
+                    ctx.fillStyle = d.color; ctx.globalAlpha = d.opacity * 2;
+                    ctx.beginPath();
+                    ctx.arc(d.x, d.y, d.size, 0.2, Math.PI * 1.8);
+                    ctx.lineTo(d.x, d.y);
+                    ctx.fill();
+                    // Subtle vein
+                    ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 1;
+                    ctx.beginPath(); ctx.moveTo(d.x, d.y); ctx.lineTo(d.x + d.size, d.y); ctx.stroke();
+                } else if (d.type === 'mud') {
+                    // Dark Mud patch
+                    ctx.fillStyle = d.color; ctx.globalAlpha = d.opacity;
+                    ctx.beginPath(); ctx.ellipse(d.x, d.y, d.size, d.size/1.5, d.phase, 0, Math.PI * 2); ctx.fill();
+                } else {
+                    // Rising Bubble
+                    const pulse = Math.sin(renderTime * 0.005 + d.phase) * 0.5 + 0.5;
+                    ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1;
+                    ctx.beginPath(); ctx.arc(d.x, d.y, d.size * pulse, 0, Math.PI * 2); ctx.stroke();
+                }
             });
+            ctx.restore();
+
+            // 2. Fireflies (Lively particles)
+            ctx.save();
+            for (let i = 0; i < 40; i++) {
+                const fx = (Math.sin(renderTime * 0.0005 + i) * 0.5 + 0.5) * worldSize;
+                const fy = (Math.cos(renderTime * 0.0007 + i * 2) * 0.5 + 0.5) * worldSize;
+                
+                if (fx > camera.x && fx < camera.x + canvas.width && fy > camera.y && fy < camera.y + canvas.height) {
+                    const glow = 0.5 + Math.sin(renderTime * 0.01 + i) * 0.5;
+                    ctx.shadowBlur = 10 * glow;
+                    ctx.shadowColor = '#aaff00';
+                    ctx.fillStyle = `rgba(170, 255, 0, ${0.4 * glow})`;
+                    ctx.beginPath(); ctx.arc(fx, fy, 2, 0, Math.PI * 2); ctx.fill();
+                }
+            }
+            ctx.restore();
+
+            // 3. Murky Fog/Mist
+            ctx.save();
+            ctx.globalCompositeOperation = 'screen';
+            const mistGrad = ctx.createRadialGradient(camera.x + canvas.width/2, camera.y + canvas.height/2, 100, camera.x + canvas.width/2, camera.y + canvas.height/2, 800);
+            mistGrad.addColorStop(0, 'rgba(40, 60, 40, 0)');
+            mistGrad.addColorStop(1, 'rgba(20, 30, 20, 0.15)');
+            ctx.fillStyle = mistGrad;
+            ctx.fillRect(camera.x, camera.y, canvas.width, canvas.height);
             ctx.restore();
         }
     } else {
@@ -1355,6 +1416,7 @@ function drawElements() {
     const currentBiome = gameState.zones && gameState.zones[0] ? gameState.zones[0].type : 'RANDOM';
     const isWasteland = currentBiome === 'WASTELAND';
     const isIndustrial = currentBiome === 'INDUSTRIAL';
+    const isWetland = currentBiome === 'WETLAND';
 
     gameState.elements.forEach(e => {
         ctx.save();
@@ -1375,17 +1437,39 @@ function drawElements() {
             } else if (isIndustrial) {
                 bGradient.addColorStop(0, '#2a2a3a'); // Metallic Top
                 bGradient.addColorStop(1, '#0a0a15'); // Dark Bottom
+            } else if (isWetland) {
+                bGradient.addColorStop(0, '#152515'); // Mossy Green Top
+                bGradient.addColorStop(1, '#050a05'); // Murky Bottom
             } else {
                 bGradient.addColorStop(0, '#252535'); // Top (lighter)
                 bGradient.addColorStop(1, '#151520'); // Bottom (darker)
             }
             ctx.fillStyle = bGradient;
-            ctx.strokeStyle = isWasteland ? 'rgba(150, 80, 50, 0.5)' : 'rgba(0, 242, 255, 0.6)';
+            ctx.strokeStyle = isWasteland ? 'rgba(150, 80, 50, 0.5)' : (isWetland ? 'rgba(50, 100, 50, 0.4)' : 'rgba(0, 242, 255, 0.6)');
             ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.roundRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h, 4);
             ctx.fill();
             ctx.stroke();
+
+            // Wetland Overgrowth (Moss & Vines)
+            if (isWetland && ENABLE_PREMIUM_VISUALS) {
+                ctx.save();
+                // Moss Patches
+                ctx.fillStyle = 'rgba(40, 80, 40, 0.4)';
+                for (let i = 0; i < 5; i++) {
+                    const mx = e.x + (Math.sin(e.id + i) * 0.4) * e.w;
+                    const my = e.y + (Math.cos(e.id * 2 + i) * 0.4) * e.h;
+                    ctx.beginPath(); ctx.arc(mx, my, 15 + Math.random() * 15, 0, Math.PI * 2); ctx.fill();
+                }
+                // Hanging Vines
+                ctx.strokeStyle = 'rgba(20, 40, 20, 0.6)'; ctx.lineWidth = 2;
+                for (let i = 0; i < 3; i++) {
+                    const vx = e.x - e.w/2 + 20 + (i * (e.w-40)/3);
+                    ctx.beginPath(); ctx.moveTo(vx, e.y - e.h/2); ctx.lineTo(vx + Math.sin(e.id+i)*10, e.y + e.h/2 - 10); ctx.stroke();
+                }
+                ctx.restore();
+            }
 
             // 3. Roof Details (The "Shell" fix)
             ctx.fillStyle = isWasteland ? 'rgba(100, 50, 0, 0.05)' : 'rgba(255, 255, 255, 0.03)';
@@ -1464,7 +1548,7 @@ function drawElements() {
             const winSpacingY = 18;
             for (let wx = e.x - e.w/2 + 15; wx < e.x + e.w/2 - 10; wx += winSpacingX) {
                 for (let wy = e.y - e.h/2 + 15; wy < e.y + e.h/2 - 10; wy += winSpacingY) {
-                    const isLit = (Math.floor(wx * 0.7 + wy * 1.3 + e.id)) % 6 > (isWasteland ? 5 : 3);
+                    const isLit = !isWetland && (Math.floor(wx * 0.7 + wy * 1.3 + e.id)) % 6 > (isWasteland ? 5 : 3);
                     if (isLit) {
                         if (isIndustrial) {
                             ctx.fillStyle = `rgba(0, 242, 255, ${0.4 * flicker})`;
@@ -1484,8 +1568,8 @@ function drawElements() {
                 }
             }
 
-            // Neon Signs on random buildings
-            if (e.id % 5 === 0) {
+            // Neon Signs (Disabled for Wetland)
+            if (e.id % 5 === 0 && !isWetland) {
                 const isIndustrial = currentBiome === 'INDUSTRIAL';
                 let neonColors = ['#ff00ff', '#00f2ff', '#ffff00', '#ff0000'];
                 let texts = ['HOTEL', 'BAR', 'CLUB', 'REPAIR', 'TANK', 'NEON'];

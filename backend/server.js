@@ -337,7 +337,13 @@ class Lobby {
                 }
                 else if (mapType === 'WETLAND') {
                     if (rand < 0.3) this.generateCityBlock(x, y, blockSize);
-                    else if (rand < 0.8) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.WATER, null, null, null, 220, 220);
+                    else if (rand < 0.8) {
+                        const r2 = Math.random();
+                        let pType = MATERIALS.WATER;
+                        if (r2 > 0.5 && r2 <= 0.8) pType = MATERIALS.ACID;
+                        else if (r2 > 0.8) pType = MATERIALS.GAS;
+                        this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, pType, null, null, null, 220, 220);
+                    }
                     if (Math.random() > 0.7) this.spawnElement({ x: x + blockSize, y: y + blockSize }, MATERIALS.DIRT, null, null, null, 150, 150);
                 }
                 else if (mapType === 'ICE') {
@@ -377,6 +383,26 @@ class Lobby {
                         if (this.spawnElement(pos, pType, null, null, null, size, size)) {
                             spawned = true;
                         }
+                    }
+                }
+            }
+        }
+        
+        if (mapType === 'WETLAND') {
+            const puddleCount = Math.floor(this.worldSize / 500);
+            for (let i = 0; i < puddleCount; i++) {
+                let spawned = false;
+                for (let attempts = 0; attempts < 15 && !spawned; attempts++) {
+                    const pos = { x: 200 + Math.random() * (this.worldSize - 400), y: 200 + Math.random() * (this.worldSize - 400) };
+                    const r = Math.random();
+                    let pType = MATERIALS.WATER;
+                    if (r > 0.4 && r <= 0.75) pType = MATERIALS.ACID;
+                    else if (r > 0.75) pType = MATERIALS.GAS;
+
+                    const tooClose = Object.values(this.elements).some(e => Vector.magnitude(Vector.sub(e.body.position, pos)) < 400);
+                    if (!tooClose) {
+                        const size = 120 + Math.random() * 80;
+                        if (this.spawnElement(pos, pType, null, null, null, size, size)) spawned = true;
                     }
                 }
             }
@@ -1085,7 +1111,10 @@ class Lobby {
                 else if (r < 0.85) pType = MATERIALS.WATER;
                 else pType = MATERIALS.OIL;
             } else if (biome === 'WETLAND') {
-                pType = MATERIALS.WATER;
+                const r = Math.random();
+                if (r < 0.4) pType = MATERIALS.WATER;
+                else if (r < 0.75) pType = MATERIALS.ACID;
+                else pType = MATERIALS.GAS;
             } else if (biome === 'ICE') {
                 pType = MATERIALS.ICE;
             } else {

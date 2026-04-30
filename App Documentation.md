@@ -35,7 +35,7 @@ Matches feature unique, randomly generated maps:
 - **URBAN**: Dense city grid with buildings and narrow streets.
 - **WASTELAND**: Post-apocalyptic terrain with radioactive pools, floating ash, and dynamic wind.
 - **INDUSTRIAL**: High-tech factory environment with concrete floors, pulsing neon power cables, and procedural steam vents.
-- **WETLAND**: Marshland with water pools and reduced movement speed.
+- **WETLAND**: Murky swamp land with lily pads, fireflies, rising gas bubbles, and a thick atmospheric mist. Reduced movement speed.
 
 ### 2. Elemental Interactions (Alchemy)
 The environment is reactive:
@@ -47,7 +47,7 @@ The environment is reactive:
 - **Ice**: Reduces friction significantly, created by FROST_GUN or freezing WATER.
 - **Dirt**: Acts as an **insulator**, blocking ELECTRIC arcs.
 - **Scrap**: Provides linear automated scaling (+100% damage per 100 Scrap, -50% reload per 200 Scrap).
-- **Hazard Damage**: ALL environmental hazards (Fire, Acid, Gas, Electric) damage ALL players within their range, regardless of who created the hazard. Standing in your own fire or acid will cause damage.
+- **Hazard Damage**: Environmental hazards like **Fire**, **Acid**, and **Gas** damage ALL players within their range, regardless of who created the hazard. **Electric** hazards do not deal HP damage but cause a powerful **Stun** effect to all targets. Standing in your own fire or acid will cause damage.
 
 ### 3. Bot AI System
 The game features a server-side AI system:
