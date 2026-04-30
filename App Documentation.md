@@ -111,6 +111,40 @@ npm run dev
 
 ---
 
+## 📈 Technical Debt & Future Roadmap
+
+### 1. Current Limitations
+- **Network Sync**: Currently relies on basic interpolation. Lacks **Client-Side Prediction**, which causes "input lag" on high-latency connections.
+- **Rendering Performance**: Using **Canvas 2D API** limits us to simple shapes and a few thousand particles. Transitioning to **WebGL** would enable complex shaders and better frame rates.
+- **Monolithic Backend**: `server.js` handles all responsibilities. Future growth will require splitting logic into microservices or modular components (Lobby, Match, Persistence).
+- **Static Environments**: Buildings and terrain are currently indestructible and visually static.
+
+### 2. Proposed Expansion Strategy
+- **Visuals**: Move to **PixiJS** for WebGL-accelerated 2D rendering. Implement a dynamic lighting system for neon glows.
+- **Physics**: Optimize server-side Matter.js or explore **WASM-based physics** (Rapier) for higher player counts.
+- **Networking**: Explore **WebRTC** (via Geckos.io) for UDP-like performance, reducing overhead compared to WebSockets.
+- **Juice**: Implement Screen Shake, Dynamic Shadows, and layered Parallax backgrounds.
+
+### 3. Commercial Path (Next Steps)
+To transition from a learning project to a **marketable product**, the following migrations are recommended:
+
+| Layer | Current (Learning) | Target (Commercial) | Key Benefit |
+| :--- | :--- | :--- | :--- |
+| **Rendering** | Canvas 2D | **PixiJS (WebGL)** | GPU acceleration, Shaders, 10x more particles. |
+| **Network** | WebSockets | **WebRTC (Geckos.io)** | UDP-like performance, lower latency, better for fast-paced action. |
+| **Networking Logic** | Interpolation | **Client-Side Prediction** | Eliminates felt input lag for the local player. |
+| **Architecture** | Monolith | **Modular Microservices** | Scalability and easier maintenance. |
+| **Assets** | Procedural Code | **Sprite Sheets / Assets** | High-fidelity visuals, unique character design. |
+
+### 4. Recommended Toolset for Expansion
+- **Engine**: [PixiJS](https://pixijs.com/) for high-performance 2D.
+- **Audio**: [Howler.js](https://howlerjs.com/) for spatial and ambient audio management.
+- **Networking**: [Geckos.io](https://geckos.io/) for real-time multiplayer over UDP.
+- **Asset Creation**: [Figma](https://www.figma.com/) (UI/UX), [Aseprite](https://www.aseprite.org/) (Pixel Art).
+- **Mapping**: [Tiled Map Editor](https://www.mapeditor.org/) for handcrafted competitive maps.
+
+---
+
 ## 📚 Lessons Learned & Best Practices
 
 ### 1. Renaming Constants & Keys
