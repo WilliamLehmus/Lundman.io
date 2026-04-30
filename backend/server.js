@@ -307,7 +307,7 @@ class Lobby {
     }
 
     generateMap(forcedType = 'RANDOM') {
-        const biomes = ['URBAN', 'WASTELAND', 'INDUSTRIAL', 'WETLAND', 'ICE'];
+        const biomes = ['URBAN', 'WASTELAND', 'INDUSTRIAL', 'WETLAND', 'TUNDRA'];
         let mapType = forcedType === 'RANDOM' || !biomes.includes(forcedType) 
             ? biomes[Math.floor(Math.random() * biomes.length)] 
             : forcedType;
@@ -346,7 +346,7 @@ class Lobby {
                     }
                     if (Math.random() > 0.7) this.spawnElement({ x: x + blockSize, y: y + blockSize }, MATERIALS.DIRT, null, null, null, 150, 150);
                 }
-                else if (mapType === 'ICE') {
+                else if (mapType === 'TUNDRA') {
                     if (rand < 0.2) this.generateCityBlock(x, y, blockSize);
                     else if (rand < 0.8) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.ICE, null, null, null, 180, 180);
                 }
@@ -1115,7 +1115,7 @@ class Lobby {
                 if (r < 0.4) pType = MATERIALS.WATER;
                 else if (r < 0.75) pType = MATERIALS.ACID;
                 else pType = MATERIALS.GAS;
-            } else if (biome === 'ICE') {
+            } else if (biome === 'TUNDRA') {
                 pType = MATERIALS.ICE;
             } else {
                 pType = Math.random() > 0.6 ? MATERIALS.WATER : MATERIALS.OIL;
@@ -1176,7 +1176,7 @@ class Lobby {
                 if (isBurning) p.hp -= 0.3; // Damage over time while burning
 
                 // Adjust friction: Slips (Ice/Oil) are now less extreme (0.04 instead of 0.01)
-                const baseFriction = isSlipping ? 0.04 : (zone.type === 'ICE' ? 0.015 : biome.friction);
+                const baseFriction = isSlipping ? 0.04 : (zone.type === 'TUNDRA' ? 0.015 : biome.friction);
                 const friction = config.speed > 0.005 ? baseFriction : baseFriction * 1.5;
                 if (body.frictionAir !== friction) body.frictionAir = friction;
                 

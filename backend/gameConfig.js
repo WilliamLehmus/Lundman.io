@@ -36,7 +36,7 @@ export const MATERIAL_PROPERTIES = {
 };
 
 export const BIOMES = {
-    ICE: { color: '#aaddff33', friction: 0.005, speedMult: 1.2 },
+    TUNDRA: { color: 'rgba(10, 25, 40, 0.4)', friction: 0.015, speedMult: 1.1 },
     SWAMP: { color: '#2d3e2d33', friction: 0.3, speedMult: 0.6 },
     DESERT: { color: '#edc9af33', friction: 0.1, speedMult: 0.9 },
     URBAN: { color: 'rgba(0,0,0,0)', friction: 0.1, speedMult: 1.0 },

@@ -80,6 +80,8 @@ let particles = []; // { x, y, vx, vy, life, color, size }
 let atmosphereParticles = []; // { x, y, size, vx, vy, speed, color }
 let environmentalObjects = []; // Dynamic objects like Tumbleweeds
 let lizards = []; // Scurrying desert life
+let snowHares = []; // Scurrying arctic life
+let windStreaks = []; // Fast moving wind lines
 let ashParticles = []; // Atmospheric embers/ash for wasteland
 let groundDetails = []; // Cache for procedural cracks/stains
 let windIntensity = 1.0;
@@ -1278,17 +1280,110 @@ function drawGrid() {
                 if (l.x > camera.x && l.x < camera.x + canvas.width && l.y > camera.y && l.y < camera.y + canvas.height) { ctx.fillStyle = '#4a3a1a'; ctx.fillRect(l.x, l.y, 3, 2); }
             });
         }
-    } else if (currentBiome === 'ICE') {
-        ctx.fillStyle = '#08141c'; ctx.fillRect(0, 0, worldSize, worldSize);
+    } else if (currentBiome === 'TUNDRA') {
+        // Deep Frozen Ice Base
+        ctx.fillStyle = '#050c12'; 
+        ctx.fillRect(0, 0, worldSize, worldSize);
+        
         if (ENABLE_PREMIUM_VISUALS) {
-            if (groundDetails.length === 0) for (let i = 0; i < 400; i++) groundDetails.push({ x: Math.random() * worldSize, y: Math.random() * worldSize, size: 10 + Math.random() * 20, opacity: 0.05 + Math.random() * 0.1, type: Math.random() > 0.7 ? 'crack' : 'snow' });
+            if (groundDetails.length === 0) {
+                for (let i = 0; i < 600; i++) {
+                    const r = Math.random();
+                    groundDetails.push({
+                        x: Math.random() * worldSize,
+                        y: Math.random() * worldSize,
+                        size: r < 0.1 ? 15 + Math.random() * 30 : (r < 0.4 ? 5 + Math.random() * 10 : 1 + Math.random() * 2),
+                        opacity: 0.05 + Math.random() * 0.15,
+                        type: r < 0.1 ? 'ice_sheet' : (r < 0.4 ? 'snow_drift' : 'crystal'),
+                        angle: Math.random() * Math.PI * 2,
+                        glint: Math.random()
+                    });
+                }
+            }
+            
             ctx.save();
             groundDetails.forEach(d => {
-                if (d.x < camera.x - 40 || d.x > camera.x + canvas.width + 40 || d.y < camera.y - 40 || d.y > camera.y + canvas.height + 40) return;
-                if (d.type === 'snow') { ctx.fillStyle = '#fff'; ctx.globalAlpha = d.opacity * 0.4; ctx.beginPath(); ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2); ctx.fill(); }
-                else { ctx.strokeStyle = 'rgba(200, 240, 255, 0.15)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(d.x - d.size, d.y - d.size/2); ctx.lineTo(d.x + d.size, d.y + d.size/2); ctx.stroke(); }
+                if (d.x < camera.x - 100 || d.x > camera.x + canvas.width + 100 || d.y < camera.y - 100 || d.y > camera.y + canvas.height + 100) return;
+                
+                if (d.type === 'ice_sheet') {
+                    // Large frozen plate with cracks
+                    ctx.strokeStyle = 'rgba(200, 240, 255, 0.1)';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(d.x - d.size, d.y);
+                    ctx.lineTo(d.x + d.size, d.y);
+                    ctx.moveTo(d.x, d.y - d.size);
+                    ctx.lineTo(d.x, d.y + d.size);
+                    ctx.stroke();
+                    
+                    ctx.fillStyle = 'rgba(150, 220, 255, 0.03)';
+                    ctx.beginPath();
+                    ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (d.type === 'snow_drift') {
+                    // Soft white patch
+                    ctx.fillStyle = '#fff';
+                    ctx.globalAlpha = d.opacity * 0.4;
+                    ctx.beginPath();
+                    ctx.ellipse(d.x, d.y, d.size, d.size * 0.5, d.angle, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    // Glistening crystal
+                    const pulse = Math.sin(renderTime * 0.005 + d.glint * 10) * 0.5 + 0.5;
+                    if (pulse > 0.8) {
+                        ctx.fillStyle = '#fff';
+                        ctx.globalAlpha = (pulse - 0.8) * 5;
+                        ctx.beginPath();
+                        ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
             });
             ctx.restore();
+
+            // Snow Hares (Lively animals)
+            if (snowHares.length === 0) {
+                for (let i = 0; i < 25; i++) snowHares.push({ 
+                    x: Math.random() * worldSize, 
+                    y: Math.random() * worldSize, 
+                    vx: 0, vy: 0, 
+                    jump: 0, 
+                    phase: Math.random() * Math.PI * 2 
+                });
+            }
+            
+            const me = gameState.players.find(p => p.id === myId);
+            snowHares.forEach(h => {
+                if (me) {
+                    const dist = Math.hypot(me.x - h.x, me.y - h.y);
+                    if (dist < 200) {
+                        const a = Math.atan2(h.y - me.y, h.x - me.x);
+                        h.vx = Math.cos(a) * 6;
+                        h.vy = Math.sin(a) * 6;
+                        h.jump = 1.0;
+                    }
+                }
+                h.x += h.vx; h.y += h.vy;
+                h.vx *= 0.92; h.vy *= 0.92;
+                if (h.jump > 0) h.jump *= 0.9;
+
+                if (h.x > camera.x - 20 && h.x < camera.x + canvas.width + 20 && 
+                    h.y > camera.y - 20 && h.y < camera.y + canvas.height + 20) {
+                    ctx.save();
+                    ctx.translate(h.x, h.y - h.jump * 10);
+                    ctx.fillStyle = '#fff';
+                    // Draw a small bunny shape
+                    ctx.beginPath();
+                    ctx.ellipse(0, 0, 4, 3, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    // Ears
+                    ctx.beginPath();
+                    ctx.ellipse(-2, -3, 1, 3, -0.2, 0, Math.PI * 2);
+                    ctx.ellipse(0, -3, 1, 3, 0.2, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                }
+            });
         }
     } else if (currentBiome === 'WETLAND') {
         // Murky Dark Swamp Water
@@ -2187,8 +2282,13 @@ function drawVignette() {
         canvas.width / 2, canvas.height / 2, canvas.width * 0.1,
         canvas.width / 2, canvas.height / 2, canvas.width * 0.8
     );
+    const currentBiome = gameState.zones && gameState.zones[0] ? gameState.zones[0].type : 'URBAN';
     gradient.addColorStop(0, 'rgba(0,0,0,0)');
-    gradient.addColorStop(1, 'rgba(0,0,15,0.4)');
+    if (currentBiome === 'TUNDRA') {
+        gradient.addColorStop(1, 'rgba(150, 220, 255, 0.25)'); // Cold frost vignette
+    } else {
+        gradient.addColorStop(1, 'rgba(0,0,15,0.4)');
+    }
     
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0); // Ignore camera
@@ -2213,19 +2313,38 @@ function updateAtmosphere(dt) {
 
     if (atmosphereParticles.length < 120) {
         const pColor = currentBiome === 'WASTELAND' ? 'rgba(255, 150, 50, 0.15)' : 
-                       (currentBiome === 'ICE' ? 'rgba(200, 240, 255, 0.2)' : 'rgba(0, 242, 255, 0.2)');
+                       (currentBiome === 'TUNDRA' ? 'rgba(230, 250, 255, 0.4)' : 'rgba(0, 242, 255, 0.2)');
         
         for (let i = 0; i < 120; i++) {
+            const isTundra = currentBiome === 'TUNDRA';
             atmosphereParticles.push({
                 x: Math.random() * worldSize,
                 y: Math.random() * worldSize,
-                size: 0.5 + Math.random() * 2.5,
-                vx: (Math.random() - 0.5) * 0.5 + (currentBiome === 'WASTELAND' ? 0.8 * windIntensity : 0),
-                vy: (Math.random() - 0.5) * 0.5 + (currentBiome === 'WASTELAND' ? 0.2 * windIntensity : 0),
-                color: Math.random() > 0.7 ? pColor : 'rgba(255, 255, 255, 0.08)'
+                size: isTundra ? 1.0 + Math.random() * 2.5 : 0.5 + Math.random() * 2.5,
+                vx: (Math.random() - 0.5) * 0.5 + (currentBiome === 'WASTELAND' ? 0.8 * windIntensity : (isTundra ? 2.5 * windIntensity : 0)),
+                vy: (Math.random() - 0.5) * 0.5 + (currentBiome === 'WASTELAND' ? 0.2 * windIntensity : (isTundra ? 1.5 * windIntensity : 0)),
+                color: Math.random() > 0.7 ? pColor : (isTundra ? 'rgba(255, 255, 255, 0.6)' : 'rgba(255, 255, 255, 0.08)'),
+                isSnow: isTundra && Math.random() > 0.3
             });
         }
     }
+
+    // Tundra Wind Streaks
+    if (currentBiome === 'TUNDRA' && windStreaks.length < 20) {
+        if (Math.random() > 0.9) {
+            windStreaks.push({
+                x: -200,
+                y: Math.random() * worldSize,
+                w: 100 + Math.random() * 200,
+                h: 1 + Math.random() * 2,
+                speed: 15 + Math.random() * 10
+            });
+        }
+    }
+    windStreaks.forEach((s, i) => {
+        s.x += s.speed * dt;
+        if (s.x > worldSize + 300) windStreaks.splice(i, 1);
+    });
 
     // Ash Particles (Embers) for Wasteland
     if (currentBiome === 'WASTELAND' && ashParticles.length < 40) {
@@ -2337,6 +2456,25 @@ function drawGlobalTint() {
         ctx.fillStyle = 'rgba(255, 200, 100, 0.08)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.restore();
+    } else if (currentBiome === 'TUNDRA') {
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+        ctx.fillStyle = 'rgba(200, 230, 255, 0.05)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.restore();
+        
+        // Draw Wind Streaks
+        ctx.save();
+        ctx.translate(-camera.x, -camera.y);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.lineWidth = 1;
+        windStreaks.forEach(s => {
+            ctx.beginPath();
+            ctx.moveTo(s.x, s.y);
+            ctx.lineTo(s.x + s.w, s.y);
+            ctx.stroke();
+        });
+        ctx.restore();
     }
 }
 
@@ -2345,10 +2483,28 @@ function drawAtmosphere() {
     atmosphereParticles.forEach(p => {
         if (p.x > camera.x - 50 && p.x < camera.x + canvas.width + 50 &&
             p.y > camera.y - 50 && p.y < camera.y + canvas.height + 50) {
-            ctx.fillStyle = p.color;
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-            ctx.fill();
+            
+            if (p.isSnow) {
+                // Shiny snowflake crystal
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+                // Subtle glint
+                ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+                ctx.lineWidth = 0.5;
+                ctx.beginPath();
+                ctx.moveTo(p.x - p.size * 2, p.y);
+                ctx.lineTo(p.x + p.size * 2, p.y);
+                ctx.moveTo(p.x, p.y - p.size * 2);
+                ctx.lineTo(p.x, p.y + p.size * 2);
+                ctx.stroke();
+            } else {
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
         }
     });
 

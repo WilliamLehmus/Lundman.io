@@ -36,6 +36,7 @@ Matches feature unique, randomly generated maps:
 - **WASTELAND**: Post-apocalyptic terrain with radioactive pools, floating ash, and dynamic wind.
 - **INDUSTRIAL**: High-tech factory environment with concrete floors, pulsing neon power cables, and procedural steam vents.
 - **WETLAND**: Murky swamp land with lily pads, fireflies, rising gas bubbles, and a thick atmospheric mist. Reduced movement speed.
+- **TUNDRA**: Frozen wasteland with snow hares, wind gusts, and slippery ice. Features a cold frost aesthetic.
 
 ### 2. Elemental Interactions (Alchemy)
 The environment is reactive:
@@ -44,7 +45,7 @@ The environment is reactive:
 - **Acid**: Corrosive green pools that damage tanks over time. Reacts with FIRE to create GAS.
 - **Gas**: Toxic cloud created by chemical reactions. Causes area-denial damage.
 - **Electric**: Stuns tanks, spreads through WATER pools. **Reveals** tanks hidden in STEAM.
-- **Ice**: Reduces friction significantly, created by FROST_GUN or freezing WATER.
+- **Ice**: Reduces friction significantly, created by FROST_GUN or freezing WATER. Found naturally in **TUNDRA** biome.
 - **Dirt**: Acts as an **insulator**, blocking ELECTRIC arcs.
 - **Scrap**: Provides linear automated scaling (+100% damage per 100 Scrap, -50% reload per 200 Scrap).
 - **Hazard Damage**: Environmental hazards like **Fire**, **Acid**, and **Gas** damage ALL players within their range, regardless of who created the hazard. **Electric** hazards do not deal HP damage but cause a powerful **Stun** effect to all targets. Standing in your own fire or acid will cause damage.
@@ -107,3 +108,17 @@ npm run dev
 - **Dev Tank**: High-performance tank with all weapons.
     - **How to activate**: Open browser console (F12) and type `activateDevTank()`.
 - **Debug Menu**: Enables bot/terrain spawning if `debugMode` is active.
+
+---
+
+## 📚 Lessons Learned & Best Practices
+
+### 1. Renaming Constants & Keys
+> [!WARNING]
+> **Full Stack Consistency**: When renaming a core constant (like a Biome name), ensure updates are made across ALL layers:
+> 1.  **Shared Config**: `backend/gameConfig.js`
+> 2.  **Server Logic**: `backend/server.js` (Validation, Map Gen, Logic)
+> 3.  **Frontend Logic**: `frontend/game.js` (Rendering, Atmosphere)
+> 4.  **UI Elements**: `frontend/index.html` (Dropdown values, IDs)
+> 
+> Failure to update the `index.html` dropdown value will cause the server to receive an "invalid" key and fallback to random generation.
