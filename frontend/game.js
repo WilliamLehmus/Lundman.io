@@ -725,9 +725,10 @@ function renderLoop(now) {
                 const currentBiome = gameState.zones && gameState.zones[0] ? gameState.zones[0].type : 'RANDOM';
                 const isMoving = p.id === myId ? (keys.up || keys.down || keys.left || keys.right) : true; 
                 if (isMoving) {
-                    // More intense dust in wasteland
-                    const pCount = currentBiome === 'WASTELAND' ? 2 : 1;
-                    const pColor = currentBiome === 'WASTELAND' ? 'rgba(150, 100, 50, 0.3)' : 'rgba(100,100,100,0.2)';
+                    // More intense dust in wasteland/tundra
+                    const pCount = (currentBiome === 'WASTELAND' || currentBiome === 'TUNDRA') ? 2 : 1;
+                    const pColor = currentBiome === 'WASTELAND' ? 'rgba(150, 100, 50, 0.3)' : 
+                                   (currentBiome === 'TUNDRA' ? 'rgba(230, 250, 255, 0.4)' : 'rgba(100,100,100,0.2)');
                     spawnParticles(p.x - Math.cos(p.angle) * 20, p.y - Math.sin(p.angle) * 20, pColor, pCount, 0.5);
                 }
             }
@@ -1366,6 +1367,10 @@ function drawGrid() {
                 h.x += h.vx; h.y += h.vy;
                 h.vx *= 0.92; h.vy *= 0.92;
                 if (h.jump > 0) h.jump *= 0.9;
+                else {
+                    // Small random hops when idle
+                    if (Math.random() > 0.99) h.jump = 0.5 + Math.random() * 0.5;
+                }
 
                 if (h.x > camera.x - 20 && h.x < camera.x + canvas.width + 20 && 
                     h.y > camera.y - 20 && h.y < camera.y + canvas.height + 20) {
@@ -1512,6 +1517,7 @@ function drawElements() {
     const isWasteland = currentBiome === 'WASTELAND';
     const isIndustrial = currentBiome === 'INDUSTRIAL';
     const isWetland = currentBiome === 'WETLAND';
+    const isTundra = currentBiome === 'TUNDRA';
 
     gameState.elements.forEach(e => {
         ctx.save();
@@ -1535,12 +1541,15 @@ function drawElements() {
             } else if (isWetland) {
                 bGradient.addColorStop(0, '#152515'); // Mossy Green Top
                 bGradient.addColorStop(1, '#050a05'); // Murky Bottom
+            } else if (isTundra) {
+                bGradient.addColorStop(0, '#3a4a5a'); // Frosty Blue Top
+                bGradient.addColorStop(1, '#050c12'); // Deep Cold Bottom
             } else {
                 bGradient.addColorStop(0, '#252535'); // Top (lighter)
                 bGradient.addColorStop(1, '#151520'); // Bottom (darker)
             }
             ctx.fillStyle = bGradient;
-            ctx.strokeStyle = isWasteland ? 'rgba(150, 80, 50, 0.5)' : (isWetland ? 'rgba(50, 100, 50, 0.4)' : 'rgba(0, 242, 255, 0.6)');
+            ctx.strokeStyle = isWasteland ? 'rgba(150, 80, 50, 0.5)' : (isWetland ? 'rgba(50, 100, 50, 0.4)' : (isTundra ? 'rgba(200, 240, 255, 0.6)' : 'rgba(0, 242, 255, 0.6)'));
             ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.roundRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h, 4);
@@ -1583,6 +1592,24 @@ function drawElements() {
                 ctx.arc(e.x, e.y, 15, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.stroke();
+            }
+
+            // Tundra Roof Details (Snow Cap)
+            if (isTundra && ENABLE_PREMIUM_VISUALS) {
+                ctx.save();
+                ctx.fillStyle = '#fff';
+                ctx.globalAlpha = 0.2;
+                // Accumulate snow on top edge
+                ctx.beginPath();
+                ctx.roundRect(e.x - e.w/2 + 5, e.y - e.h/2 + 5, e.w - 10, 15, 5);
+                ctx.fill();
+                // Random snow patches
+                for (let i = 0; i < 3; i++) {
+                    const sx = e.x + (Math.sin(e.id + i) * 0.3) * e.w;
+                    const sy = e.y + (Math.cos(e.id * 2 + i) * 0.3) * e.h;
+                    ctx.beginPath(); ctx.arc(sx, sy, 10 + Math.random() * 10, 0, Math.PI * 2); ctx.fill();
+                }
+                ctx.restore();
             }
 
             // 3. Industrial / Factory Details
@@ -1649,6 +1676,10 @@ function drawElements() {
                             ctx.fillStyle = `rgba(0, 242, 255, ${0.4 * flicker})`;
                             ctx.shadowBlur = 8;
                             ctx.shadowColor = '#00f2ff';
+                        } else if (isTundra) {
+                            ctx.fillStyle = `rgba(150, 220, 255, ${0.3 * flicker})`;
+                            ctx.shadowBlur = 5;
+                            ctx.shadowColor = '#aaddff';
                         } else {
                             ctx.fillStyle = isWasteland ? `rgba(255, 150, 50, ${0.2 * flicker})` : `rgba(255, 240, 150, ${0.3 * flicker})`;
                             ctx.shadowBlur = isWasteland ? 2 : 5;

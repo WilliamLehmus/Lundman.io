@@ -816,6 +816,11 @@ class Lobby {
                 }
                 if ((element.type === MATERIALS.ICE || element.type === MATERIALS.OIL)) p.statusEffects.slip = now + 1000;
                 
+                // Burning tanks melt ice
+                if (element.type === MATERIALS.ICE && now < p.statusEffects.burn) {
+                    this.destroyElement(element.id);
+                }
+                
                 if (element.type === MATERIALS.FIRE && !isInvulnerable) p.hp -= 0.5;
                 
                 if (element.type === MATERIALS.ACID && !isInvulnerable) {
@@ -1539,6 +1544,12 @@ class Lobby {
                 x: pos.x + Math.cos(p.body.angle) * 20,
                 y: pos.y + Math.sin(p.body.angle) * 20
             }, MATERIALS.FIRE, 1500, undefined, p.id);
+        }
+        if (weapon.type === MATERIALS.ICE) {
+            this.spawnElement({
+                x: pos.x + Math.cos(p.body.angle) * 20,
+                y: pos.y + Math.sin(p.body.angle) * 20
+            }, MATERIALS.ICE, 2000, undefined, p.id);
         }
     }
 
