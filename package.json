@@ -15,8 +15,11 @@
     "setup-hooks": "node scripts/install-hooks.js"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "dotenv": "^16.6.1",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.4.1",
+    "helmet": "^8.1.0",
     "matter-js": "^0.20.0",
     "socket.io": "^4.8.3"
   },

@@ -259,7 +259,7 @@ button {
     pointer-events: auto;
 }
 
-#username {
+#username, #user-pin {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid var(--glass-border);
     padding: 1rem 2rem;

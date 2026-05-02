@@ -4,6 +4,9 @@ import { Server } from 'socket.io';
 import Matter from 'matter-js';
 import path from 'path';
 import fs from 'fs';
+import helmet from 'helmet';
+import { rateLimit } from 'express-rate-limit';
+import bcrypt from 'bcryptjs';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { MATERIALS, MATERIAL_PROPERTIES, BIOMES, CHASSIS, WEAPON_MODULES, ALL_WEAPONS } from './gameConfig.js';
@@ -15,6 +18,27 @@ const ENVIRONMENT = process.env.ENVIRONMENT || process.env.NODE_ENV || 'developm
 const IS_DEV = ENVIRONMENT === 'development';
 
 const app = express();
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            "default-src": ["'self'"],
+            "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Needed for Vite/Socket.io
+            "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            "font-src": ["'self'", "https://fonts.gstatic.com"],
+            "img-src": ["'self'", "data:", "blob:"],
+            "connect-src": ["'self'", "ws:", "wss:", "http://localhost:*", "ws://localhost:*"]
+        }
+    }
+}));
+
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+app.use('/health', limiter); // Only apply to health/api for now to avoid blocking static assets if misconfigured
+
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
@@ -1706,17 +1730,62 @@ class Lobby {
     }
 }
 
+// Socket.io Rate Limiting Middleware
+io.use((socket, next) => {
+    socket.eventCount = 0;
+    socket.lastReset = Date.now();
+    next();
+});
+
 io.on('connection', (socket) => {
+    // Per-event rate limit (100 events/sec)
+    socket.use(([event, ...args], next) => {
+        const now = Date.now();
+        if (now - socket.lastReset > 1000) {
+            socket.eventCount = 0;
+            socket.lastReset = now;
+        }
+        socket.eventCount++;
+        
+        if (socket.eventCount > 100) {
+            return; // Drop the event quietly
+        }
+        next();
+    });
+
     console.log('User connected:', socket.id);
 
     if (IS_DEV) {
         socket.emit('debug-init');
     }
-    socket.on('join-game', (data) => {
+    socket.on('join-game', async (data) => {
         if (!data || typeof data.username !== 'string' || data.username.trim() === '') return;
-        let { username, chassisType } = data;
+        let { username, chassisType, pin } = data;
         username = username.trim().substring(0, 12);
         if (!['SCOUT', 'BRAWLER', 'ARTILLERY'].includes(chassisType)) chassisType = 'SCOUT';
+
+        // PIN Authentication & Validation
+        if (!pin || pin.length < 4 || pin.length > 10) {
+            socket.emit('auth-error', { message: 'PIN MUST BE 4-10 DIGITS!' });
+            return;
+        }
+        
+        if (playerData[username]) {
+            if (!pin || !playerData[username].pin) {
+                // If existing user has no PIN (legacy), set it now
+                if (pin) playerData[username].pin = await bcrypt.hash(pin, 10);
+            } else {
+                const match = await bcrypt.compare(pin, playerData[username].pin);
+                if (!match) {
+                    socket.emit('auth-error', { message: 'INVALID PIN FOR THIS CALLSIGN!' });
+                    return;
+                }
+            }
+        } else {
+            // New user: hash PIN if provided, otherwise use default
+            const hashedPin = pin ? await bcrypt.hash(pin, 10) : null;
+            playerData[username] = { kills: 0, deaths: 0, scrap: 0, lastSeen: Date.now(), pin: hashedPin };
+        }
 
         console.log('Join Game request from:', username, 'chassis:', chassisType);
         let lobbyList = Object.values(lobbies).filter(l => Object.keys(l.players).length < 10);
@@ -1738,11 +1807,32 @@ io.on('connection', (socket) => {
         });
     });
 
-    socket.on('host-game', (data) => {
+    socket.on('host-game', async (data) => {
         if (!data || typeof data.username !== 'string' || data.username.trim() === '') return;
-        let { username, chassisType } = data;
+        let { username, chassisType, pin } = data;
         username = username.trim().substring(0, 12);
         if (!['SCOUT', 'BRAWLER', 'ARTILLERY'].includes(chassisType)) chassisType = 'SCOUT';
+
+        // PIN Authentication & Validation
+        if (!pin || pin.length < 4 || pin.length > 10) {
+            socket.emit('auth-error', { message: 'PIN MUST BE 4-10 DIGITS!' });
+            return;
+        }
+        
+        if (playerData[username]) {
+            if (!pin || !playerData[username].pin) {
+                if (pin) playerData[username].pin = await bcrypt.hash(pin, 10);
+            } else {
+                const match = await bcrypt.compare(pin, playerData[username].pin);
+                if (!match) {
+                    socket.emit('auth-error', { message: 'INVALID PIN FOR THIS CALLSIGN!' });
+                    return;
+                }
+            }
+        } else {
+            const hashedPin = pin ? await bcrypt.hash(pin, 10) : null;
+            playerData[username] = { kills: 0, deaths: 0, scrap: 0, lastSeen: Date.now(), pin: hashedPin };
+        }
 
         console.log('Host Game request from:', username, 'chassis:', chassisType);
         const id = Math.random().toString(36).substring(7);
@@ -1783,9 +1873,20 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('input', (inputs) => {
+    socket.on('input', (data) => {
         const lobby = lobbies[socket.lobbyId];
-        if (lobby && lobby.players[socket.id]) lobby.players[socket.id].inputs = inputs;
+        if (lobby && lobby.players[socket.id]) {
+            // Sanitization: Only allow expected properties and force correct types
+            const sanitized = {
+                up: !!data?.up,
+                down: !!data?.down,
+                left: !!data?.left,
+                right: !!data?.right,
+                shoot: !!data?.shoot,
+                aimAngle: typeof data?.aimAngle === 'number' && !isNaN(data.aimAngle) ? data.aimAngle : 0
+            };
+            lobby.players[socket.id].inputs = sanitized;
+        }
     });
 
     socket.on('switch-weapon', (slotIndex) => {
@@ -1832,8 +1933,8 @@ io.on('connection', (socket) => {
         if (lobby && lobby.players[socket.id]) {
             const p = lobby.players[socket.id];
             
-            // Allow normal switch only if not active, but ALWAYS allow DEV switch for testers
-            const isDevSwitch = (chassisType === 'DEV');
+            // Allow normal switch only if not active, but ONLY allow DEV switch in development mode
+            const isDevSwitch = (chassisType === 'DEV' && IS_DEV);
             if (!lobby.active || isDevSwitch) {
                 if (CHASSIS[chassisType]) {
                     const config = CHASSIS[chassisType];

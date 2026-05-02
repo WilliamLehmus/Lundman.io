@@ -45,6 +45,7 @@ const loadingProgress = document.getElementById('loading-progress');
 const fpsCounter = document.getElementById('fps-counter');
 
 const usernameInput = document.getElementById('username');
+const pinInput = document.getElementById('user-pin');
 const hostBtn = document.getElementById('host-btn');
 const joinBtn = document.getElementById('join-btn');
 const startGameBtn = document.getElementById('start-game-btn');
@@ -270,6 +271,8 @@ function init() {
     // Load username from local storage
     const savedName = localStorage.getItem('tanks_username');
     if (savedName) usernameInput.value = savedName;
+    const savedPin = localStorage.getItem('tanks_user_pin');
+    if (savedPin) pinInput.value = savedPin;
     
     // Loading animation
     let progress = 0;
@@ -417,6 +420,10 @@ socket.on('lobby-update', ({ id, players }) => {
     splashScreen.classList.add('hidden');
     lobbyScreen.classList.remove('hidden');
     updateLobbyUI(id, players);
+});
+
+socket.on('auth-error', (data) => {
+    alert(data.message || 'AUTHENTICATION ERROR');
 });
 
 socket.on('game-started', () => {
@@ -2637,26 +2644,38 @@ hostBtn.onclick = () => {
     console.log('Host button clicked');
     playMusic();
     const name = usernameInput.value.trim();
+    const pin = pinInput.value.trim();
     if (!name) {
         alert('PLEASE ENTER A CALLSIGN!');
         return;
     }
+    if (!pin || pin.length < 4 || pin.length > 10) {
+        alert('PLEASE ENTER A PIN (4-10 DIGITS)!');
+        return;
+    }
     localStorage.setItem('tanks_username', name);
+    localStorage.setItem('tanks_user_pin', pin);
     const chassis = document.getElementById('chassis-select').value;
     console.log('Emitting host-game:', { name, chassis });
-    socket.emit('host-game', { username: name, chassisType: chassis });
+    socket.emit('host-game', { username: name, chassisType: chassis, pin: pin });
 };
 
 joinBtn.onclick = () => {
     playMusic();
     const name = usernameInput.value.trim();
+    const pin = pinInput.value.trim();
     if (!name) {
         alert('PLEASE ENTER A CALLSIGN!');
         return;
     }
+    if (!pin || pin.length < 4 || pin.length > 10) {
+        alert('PLEASE ENTER A PIN (4-10 DIGITS)!');
+        return;
+    }
     localStorage.setItem('tanks_username', name);
+    localStorage.setItem('tanks_user_pin', pin);
     const chassis = document.getElementById('chassis-select').value;
-    socket.emit('join-game', { username: name, chassisType: chassis });
+    socket.emit('join-game', { username: name, chassisType: chassis, pin: pin });
 };
 
 startGameBtn.onclick = () => {
