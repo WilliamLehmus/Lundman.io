@@ -2640,6 +2640,12 @@ usernameInput.addEventListener('keypress', (e) => {
     }
 });
 
+pinInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        joinBtn.click();
+    }
+});
+
 hostBtn.onclick = () => {
     console.log('Host button clicked');
     playMusic();
