@@ -1644,6 +1644,7 @@ class Lobby {
     }
 
     broadcastState() {
+        const now = Date.now();
         const state = {
             active: this.active,
             worldSize: this.worldSize,
@@ -1878,7 +1879,14 @@ io.on('connection', (socket) => {
         if (bestLobby.active) socket.emit('game-started');
         io.to(bestLobby.id).emit('lobby-update', {
             id: bestLobby.id,
-            players: Object.values(bestLobby.players).map(p => ({ u: p.username, t: p.team, id: p.id, ch: p.chassis }))
+            players: Object.values(bestLobby.players).map(p => ({ 
+                u: p.username, 
+                t: p.team, 
+                id: p.id, 
+                ch: p.chassis,
+                isBot: !!p.isBot,
+                botDifficulty: p.botDifficulty 
+            }))
         });
         bestLobby.syncToDB();
     });
@@ -1918,7 +1926,17 @@ io.on('connection', (socket) => {
         lobby.addPlayer(socket, username, chassisType);
         socket.join(id);
         socket.lobbyId = id;
-        io.to(socket.id).emit('lobby-update', { id: lobby.id, players: Object.values(lobby.players).map(p => ({ u: p.username, t: p.team, id: p.id, ch: p.chassis })) });
+        io.to(socket.id).emit('lobby-update', { 
+            id: lobby.id, 
+            players: Object.values(lobby.players).map(p => ({ 
+                u: p.username, 
+                t: p.team, 
+                id: p.id, 
+                ch: p.chassis,
+                isBot: !!p.isBot,
+                botDifficulty: p.botDifficulty 
+            })) 
+        });
         lobby.syncToDB();
     });
 
@@ -1980,7 +1998,14 @@ io.on('connection', (socket) => {
         if (lobby.active) socket.emit('game-started');
         io.to(lobby.id).emit('lobby-update', {
             id: lobby.id,
-            players: Object.values(lobby.players).map(p => ({ u: p.username, t: p.team, id: p.id, ch: p.chassis }))
+            players: Object.values(lobby.players).map(p => ({ 
+                u: p.username, 
+                t: p.team, 
+                id: p.id, 
+                ch: p.chassis,
+                isBot: !!p.isBot,
+                botDifficulty: p.botDifficulty 
+            }))
         });
         lobby.syncToDB();
     });
@@ -1988,26 +2013,65 @@ io.on('connection', (socket) => {
     socket.on('add-bot', (data) => {
         const lobby = lobbies[socket.lobbyId];
         if (lobby && Object.keys(lobby.players).length < 10) {
-            lobby.addBot(data.difficulty, null, true, null, data.chassisType);
+            // data.team can be 'blue' or 'pink'
+            lobby.addBot(data.difficulty || 'NORMAL', null, true, data.team, data.chassisType);
             io.to(lobby.id).emit('lobby-update', {
                 id: lobby.id,
-                players: Object.values(lobby.players).map(p => ({ u: p.username, t: p.team, id: p.id, ch: p.chassis }))
+                players: Object.values(lobby.players).map(p => ({ 
+                    u: p.username, 
+                    t: p.team, 
+                    id: p.id, 
+                    ch: p.chassis,
+                    isBot: !!p.isBot,
+                    botDifficulty: p.botDifficulty 
+                }))
             });
         }
     });
 
-    socket.on('remove-bot', () => {
+    socket.on('update-bot-difficulty', (data) => {
+        const lobby = lobbies[socket.lobbyId];
+        if (lobby && data.botId && lobby.players[data.botId]) {
+            lobby.players[data.botId].botDifficulty = data.difficulty;
+            io.to(lobby.id).emit('lobby-update', {
+                id: lobby.id,
+                players: Object.values(lobby.players).map(p => ({ 
+                    u: p.username, 
+                    t: p.team, 
+                    id: p.id, 
+                    ch: p.chassis,
+                    isBot: !!p.isBot,
+                    botDifficulty: p.botDifficulty 
+                }))
+            });
+        }
+    });
+
+    socket.on('remove-bot', (data) => {
         const lobby = lobbies[socket.lobbyId];
         if (lobby) {
-            const bots = Object.values(lobby.players).filter(p => p.isBot);
-            if (bots.length > 0) {
-                const botToRemove = bots[bots.length - 1];
-                lobby.removePlayer(botToRemove.id);
-                io.to(lobby.id).emit('lobby-update', {
-                    id: lobby.id,
-                    players: Object.values(lobby.players).map(p => ({ u: p.username, t: p.team, id: p.id, ch: p.chassis }))
-                });
+            const botId = data?.botId;
+            if (botId && lobby.players[botId] && lobby.players[botId].isBot) {
+                lobby.removePlayer(botId);
+            } else {
+                const bots = Object.values(lobby.players).filter(p => p.isBot);
+                if (bots.length > 0) {
+                    const botToRemove = bots[bots.length - 1];
+                    lobby.removePlayer(botToRemove.id);
+                }
             }
+            
+            io.to(lobby.id).emit('lobby-update', {
+                id: lobby.id,
+                players: Object.values(lobby.players).map(p => ({ 
+                    u: p.username, 
+                    t: p.team, 
+                    id: p.id, 
+                    ch: p.chassis,
+                    isBot: !!p.isBot,
+                    botDifficulty: p.botDifficulty 
+                }))
+            });
         }
     });
 
@@ -2122,7 +2186,14 @@ io.on('connection', (socket) => {
                     if (!lobby.active) {
                         io.to(lobby.id).emit('lobby-update', {
                             id: lobby.id,
-                            players: Object.values(lobby.players).map(p => ({ u: p.username, t: p.team, id: p.id, ch: p.chassis }))
+                            players: Object.values(lobby.players).map(p => ({ 
+                                u: p.username, 
+                                t: p.team, 
+                                id: p.id, 
+                                ch: p.chassis,
+                                isBot: !!p.isBot,
+                                botDifficulty: p.botDifficulty 
+                            }))
                         });
                     } else {
                         // Notify match that a player changed (for health bars etc)
@@ -2154,7 +2225,14 @@ io.on('connection', (socket) => {
                 io.to(lobby.id).emit('player-event', { text: `${username.toUpperCase()} LEFT THE BATTLE`, color: '#ff3333' });
                 io.to(lobby.id).emit('lobby-update', {
                     id: lobby.id,
-                    players: Object.values(lobby.players).map(p => ({ u: p.username, t: p.team, id: p.id, ch: p.chassis }))
+                    players: Object.values(lobby.players).map(p => ({ 
+                        u: p.username, 
+                        t: p.team, 
+                        id: p.id, 
+                        ch: p.chassis,
+                        isBot: !!p.isBot,
+                        botDifficulty: p.botDifficulty 
+                    }))
                 });
             }
         }

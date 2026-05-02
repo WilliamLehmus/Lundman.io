@@ -1,7 +1,7 @@
 ReferenceError: now is not defined
-    at file:///C:/Users/Maste/Desktop/Lundman.io/backend/server.js:1660:44
+    at file:///C:/Users/Maste/Desktop/Lundman.io/backend/server.js:1662:44
     at Array.map (<anonymous>)
-    at Lobby.broadcastState (file:///C:/Users/Maste/Desktop/Lundman.io/backend/server.js:1652:50)
+    at Lobby.broadcastState (file:///C:/Users/Maste/Desktop/Lundman.io/backend/server.js:1654:50)
     at Timeout._onTimeout (file:///C:/Users/Maste/Desktop/Lundman.io/backend/server.js:149:18)
     at listOnTimeout (node:internal/timers:605:17)
     at process.processTimers (node:internal/timers:541:7)

@@ -282,13 +282,19 @@ button {
 /* Lobby Styles */
 #lobby-screen {
     width: 800px;
+    max-width: 95vw;
     pointer-events: auto;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
 }
 
 .lobby-columns {
     display: flex;
-    gap: 2rem;
-    margin: 2rem 0;
+    gap: 1.5rem;
+    margin: 1rem 0;
+    flex: 1;
+    min-height: 0;
 }
 
 .team-column {
@@ -305,24 +311,159 @@ button {
 .player-list {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
-    min-height: 200px;
+    gap: 0.6rem;
+    max-height: 40vh;
+    overflow-y: auto;
+    padding-right: 5px;
 }
 
-.player-item {
-    background: rgba(255, 255, 255, 0.05);
-    padding: 0.8rem;
-    border-radius: 8px;
-    font-weight: 700;
-    font-size: 0.9rem;
+.player-list::-webkit-scrollbar {
+    width: 4px;
+}
+
+.player-list::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+}
+
+.player-slot {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px dashed rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    height: 55px;
+    min-height: 55px;
     display: flex;
+    align-items: center;
     justify-content: space-between;
+    padding: 0 1rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
 }
 
-.player-item.self {
-    border: 1px solid #fff;
-    background: rgba(255, 255, 255, 0.15);
+.player-slot::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.03), transparent);
+    transition: 0.5s;
 }
+
+.player-slot:hover::before {
+    left: 100%;
+}
+
+.player-slot.empty {
+    box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.02);
+    border: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+.player-slot.empty:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.player-slot.occupied {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-style: solid;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(5px);
+}
+
+.player-slot.self {
+    border-color: var(--p1-color);
+    background: linear-gradient(90deg, rgba(0, 242, 255, 0.08), rgba(0, 242, 255, 0.02));
+    box-shadow: 0 0 20px rgba(0, 242, 255, 0.15);
+}
+
+.team-blue .player-slot.occupied:not(.self) { border-left: 4px solid var(--p1-color); }
+.team-pink .player-slot.occupied:not(.self) { border-left: 4px solid var(--p2-color); }
+
+.slot-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+}
+
+.slot-name {
+    font-weight: 700;
+    font-size: 1rem;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.slot-chassis {
+    font-size: 0.65rem;
+    color: rgba(255, 255, 255, 0.4);
+    letter-spacing: 1px;
+}
+
+.slot-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.slot-bot-btn {
+    padding: 6px 14px;
+    font-size: 0.75rem;
+    border-radius: 50px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.slot-bot-btn:hover {
+    background: var(--p1-color);
+    color: #000;
+    border-color: var(--p1-color);
+    box-shadow: 0 0 10px var(--p1-color);
+}
+
+.slot-difficulty {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.7rem;
+    border-radius: 4px;
+    padding: 4px 8px;
+    cursor: pointer;
+    outline: none;
+    font-weight: 700;
+}
+
+.slot-difficulty:hover {
+    border-color: var(--p1-color);
+}
+
+.remove-bot-slot-btn {
+    background: transparent;
+    color: #ff4444;
+    border: none;
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 5px;
+    line-height: 1;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}
+
+.remove-bot-slot-btn:hover {
+    opacity: 1;
+    transform: scale(1.2);
+}
+
+.player-item { display: none; } /* Legacy */
 
 #lobby-status {
     margin-bottom: 1.5rem;

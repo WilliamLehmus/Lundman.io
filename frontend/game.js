@@ -61,10 +61,7 @@ const pinkTeamList = document.getElementById('pink-team-list');
 const lobbyIdSpan = document.getElementById('lobby-id');
 const lobbyStatus = document.getElementById('lobby-status');
 
-const addBotBtn = document.getElementById('add-bot-btn');
-const removeBotBtn = document.getElementById('remove-bot-btn');
-const botDifficulty = document.getElementById('bot-difficulty');
-// (Bot button handlers moved to bottom for consistency)
+// Bot management is now handled via slots
 
 const p1HpBar = document.getElementById('p1-hp');
 const p1Scrap = document.getElementById('p1-scrap');
@@ -473,37 +470,101 @@ socket.on('dev-reload', () => {
 function updateLobbyUI(id, players) {
     lobbyIdSpan.innerText = id.toUpperCase();
     
-    blueTeamList.innerHTML = '';
-    pinkTeamList.innerHTML = '';
-    
-    players.forEach(p => {
-        const item = document.createElement('div');
-        item.className = `player-item ${p.id === myId ? 'self' : ''}`;
-        item.innerText = p.u.toUpperCase();
-        
-        if (p.t === 'blue') blueTeamList.appendChild(item);
-        else pinkTeamList.appendChild(item);
-        
-        if (p.id === myId) {
-            const lobbyChassisSelect = document.getElementById('lobby-chassis-select');
-            if (lobbyChassisSelect && lobbyChassisSelect.value !== p.ch) {
-                lobbyChassisSelect.value = p.ch;
+    const renderTeam = (teamName, container) => {
+        container.innerHTML = '';
+        const teamPlayers = players.filter(p => p.t === teamName);
+        const slotsCount = 5;
+
+        for (let i = 0; i < slotsCount; i++) {
+            const slot = document.createElement('div');
+            slot.className = 'player-slot';
+            
+            const player = teamPlayers[i];
+            if (player) {
+                slot.classList.add('occupied');
+                if (player.id === myId) slot.classList.add('self');
+                
+                const info = document.createElement('div');
+                info.className = 'slot-info';
+                info.innerHTML = `
+                    <div class="slot-name">${player.u.toUpperCase()} ${player.isBot ? '(BOT)' : ''}</div>
+                    <div class="slot-chassis">${player.ch}</div>
+                `;
+                slot.appendChild(info);
+
+                const actions = document.createElement('div');
+                actions.className = 'slot-actions';
+
+                if (player.isBot) {
+                    const diffSelect = document.createElement('select');
+                    diffSelect.className = 'slot-difficulty';
+                    ['EASY', 'NORMAL', 'HARD'].forEach(d => {
+                        const opt = document.createElement('option');
+                        opt.value = d;
+                        opt.innerText = d;
+                        if (player.botDifficulty === d) opt.selected = true;
+                        diffSelect.appendChild(opt);
+                    });
+                    diffSelect.onchange = () => {
+                        socket.emit('update-bot-difficulty', { botId: player.id, difficulty: diffSelect.value });
+                    };
+                    actions.appendChild(diffSelect);
+
+                    const removeBtn = document.createElement('button');
+                    removeBtn.className = 'remove-bot-slot-btn';
+                    removeBtn.innerHTML = '×';
+                    removeBtn.onclick = () => {
+                        socket.emit('remove-bot', { botId: player.id });
+                    };
+                    actions.appendChild(removeBtn);
+                }
+                
+                slot.appendChild(actions);
+
+                if (player.id === myId) {
+                    const lobbyChassisSelect = document.getElementById('lobby-chassis-select');
+                    if (lobbyChassisSelect && lobbyChassisSelect.value !== player.ch) {
+                        lobbyChassisSelect.value = player.ch;
+                    }
+                }
+            } else {
+                slot.classList.add('empty');
+                slot.innerHTML = `
+                    <div class="slot-info">
+                        <div class="slot-name" style="opacity: 0.2;">EMPTY SLOT</div>
+                    </div>
+                `;
+                
+                const actions = document.createElement('div');
+                actions.className = 'slot-actions';
+                
+                const addBtn = document.createElement('button');
+                addBtn.className = 'slot-bot-btn';
+                addBtn.innerText = '+ ADD BOT';
+                addBtn.onclick = () => {
+                    socket.emit('add-bot', { team: teamName, difficulty: 'NORMAL' });
+                };
+                actions.appendChild(addBtn);
+                slot.appendChild(actions);
             }
+            container.appendChild(slot);
         }
-    });
+    };
+
+    renderTeam('blue', blueTeamList);
+    renderTeam('pink', pinkTeamList);
 
     const isHost = players.length > 0 && players[0].id === myId;
-    const humanPlayers = players.filter(p => !p.id.startsWith('bot-')).length; // Check for actual human players if needed, but backlog says "at least 2 players" (bots count usually)
     const totalCount = players.length;
 
-    if (isHost && totalCount >= 2) {
+    if (isHost && totalCount >= 1) { // Bots count, so 1 human + anything is fine
         startGameBtn.classList.remove('hidden');
         lobbyStatus.innerText = `READY TO DEPLOY (${totalCount}/10)`;
         lobbyStatus.style.color = '#00ff00';
     } else {
         startGameBtn.classList.add('hidden');
-        if (totalCount < 2) {
-            lobbyStatus.innerText = `WAITING FOR PLAYERS (${totalCount}/2 MIN)...`;
+        if (totalCount < 1) {
+            lobbyStatus.innerText = `WAITING FOR PLAYERS...`;
             lobbyStatus.style.color = '#ffcc00';
         } else {
             lobbyStatus.innerText = `WAITING FOR HOST TO START (${totalCount}/10)`;
@@ -1063,7 +1124,8 @@ function drawTank(p) {
     ctx.font = '700 12px Outfit';
     ctx.textAlign = 'center';
     const labelY = -TANK_HEIGHT - 10 - (p.labelYOffset || 0);
-    ctx.fillText(p.username.toUpperCase(), 0, labelY);
+    const nameLabel = (p.username || p.u || 'PLAYER').toUpperCase();
+    ctx.fillText(nameLabel, 0, labelY);
     ctx.restore();
 
     // Shield / Invulnerability
@@ -1652,7 +1714,13 @@ function interpolateState(dt) {
     gameState.zones     = serverState.zones;
     gameState.worldSize = serverState.worldSize;
 
+    const P_POS = 1 - Math.pow(0.1, dt); // Stiff interpolation for CSP reconciliation
     gameState.players = serverState.players.map(sp => {
+        // Map short keys to descriptive keys for rendering logic
+        if (sp.u) sp.username = sp.u;
+        if (sp.mh) sp.maxHp = sp.mh;
+        if (sp.h) sp.hp = sp.h;
+
         const gp = gameState.players.find(p => p.id === sp.id);
         if (!gp) return { ...sp };
         
@@ -2888,22 +2956,7 @@ startGameBtn.onclick = () => {
     socket.emit('start-game', { mapType });
 };
 
-if (addBotBtn) {
-    addBotBtn.onclick = () => {
-        const difficulty = document.getElementById('bot-difficulty').value;
-        const chassis = document.getElementById('bot-chassis-select').value;
-        socket.emit('add-bot', { 
-            difficulty: difficulty,
-            chassisType: chassis
-        });
-    };
-}
-
-if (removeBotBtn) {
-    removeBotBtn.onclick = () => {
-        socket.emit('remove-bot');
-    };
-}
+// Bot management is now handled via slots in updateLobbyUI
 
 // Debug Button Handlers
 const spawnBotBtn = document.getElementById('debug-spawn-bot-btn');

@@ -62,7 +62,16 @@ The environment is reactive:
     - **DEV**: Standard form with a unique white-neon high-tech glow.
 - **Hazard Damage**: Environmental hazards like **Fire**, **Acid**, and **Gas** damage ALL players within their range, regardless of who created the hazard. **Electric** hazards do not deal HP damage but cause a powerful **Stun** effect to all targets. Standing in your own fire or acid will cause damage.
 
-### 6. Lobby & Server Management
+### 6. Lobby & Slot Management
+- **Fixed Slots**: The lobby features a fixed layout of **5 slots per team** (10 total).
+- **Slot States**:
+    - **Empty**: Displayed as a shadowed outline with a "Dashed" border. Provides an "+ ADD BOT" button.
+    - **Occupied (Human)**: Shows the player's callsign and selected chassis.
+    - **Occupied (Bot)**: Shows the bot's name, its individual **Difficulty Selector** (Easy/Normal/Hard), and a removal button.
+- **Bot Management**:
+    - Bots can be added to specific teams by clicking the "+ ADD BOT" button in an empty slot.
+    - Individual bot difficulty can be adjusted on-the-fly from the lobby.
+    - A game can be started with **bots only** (at least 1 player total required, which includes the host).
 - **Lobby State**: Managed in-memory on the server for low-latency physics.
 - **Server Browser**: Synchronized with MongoDB (`MONGO_URL`). 
     - Lobbies are added to DB on creation.
