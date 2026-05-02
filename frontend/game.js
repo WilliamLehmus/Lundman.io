@@ -1,6 +1,6 @@
 import { io } from "socket.io-client";
 import versionData from './version.json';
-import { MATERIALS, MATERIAL_PROPERTIES } from '../backend/gameConfig.js';
+import { MATERIALS, MATERIAL_PROPERTIES, BIOMES, CHASSIS } from '../backend/gameConfig.js';
 
 // Connect to the same host the game is served from
 const socket = io({
@@ -48,7 +48,13 @@ const usernameInput = document.getElementById('username');
 const pinInput = document.getElementById('user-pin');
 const hostBtn = document.getElementById('host-btn');
 const joinBtn = document.getElementById('join-btn');
+const quickMatchBtn = document.getElementById('quick-match-btn');
 const startGameBtn = document.getElementById('start-game-btn');
+
+const serverBrowser = document.getElementById('server-browser');
+const serverList = document.getElementById('server-list');
+const refreshServersBtn = document.getElementById('refresh-servers-btn');
+const closeBrowserBtn = document.getElementById('close-browser-btn');
 
 const blueTeamList = document.getElementById('blue-team-list');
 const pinkTeamList = document.getElementById('pink-team-list');
@@ -73,6 +79,8 @@ let lastScrap = 0;
 let popups = []; // { x, y, text, life }
 let killFeed = []; // { killer, victim, weapon, killerTeam, victimTeam, time }
 let myId = null;
+let inputSeq = 0;
+let pendingInputs = [];
 
 let gameActive = false;
 let camera = { x: 0, y: 0 };
@@ -119,9 +127,9 @@ socket.on('kill-feed', (data) => {
     if (killFeed.length > 8) killFeed.shift();
     
     // VFX for kill
-    const victim = gameState.players.find(p => p.username === data.victim);
+    const victim = gameState.players.find(p => p.u === data.victim);
     if (victim) {
-        spawnExplosion(victim.x, victim.y, victim.team === 'blue' ? '#00f2ff' : '#ff00ff');
+        spawnExplosion(victim.x, victim.y, victim.t === 'blue' ? '#00f2ff' : '#ff00ff');
     }
 });
 
@@ -257,10 +265,10 @@ function updateShopUI() {
 
     // Update Scrap count in header
     const shopScrap = document.getElementById('shop-scrap-count');
-    if (shopScrap) shopScrap.innerText = Math.floor(me.scrap);
+    if (shopScrap) shopScrap.innerText = Math.floor(me.s);
 
     ['health', 'speed', 'power'].forEach(type => {
-        const lvl = me.upgrades[type] || 0;
+        const lvl = me.up[type] || 0;
         const badge = document.getElementById(`lvl-${type}`);
         const btn = document.getElementById(`btn-${type}`);
         
@@ -274,7 +282,7 @@ function updateShopUI() {
             } else {
                 const cost = UPGRADE_COSTS[lvl];
                 btn.innerText = `BUY (${cost})`;
-                const canAfford = me.scrap >= cost;
+                const canAfford = me.s >= cost;
                 btn.disabled = !canAfford;
                 btn.style.opacity = canAfford ? '1' : '0.5';
                 btn.style.cursor = canAfford ? 'pointer' : 'not-allowed';
@@ -379,8 +387,15 @@ function updateAimAngle() {
     
     if (isNaN(keys.aimAngle) || Math.abs(aimAngle - keys.aimAngle) > 0.01) {
         keys.aimAngle = aimAngle;
-        socket.emit('input', keys);
+        sendInput();
     }
+}
+
+function sendInput() {
+    inputSeq++;
+    const inputPayload = { ...keys, seq: inputSeq };
+    pendingInputs.push({ ...inputPayload, ts: Date.now() });
+    socket.emit('input', inputPayload);
 }
 
 function showActionButtons() {
@@ -419,7 +434,7 @@ function handleInput(code, isPressed) {
 
     if (changed) {
         updateAimAngle();
-        socket.emit('input', keys);
+        sendInput();
     }
 
     // Weapon slot switching
@@ -464,26 +479,36 @@ function updateLobbyUI(id, players) {
     players.forEach(p => {
         const item = document.createElement('div');
         item.className = `player-item ${p.id === myId ? 'self' : ''}`;
-        item.innerText = p.username.toUpperCase();
+        item.innerText = p.u.toUpperCase();
         
-        if (p.team === 'blue') blueTeamList.appendChild(item);
+        if (p.t === 'blue') blueTeamList.appendChild(item);
         else pinkTeamList.appendChild(item);
         
         if (p.id === myId) {
             const lobbyChassisSelect = document.getElementById('lobby-chassis-select');
-            if (lobbyChassisSelect && lobbyChassisSelect.value !== p.chassis) {
-                lobbyChassisSelect.value = p.chassis;
+            if (lobbyChassisSelect && lobbyChassisSelect.value !== p.ch) {
+                lobbyChassisSelect.value = p.ch;
             }
         }
     });
 
-    const count = players.length;
-    lobbyStatus.innerText = `PLAYERS: ${count}/10`;
-    
-    if (count >= 1) {
+    const isHost = players.length > 0 && players[0].id === myId;
+    const humanPlayers = players.filter(p => !p.id.startsWith('bot-')).length; // Check for actual human players if needed, but backlog says "at least 2 players" (bots count usually)
+    const totalCount = players.length;
+
+    if (isHost && totalCount >= 2) {
         startGameBtn.classList.remove('hidden');
+        lobbyStatus.innerText = `READY TO DEPLOY (${totalCount}/10)`;
+        lobbyStatus.style.color = '#00ff00';
     } else {
         startGameBtn.classList.add('hidden');
+        if (totalCount < 2) {
+            lobbyStatus.innerText = `WAITING FOR PLAYERS (${totalCount}/2 MIN)...`;
+            lobbyStatus.style.color = '#ffcc00';
+        } else {
+            lobbyStatus.innerText = `WAITING FOR HOST TO START (${totalCount}/10)`;
+            lobbyStatus.style.color = '#00f2ff';
+        }
     }
 }
 
@@ -548,12 +573,12 @@ socket.on('match-ended', ({ winner, scores, stats }) => {
         `;
         stats.forEach(p => {
             const row = document.createElement('div');
-            row.className = `result-row ${p.team}`;
+            row.className = `result-row ${p.t}`;
             row.innerHTML = `
-                <div>${p.username.toUpperCase()}</div>
-                <div>${p.kills}</div>
-                <div>${p.deaths}</div>
-                <div>${p.scrap}</div>
+                <div>${p.u.toUpperCase()}</div>
+                <div>${p.kills || 0}</div>
+                <div>${p.deaths || 0}</div>
+                <div>${p.s || 0}</div>
             `;
             resultsContainer.appendChild(row);
         });
@@ -616,11 +641,11 @@ socket.on('state', (state) => {
     if (state.bullets) {
         state.bullets.forEach(b => {
             if (!knownBulletIds.has(b.id)) {
-                playWeaponSound(b.weapon, b.x, b.y);
+                playWeaponSound(b.w, b.x, b.y);
                 knownBulletIds.add(b.id);
                 
                 // Muzzle Flash / Spawn particles
-                spawnParticles(b.x, b.y, b.color, 5);
+                spawnParticles(b.x, b.y, b.c, 5);
                 
                 // NEW: Small shake on shoot (only if near player)
                 if (ENABLE_PREMIUM_VISUALS) {
@@ -642,10 +667,10 @@ socket.on('state', (state) => {
     }
 
     const me = state.players.find(p => p.id === myId);
-    if (me && me.scrap > lastScrap) {
+    if (me && me.s > lastScrap) {
         const renderMe = gameState.players.find(p => p.id === myId) || me;
-        popups.push({ x: renderMe.x, y: renderMe.y - 40, text: `+${me.scrap - lastScrap} SCRAP`, life: 1.0 });
-        lastScrap = me.scrap;
+        popups.push({ x: renderMe.x, y: renderMe.y - 40, text: `+${me.s - lastScrap} SCRAP`, life: 1.0 });
+        lastScrap = me.s;
     }
     updateHUD();
     
@@ -657,23 +682,23 @@ socket.on('state', (state) => {
 function updateHUD() {
     const me = serverState.players.find(p => p.id === myId);
     if (me) {
-        if (p1HpBar.dataset.val !== me.hp.toString()) {
-            const oldHp = parseFloat(p1HpBar.dataset.val || me.maxHp);
-            if (me.hp < oldHp) {
+        if (p1HpBar.dataset.val !== me.h.toString()) {
+            const oldHp = parseFloat(p1HpBar.dataset.val || me.mh);
+            if (me.h < oldHp) {
                 shake.intensity = 15;
                 spawnParticles(me.x, me.y, '#fff', 10);
             }
-            p1HpBar.style.width = `${(me.hp / me.maxHp) * 100}%`;
-            p1HpBar.dataset.val = me.hp;
+            p1HpBar.style.width = `${(me.h / me.mh) * 100}%`;
+            p1HpBar.dataset.val = me.h;
         }
-        if (p1Scrap && p1Scrap.innerText !== me.scrap.toString()) {
-            p1Scrap.innerText = me.scrap;
+        if (p1Scrap && p1Scrap.innerText !== me.s.toString()) {
+            p1Scrap.innerText = me.s;
         }
 
         // Display Scrap Damage Buff (Gap Fix)
         const buffEl = document.getElementById('p1-buff');
         if (buffEl) {
-            const scrapBuff = 1 + (me.scrap / 100);
+            const scrapBuff = 1 + (me.s / 100);
             if (scrapBuff > 1) {
                 buffEl.innerText = `x${scrapBuff.toFixed(1)} DMG`;
                 buffEl.style.color = '#ffff00';
@@ -683,28 +708,28 @@ function updateHUD() {
         }
 
         const weaponNameEl = document.getElementById('weapon-name');
-        if (weaponNameEl) weaponNameEl.innerText = WEAPON_NAMES[me.weapon] || me.weapon;
+        if (weaponNameEl) weaponNameEl.innerText = WEAPON_NAMES[me.w] || me.w;
 
         const selector = document.querySelector('.p1-stats .weapon-selector');
         if (selector) {
-            if (selector.children.length !== me.slots.length) {
+            if (selector.children.length !== me.sl.length) {
                 selector.innerHTML = '';
-                me.slots.forEach((slot, index) => {
+                me.sl.forEach((slot, index) => {
                     const icon = document.createElement('div');
-                    icon.className = `weapon-icon ${index === me.currentSlot ? 'active' : ''}`;
+                    icon.className = `weapon-icon ${index === me.cs ? 'active' : ''}`;
                     icon.dataset.player = "1";
                     icon.dataset.slot = slot;
                     icon.innerText = WEAPON_ABBR[slot] || (index + 1);
                     selector.appendChild(icon);
                 });
-                selector.dataset.currentSlot = me.currentSlot;
+                selector.dataset.currentSlot = me.cs;
             } else {
-                if (selector.dataset.currentSlot !== me.currentSlot.toString()) {
+                if (selector.dataset.currentSlot !== me.cs.toString()) {
                     const icons = selector.querySelectorAll('.weapon-icon');
                     icons.forEach((icon, index) => {
-                        icon.classList.toggle('active', index === me.currentSlot);
+                        icon.classList.toggle('active', index === me.cs);
                     });
-                    selector.dataset.currentSlot = me.currentSlot;
+                    selector.dataset.currentSlot = me.cs;
                 }
             }
         }
@@ -815,14 +840,14 @@ function renderLoop(now) {
             drawTank(p);
             // NEW: Dust particles when moving
             if (ENABLE_PREMIUM_VISUALS && renderTime % 5 < 1) { 
-                const currentBiome = gameState.zones && gameState.zones[0] ? gameState.zones[0].type : 'RANDOM';
+                const currentBiome = gameState.zones && gameState.zones[0] ? gameState.zones[0].t : 'RANDOM';
                 const isMoving = p.id === myId ? (keys.up || keys.down || keys.left || keys.right) : true; 
                 if (isMoving) {
                     // More intense dust in wasteland/tundra
                     const pCount = (currentBiome === 'WASTELAND' || currentBiome === 'TUNDRA') ? 2 : 1;
                     const pColor = currentBiome === 'WASTELAND' ? 'rgba(150, 100, 50, 0.3)' : 
                                    (currentBiome === 'TUNDRA' ? 'rgba(230, 250, 255, 0.4)' : 'rgba(100,100,100,0.2)');
-                    spawnParticles(p.x - Math.cos(p.angle) * 20, p.y - Math.sin(p.angle) * 20, pColor, pCount, 0.5);
+                    spawnParticles(p.x - Math.cos(p.a) * 20, p.y - Math.sin(p.a) * 20, pColor, pCount, 0.5);
                 }
             }
         });
@@ -845,21 +870,21 @@ function renderLoop(now) {
 }
 
 function drawTank(p) {
-    if (p.hidden && p.id !== myId) return;
+    if (p.hid && p.id !== myId) return;
 
-    const color = p.team === 'blue' ? '#00f2ff' : '#ff00ff';
+    const color = p.t === 'blue' ? '#00f2ff' : '#ff00ff';
     ctx.save();
-    if (p.hidden && p.id === myId) ctx.globalAlpha = 0.5;
+    if (p.hid && p.id === myId) ctx.globalAlpha = 0.5;
     
     // Burning Glow Effect
-    if (p.burning) {
+    if (p.brn) {
         ctx.shadowBlur = 15 + Math.sin(Date.now() * 0.01) * 5;
         ctx.shadowColor = '#ff4400';
     }
 
     ctx.translate(p.x, p.y);
     ctx.save();
-    ctx.rotate(p.angle);
+    ctx.rotate(p.a);
 
     // Tracks (Larvfotter) - Chassis specific
     ctx.fillStyle = '#111';
@@ -870,13 +895,13 @@ function drawTank(p) {
     let trackH = 10;
     let trackOffset = TANK_HEIGHT/2 - 2;
 
-    if (p.chassis === 'BRAWLER') {
+    if (p.ch === 'BRAWLER') {
         trackH = 14;
         trackOffset = TANK_HEIGHT/2 - 4;
-    } else if (p.chassis === 'SCOUT') {
+    } else if (p.ch === 'SCOUT') {
         trackW = TANK_WIDTH - 4;
         trackH = 8;
-    } else if (p.chassis === 'ARTILLERY') {
+    } else if (p.ch === 'ARTILLERY') {
         trackW = TANK_WIDTH + 12;
         trackH = 8;
     }
@@ -898,10 +923,10 @@ function drawTank(p) {
     ctx.lineWidth = 3;
     ctx.beginPath();
 
-    if (p.chassis === 'SCOUT') {
+    if (p.ch === 'SCOUT') {
         // Sleeker, more aerodynamic scout
         ctx.roundRect(-TANK_WIDTH/2 + 4, -TANK_HEIGHT/2 + 2, TANK_WIDTH - 4, TANK_HEIGHT - 4, 15);
-    } else if (p.chassis === 'BRAWLER') {
+    } else if (p.ch === 'BRAWLER') {
         // Heavy, blocky brawler with extra plating lines
         ctx.roundRect(-TANK_WIDTH/2, -TANK_HEIGHT/2, TANK_WIDTH, TANK_HEIGHT, 4);
         ctx.fill();
@@ -912,7 +937,7 @@ function drawTank(p) {
         ctx.strokeRect(-TANK_WIDTH/2 + 5, -TANK_HEIGHT/2 + 5, TANK_WIDTH - 10, TANK_HEIGHT - 10);
         ctx.strokeStyle = color;
         ctx.lineWidth = 3;
-    } else if (p.chassis === 'ARTILLERY') {
+    } else if (p.ch === 'ARTILLERY') {
         // Long, narrow artillery chassis
         ctx.roundRect(-TANK_WIDTH/2 - 5, -TANK_HEIGHT/2 + 6, TANK_WIDTH + 10, TANK_HEIGHT - 12, 6);
     } else {
@@ -923,7 +948,7 @@ function drawTank(p) {
     ctx.stroke();
 
     // Special DEV tank glow
-    if (p.chassis === 'DEV') {
+    if (p.ch === 'DEV') {
         ctx.strokeStyle = '#fff';
         ctx.lineWidth = 1;
         ctx.strokeRect(-TANK_WIDTH/2 + 2, -TANK_HEIGHT/2 + 2, TANK_WIDTH - 4, TANK_HEIGHT - 4);
@@ -934,7 +959,7 @@ function drawTank(p) {
     // Front Indicators (Headlights)
     ctx.fillStyle = 'rgba(255, 255, 100, 0.8)';
     let headLightX = TANK_WIDTH/2 - 6;
-    if (p.chassis === 'ARTILLERY') headLightX += 4;
+    if (p.ch === 'ARTILLERY') headLightX += 4;
     
     ctx.beginPath();
     ctx.arc(headLightX, -TANK_HEIGHT/4, 3, 0, Math.PI * 2);
@@ -947,7 +972,7 @@ function drawTank(p) {
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
     ctx.lineWidth = 2;
     let ventX = -TANK_WIDTH/2 + 8;
-    if (p.chassis === 'ARTILLERY') ventX -= 4;
+    if (p.ch === 'ARTILLERY') ventX -= 4;
     
     ctx.beginPath();
     ctx.moveTo(ventX, -10);
@@ -960,7 +985,7 @@ function drawTank(p) {
 
     // Turret (Separate Rotation)
     ctx.save();
-    ctx.rotate(p.aimAngle || p.angle);
+    ctx.rotate(p.aa || p.a);
     
     // Turret Base Dome
     const turretRadius = 14;
@@ -981,7 +1006,7 @@ function drawTank(p) {
     ctx.stroke();
 
     // Barrel
-    const weaponType = p.slots && p.slots[p.currentSlot];
+    const weaponType = p.sl && p.sl[p.cs];
     let barrelLen = 30;
     let barrelWidth = 10;
     let muzzleBrake = true;
@@ -1630,14 +1655,63 @@ function interpolateState(dt) {
     gameState.players = serverState.players.map(sp => {
         const gp = gameState.players.find(p => p.id === sp.id);
         if (!gp) return { ...sp };
-        const P = sp.id === myId ? 1.0 : (1 - Math.pow(0.75, dt)); // local player snaps to server position
-        return {
-            ...sp,
-            x: lerp(gp.x, sp.x, P),
-            y: lerp(gp.y, sp.y, P),
-            angle: lerpAngle(gp.angle, sp.angle, P),
-            aimAngle: lerpAngle(gp.aimAngle || gp.angle, sp.aimAngle || sp.angle, P)
-        };
+        
+        if (sp.id === myId) {
+            // CLIENT-SIDE PREDICTION & RECONCILIATION
+            // 1. Remove inputs already processed by server
+            pendingInputs = pendingInputs.filter(i => i.seq > sp.seq);
+            
+            // 2. Start from server authoritative state
+            let predictedX = sp.x;
+            let predictedY = sp.y;
+            let predictedAngle = sp.a;
+            
+            // 3. Re-apply all pending inputs
+            // Note: This is a simplified simulation of the server physics
+            const config = CHASSIS[sp.ch] || CHASSIS.SCOUT;
+            const zone = (serverState.zones && serverState.zones[0]) || { t: 'URBAN' };
+            const biome = BIOMES[zone.t] || BIOMES.URBAN;
+            
+            // Use a fixed timestep for prediction consistency (matches server TICK_RATE)
+            const tickDt = 1.0; 
+            
+            pendingInputs.forEach(input => {
+                const moveSpeed = config.speed * biome.speedMult * 60; // 60 is for force normalization
+                const turnSpeed = config.turnSpeed * biome.speedMult;
+                
+                // Rotation
+                if (input.left) predictedAngle -= turnSpeed * tickDt;
+                if (input.right) predictedAngle += turnSpeed * tickDt;
+                
+                // Movement (Forward/Back)
+                if (input.up) {
+                    predictedX += Math.cos(predictedAngle) * moveSpeed * tickDt;
+                    predictedY += Math.sin(predictedAngle) * moveSpeed * tickDt;
+                }
+                if (input.down) {
+                    predictedX -= Math.cos(predictedAngle) * moveSpeed * tickDt;
+                    predictedY -= Math.sin(predictedAngle) * moveSpeed * tickDt;
+                }
+            });
+
+            return {
+                ...sp,
+                x: lerp(gp.x, predictedX, P_POS),
+                y: lerp(gp.y, predictedY, P_POS),
+                angle: lerpAngle(gp.angle, predictedAngle, P_POS),
+                aimAngle: lerpAngle(gp.aa || gp.a, sp.aa || sp.a, P_POS)
+            };
+        } else {
+            // Standard Interpolation for other players
+            const P_OTHER = 1 - Math.pow(0.75, dt);
+            return {
+                ...sp,
+                x: lerp(gp.x, sp.x, P_OTHER),
+                y: lerp(gp.y, sp.y, P_OTHER),
+                angle: lerpAngle(gp.angle, sp.a, P_OTHER),
+                aimAngle: lerpAngle(gp.aa || gp.a, sp.aa || sp.a, P_OTHER)
+            };
+        }
     });
 
     if (isShopOpen) updateShopUI();
@@ -1660,7 +1734,7 @@ function interpolateState(dt) {
 
 function drawElements() {
     if (!gameState.elements) return;
-    const currentBiome = gameState.zones && gameState.zones[0] ? gameState.zones[0].type : 'RANDOM';
+    const currentBiome = gameState.zones && gameState.zones[0] ? gameState.zones[0].t : 'RANDOM';
     const isWasteland = currentBiome === 'WASTELAND';
     const isIndustrial = currentBiome === 'INDUSTRIAL';
     const isWetland = currentBiome === 'WETLAND';
@@ -1668,9 +1742,9 @@ function drawElements() {
 
     gameState.elements.forEach(e => {
         ctx.save();
-        const config = MATERIAL_PROPERTIES[e.type] || { color: '#fff' };
+        const config = MATERIAL_PROPERTIES[e.t] || { color: '#fff' };
         
-        if (e.type === MATERIALS.BUILDING) {
+        if (e.t === MATERIALS.BUILDING) {
             // 1. Building Shadow (Deep Depth)
             ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
             ctx.beginPath();
@@ -1924,7 +1998,7 @@ function drawElements() {
                 if (e.id % 3 === 0 && Math.random() > 0.96) {
                     spawnParticles(e.x + (Math.random()-0.5)*e.w, e.y - e.h/2, '#ffffaa', 3, 0.8);
                 }
-        } else if (e.type === MATERIALS.SCRAP) {
+        } else if (e.t === MATERIALS.SCRAP) {
             // Draw Scrap as a rotating gold gear/nut
             ctx.translate(e.x, e.y);
             ctx.rotate(Date.now() / 1000);
@@ -1940,7 +2014,7 @@ function drawElements() {
             ctx.strokeStyle = '#fff';
             ctx.lineWidth = 1;
             ctx.stroke();
-        } else if (e.type === MATERIALS.BARREL_EXPLOSIVE || e.type === MATERIALS.BARREL_OIL) {
+        } else if (e.t === MATERIALS.BARREL_EXPLOSIVE || e.t === MATERIALS.BARREL_OIL) {
             ctx.translate(e.x, e.y);
             // Deep Shadow (Cylindrical)
             ctx.fillStyle = 'rgba(0,0,0,0.6)';
@@ -1980,7 +2054,7 @@ function drawElements() {
             // Symbol
             ctx.save();
             ctx.translate(0, 4);
-            if (e.type === MATERIALS.BARREL_EXPLOSIVE) {
+            if (e.t === MATERIALS.BARREL_EXPLOSIVE) {
                 // Draw Flame Symbol with Glow
                 ctx.shadowBlur = 10;
                 ctx.shadowColor = '#fff';
@@ -2014,7 +2088,7 @@ function drawElements() {
                 ctx.fill();
             }
             ctx.restore();
-        } else if (e.type === MATERIALS.CRATE) {
+        } else if (e.t === MATERIALS.CRATE) {
             ctx.translate(e.x, e.y);
             // Shadow
             ctx.fillStyle = 'rgba(0,0,0,0.4)';
@@ -2038,7 +2112,7 @@ function drawElements() {
         } else {
             ctx.fillStyle = config.color;
             ctx.beginPath();
-            if (e.type === MATERIALS.DIRT) {
+            if (e.t === MATERIALS.DIRT) {
                 ctx.roundRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h, 5);
             } else {
                 // Draw puddles as blobs
@@ -2047,7 +2121,7 @@ function drawElements() {
             ctx.fill();
 
             // Add animated lightning for electric pools
-            if (e.type === MATERIALS.ELECTRIC) {
+            if (e.t === MATERIALS.ELECTRIC) {
                 ctx.save();
                 ctx.strokeStyle = '#fff';
                 ctx.lineWidth = 2;
@@ -2069,7 +2143,7 @@ function drawElements() {
             }
 
             // Acid / Radioactive Pools
-            if (e.type === MATERIALS.ACID) {
+            if (e.t === MATERIALS.ACID) {
                 ctx.save();
                 const pulse = 0.7 + Math.sin(renderTime * 0.005 + e.id) * 0.3;
                 ctx.shadowBlur = 15 * pulse;
@@ -2110,7 +2184,7 @@ function drawElements() {
             }
 
             // Gas clouds
-            if (e.type === MATERIALS.GAS) {
+            if (e.t === MATERIALS.GAS) {
                 ctx.save();
                 const pulse = Math.sin(renderTime * 0.003 + e.id) * 0.1;
                 ctx.globalAlpha = 0.4 + pulse;
@@ -2159,7 +2233,7 @@ function drawGuardians() {
         // Scanning Laser (Gap fix/Visual upgrade)
         const scanAngle = Math.sin(Date.now() * 0.002 + g.id) * 0.8;
         ctx.save();
-        ctx.rotate(g.angle + scanAngle);
+        ctx.rotate(g.a + scanAngle);
         const laserGrad = ctx.createLinearGradient(0, 0, 300, 0);
         laserGrad.addColorStop(0, 'rgba(255, 0, 0, 0.4)');
         laserGrad.addColorStop(0.5, 'rgba(255, 0, 0, 0.1)');
@@ -2174,7 +2248,7 @@ function drawGuardians() {
         ctx.restore();
 
         // Drone Body (Polished Triangle)
-        ctx.rotate(g.angle);
+        ctx.rotate(g.a);
         ctx.fillStyle = '#111';
         ctx.strokeStyle = '#00f2ff';
         ctx.lineWidth = 3;
@@ -2205,7 +2279,7 @@ function drawGuardians() {
         ctx.restore();
         ctx.save();
         ctx.translate(g.x, g.y);
-        const hpPerc = g.hp / g.maxHp;
+        const hpPerc = g.h / g.mh;
         ctx.fillStyle = '#333';
         ctx.fillRect(-25, -45, 50, 6);
         ctx.fillStyle = hpPerc > 0.5 ? '#00ff00' : (hpPerc > 0.2 ? '#ffff00' : '#ff0000');
@@ -2225,7 +2299,7 @@ function updateBulletTrails() {
         const last = trail[trail.length - 1];
         if (!last || last.x !== b.x || last.y !== b.y) {
             trail.push({ x: b.x, y: b.y });
-            const maxLen = TRAIL_LENGTHS[b.type] || 4;
+            const maxLen = TRAIL_LENGTHS[b.t] || 4;
             if (trail.length > maxLen) trail.shift();
         }
     }
@@ -2236,8 +2310,8 @@ function drawBulletTrails() {
     for (const b of gameState.bullets) {
         const trail = bulletTrails.get(b.id);
         if (!trail || trail.length < 2) continue;
-        const trailColor = TRAIL_COLORS[b.type] || b.color;
-        const trailW = TRAIL_WIDTHS[b.type] || 2;
+        const trailColor = TRAIL_COLORS[b.t] || b.c;
+        const trailW = TRAIL_WIDTHS[b.t] || 2;
         for (let i = 0; i < trail.length - 1; i++) {
             const t = (i + 1) / trail.length;
             ctx.globalAlpha = t * 0.55;
@@ -2262,19 +2336,19 @@ function drawBullets() {
 }
 
 function drawBulletBody(b) {
-    if (b.type === 'fire' || b.weapon === 'FLAMETHROWER') {
+    if (b.t === 'fire' || b.w === 'FLAMETHROWER') {
         drawFireBullet(b);
         return;
     }
     
-    switch (b.type) {
+    switch (b.t) {
         case 'metal':    drawMetalBullet(b);    break;
         case 'water':    drawWaterBullet(b);    break;
         case 'dirt':     drawDirtBullet(b);     break;
         case 'electric': drawElectricBullet(b); break;
         case 'ice':      drawIceBullet(b);      break;
         default:
-            ctx.fillStyle = b.color || '#ffffff';
+            ctx.fillStyle = b.c || '#ffffff';
             ctx.beginPath();
             ctx.arc(0, 0, 5, 0, Math.PI * 2);
             ctx.fill();
@@ -2282,7 +2356,7 @@ function drawBulletBody(b) {
 }
 
 function drawMetalBullet(b) {
-    ctx.rotate(b.angle || 0);
+    ctx.rotate(b.a || 0);
     ctx.globalAlpha = 0.3;
     ctx.fillStyle = '#ff8844';
     ctx.beginPath();
@@ -2324,7 +2398,7 @@ function drawFireBullet(b) {
 }
 
 function drawWaterBullet(b) {
-    ctx.rotate(b.angle || 0);
+    ctx.rotate(b.a || 0);
     ctx.globalAlpha = 0.3;
     ctx.fillStyle = '#0088ff';
     ctx.beginPath();
@@ -2401,7 +2475,7 @@ function drawElectricBullet(b) {
 }
 
 function drawIceBullet(b) {
-    ctx.rotate(b.angle || 0);
+    ctx.rotate(b.a || 0);
     ctx.globalAlpha = 0.25;
     ctx.fillStyle = '#aaddff';
     ctx.beginPath();
@@ -2975,6 +3049,74 @@ if (mobileWeaponBtn) {
 }
 
 init();
+
+function fetchLobbies() {
+    socket.emit('request-lobbies');
+}
+
+socket.on('lobbies-list', (list) => {
+    if (!serverList) return;
+    serverList.innerHTML = '';
+    
+    if (list.length === 0) {
+        serverList.innerHTML = '<div class="server-item empty" style="padding: 2rem; opacity: 0.5; font-style: italic; color: #fff;">NO ACTIVE LOBBIES FOUND</div>';
+        return;
+    }
+    
+    list.forEach(lobby => {
+        const item = document.createElement('div');
+        item.className = 'server-item';
+        item.style = 'display: flex; justify-content: space-between; align-items: center; padding: 1rem 2rem; background: rgba(255,255,255,0.05); margin-bottom: 0.5rem; border-radius: 4px; border-left: 4px solid ' + (lobby.active ? '#ff3333' : '#00f2ff') + ';';
+        
+        const info = document.createElement('div');
+        info.innerHTML = `<span style="color: #00f2ff; font-weight: bold; font-size: 1.1rem; font-family: 'Outfit';">LOBBY: ${lobby.id.toUpperCase()}</span><br>
+                          <span style="font-size: 0.8rem; opacity: 0.7; color: #fff; font-family: 'Outfit';">PLAYERS: ${lobby.players}/10 | BOTS: ${lobby.bots} | STATUS: ${lobby.active ? 'IN MATCH' : 'LOBBY'}</span>`;
+        
+        const joinBtnEl = document.createElement('button');
+        joinBtnEl.innerText = 'JOIN';
+        joinBtnEl.className = lobby.players >= 10 ? 'secondary-btn disabled' : 'btn';
+        joinBtnEl.style = 'padding: 0.5rem 1.5rem; font-size: 0.9rem; margin-top: 0;';
+        joinBtnEl.onclick = () => {
+            const username = usernameInput.value;
+            const pin = pinInput.value;
+            const chassisType = document.getElementById('chassis-select').value;
+            socket.emit('join-lobby', { username, pin, chassisType, lobbyId: lobby.id });
+            serverBrowser.style.display = 'none';
+        };
+        
+        item.appendChild(info);
+        item.appendChild(joinBtnEl);
+        serverList.appendChild(item);
+    });
+});
+
+if (quickMatchBtn) {
+    quickMatchBtn.onclick = () => {
+        const username = usernameInput.value;
+        const pin = pinInput.value;
+        const chassisType = document.getElementById('chassis-select').value;
+        socket.emit('join-game', { username, pin, chassisType });
+    };
+}
+
+if (joinBtn) {
+    joinBtn.onclick = () => {
+        serverBrowser.style.display = 'flex';
+        fetchLobbies();
+    };
+}
+
+if (refreshServersBtn) {
+    refreshServersBtn.onclick = () => {
+        fetchLobbies();
+    };
+}
+
+if (closeBrowserBtn) {
+    closeBrowserBtn.onclick = () => {
+        serverBrowser.style.display = 'none';
+    };
+}
 
 // Hidden Dev Command (Globally accessible)
 window.activateDevTank = () => {

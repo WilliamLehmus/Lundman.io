@@ -17,5 +17,19 @@
     "deaths": 0,
     "scrap": 20,
     "lastSeen": 1777394352894
+  },
+  "Stroggo": {
+    "kills": 0,
+    "deaths": 11,
+    "scrap": 3,
+    "lastSeen": 1777740698548,
+    "pin": "$2b$10$p3vgsuddpQURaj8LBTqpXOQ1th9ubAEjX73EU6iEJCZKND6SMWJVi"
+  },
+  "Stroggo1": {
+    "kills": 0,
+    "deaths": 0,
+    "scrap": 0,
+    "lastSeen": 1777741452922,
+    "pin": "$2b$10$oP609sRXZZMUk8lq2J4VCuAC.ALHRpg1tw2uZx6uM4cBU16lifMdO"
   }
 }

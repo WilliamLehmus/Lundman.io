@@ -1,5 +1,7 @@
-Error: listen EADDRINUSE: address already in use 0.0.0.0:3000
-    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
-    at listenInCluster (node:net:2065:12)
-    at node:net:2274:7
-    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+ReferenceError: now is not defined
+    at file:///C:/Users/Maste/Desktop/Lundman.io/backend/server.js:1660:44
+    at Array.map (<anonymous>)
+    at Lobby.broadcastState (file:///C:/Users/Maste/Desktop/Lundman.io/backend/server.js:1652:50)
+    at Timeout._onTimeout (file:///C:/Users/Maste/Desktop/Lundman.io/backend/server.js:149:18)
+    at listOnTimeout (node:internal/timers:605:17)
+    at process.processTimers (node:internal/timers:541:7)

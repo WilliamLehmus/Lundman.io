@@ -9,6 +9,7 @@ import { rateLimit } from 'express-rate-limit';
 import bcrypt from 'bcryptjs';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import mongoose from 'mongoose';
 import { MATERIALS, MATERIAL_PROPERTIES, BIOMES, CHASSIS, WEAPON_MODULES, ALL_WEAPONS } from './gameConfig.js';
 
 dotenv.config(); // Force restart triggered by Antigravity
@@ -81,6 +82,27 @@ const TANK_HEIGHT = 42; // Width
 const WORLD_SIZE = 4000;
 const MIN_PLAYERS = 1;
 
+// 3. MongoDB Integration
+const MONGO_URL = process.env.MONGO_URL;
+if (MONGO_URL) {
+    mongoose.connect(MONGO_URL)
+        .then(() => {
+            console.log('Connected to MongoDB');
+            // Clear any stale lobbies on startup
+            return LobbyModel.deleteMany({});
+        })
+        .catch(err => console.error('MongoDB connection error:', err));
+}
+
+const lobbySchema = new mongoose.Schema({
+    lobbyId: { type: String, unique: true },
+    players: Number,
+    bots: Number,
+    active: Boolean,
+    lastUpdate: { type: Date, default: Date.now }
+});
+const LobbyModel = mongoose.model('Lobby', lobbySchema);
+
 // Global State
 let lobbies = {};
 
@@ -98,6 +120,9 @@ class Lobby {
             
         this.matchTimer = 480; // 8 minutes match duration
         this.scoreCap = 20;
+
+        this.syncToDB();
+
         this.scores = { blue: 0, pink: 0 };
         this.gameOver = false;
         this.guardians = {};
@@ -122,7 +147,26 @@ class Lobby {
 
         this.syncInterval = setInterval(() => {
             this.broadcastState();
-        }, 1000 / 60); // 60Hz sync
+        }, 1000 / 30); // 30Hz sync (optimized from 60Hz)
+    }
+
+    async syncToDB() {
+        if (!MONGO_URL) return;
+        try {
+            const playerCount = Object.values(this.players).filter(p => !p.isBot).length;
+            const botCount = Object.values(this.players).filter(p => p.isBot).length;
+            
+            await LobbyModel.findOneAndUpdate(
+                { lobbyId: this.id },
+                { 
+                    players: playerCount, 
+                    bots: botCount, 
+                    active: this.active,
+                    lastUpdate: Date.now()
+                },
+                { upsert: true }
+            );
+        } catch (e) { console.error('DB Sync Error:', e); }
     }
 
     setupWorld(playerCount, forcedMapType = 'RANDOM') {
@@ -230,9 +274,11 @@ class Lobby {
             deaths: 0,
             statusEffects: { stun: 0, slip: 0, slow: 0, burn: 0, wet: 0, stunImmunity: 0, revealed: 0 },
             inputs: { up: false, down: false, left: false, right: false, shoot: false, aimAngle: 0 },
+            lastInputSeq: 0,
             lastBuffLevel: 0,
             upgrades: { health: 0, speed: 0, power: 0 }
         };
+        this.syncToDB();
     }
 
     addBot(difficulty = 'NORMAL', pos = null, isActive = true, forcedTeam = null, forcedChassis = 'RANDOM') {
@@ -288,6 +334,7 @@ class Lobby {
             deaths: 0,
             statusEffects: { stun: 0, slip: 0, slow: 0, burn: 0, wet: 0, stunImmunity: 0, revealed: 0 },
             inputs: { up: false, down: false, left: false, right: false, shoot: false, aimAngle: 0 },
+            lastInputSeq: 0,
             isBot: true,
             botDifficulty: difficulty,
             isActive: isActive,
@@ -302,9 +349,12 @@ class Lobby {
             role: Math.random() > 0.6 ? 'FLANKER' : 'ASSAULT',
             strafeDir: Math.random() > 0.5 ? 1 : -1,
             lastRoleSwitch: Date.now(),
+            path: [], // For pathfinding
+            lastPathUpdate: 0,
             lastBuffLevel: 0,
             upgrades: { health: 0, speed: 0, power: 0 }
         };
+        this.syncToDB();
     }
 
     removePlayer(socketId) {
@@ -331,6 +381,7 @@ class Lobby {
                 this.addBot('NORMAL', null, true, team);
             }
         }
+        this.syncToDB();
     }
 
     generateMap(forcedType = 'RANDOM') {
@@ -1001,6 +1052,7 @@ class Lobby {
             Composite.remove(this.engine.world, b);
             delete this.bullets[id];
         }
+        this.syncToDB();
     }
 
     destroyElement(id) {
@@ -1432,7 +1484,7 @@ class Lobby {
             restitution: 0.5
         });
 
-        this.guardians[id] = {
+        const g = {
             id,
             body,
             hp: 200,
@@ -1443,9 +1495,11 @@ class Lobby {
             lastShot: 0,
             speed: 0.005 + Math.random() * 0.005
         };
-
+        
+        this.guardians[id] = g;
         Composite.add(this.engine.world, body);
         io.to(this.id).emit('player-event', { text: 'GUARDIAN DRONE DETECTED', color: '#ffcc00' });
+        return g;
     }
 
     destroyGuardian(id, killerId) {
@@ -1596,41 +1650,42 @@ class Lobby {
             gameOver: this.gameOver,
             zones: this.zones.map(z => ({ ...z, color: BIOMES[z.type].color })),
             players: Object.values(this.players).map(p => ({
-                id: p.id, username: p.username, team: p.team,
-                x: p.body.position.x, y: p.body.position.y, angle: p.body.angle,
-                aimAngle: p.inputs.aimAngle !== undefined ? p.inputs.aimAngle : p.body.angle,
-                hp: p.hp, maxHp: p.maxHp, weapon: p.slots[p.currentSlot],
-                currentSlot: p.currentSlot, slots: p.slots, scrap: p.scrap, hidden: p.hidden,
-                upgrades: p.upgrades,
-                chassis: p.chassis,
-                stunned: p.statusEffects.stun > Date.now(),
-                slowed: p.statusEffects.slow > Date.now(),
-                burning: p.statusEffects.burn > Date.now(),
-                wet: p.statusEffects.wet > Date.now(),
-                invulnerable: p.invulnerableUntil && Date.now() < p.invulnerableUntil
+                id: p.id, u: p.username, t: p.team,
+                x: Number(p.body.position.x.toFixed(1)), y: Number(p.body.position.y.toFixed(1)), a: Number(p.body.angle.toFixed(3)),
+                aa: Number((p.inputs.aimAngle !== undefined ? p.inputs.aimAngle : p.body.angle).toFixed(3)),
+                h: p.hp, mh: p.maxHp, w: p.slots[p.currentSlot],
+                cs: p.currentSlot, sl: p.slots, s: p.scrap, hid: p.hidden,
+                up: p.upgrades,
+                ch: p.chassis,
+                st: p.statusEffects.stun > now,
+                slw: p.statusEffects.slow > now,
+                brn: p.statusEffects.burn > now,
+                wt: p.statusEffects.wet > now,
+                inv: p.invulnerableUntil && now < p.invulnerableUntil,
+                seq: p.lastInputSeq
             })),
             guardians: Object.values(this.guardians).map(g => ({
-                id: g.id, x: g.body.position.x, y: g.body.position.y,
-                angle: g.angle, hp: g.hp, maxHp: g.maxHp
+                id: g.id, x: Number(g.body.position.x.toFixed(1)), y: Number(g.body.position.y.toFixed(1)),
+                a: Number(g.angle.toFixed(3)), h: g.hp, mh: g.maxHp
             })),
             bullets: Object.values(this.bullets).map(b => ({
-                id: b.id, x: b.position.x, y: b.position.y,
-                type: b.customData.type,
-                weapon: b.customData.weapon,
-                color: this.getElementColor(b.customData.type),
-                angle: Math.atan2(b.velocity.y, b.velocity.x)
+                id: b.id, x: Number(b.position.x.toFixed(1)), y: Number(b.position.y.toFixed(1)),
+                t: b.customData.type,
+                w: b.customData.weapon,
+                c: this.getElementColor(b.customData.type),
+                a: Number(Math.atan2(b.velocity.y, b.velocity.x).toFixed(3))
             })),
             elements: Object.values(this.elements).map(e => ({
-                id: e.id, x: e.body.position.x, y: e.body.position.y,
-                type: e.type, radius: e.body.circleRadius, w: e.w, h: e.h,
-                color: e.type === MATERIALS.SCRAP ? '#ffff00' : 
-                       e.type === MATERIALS.OIL ? '#333' : 
-                       e.type === MATERIALS.FIRE ? '#ff4400' : 
-                       e.type === MATERIALS.WATER ? '#0088ff' : 
-                       e.type === MATERIALS.ELECTRIC ? '#00f2ff' : 
-                       e.type === MATERIALS.ICE ? '#aaddff' : 
-                       e.type === MATERIALS.DIRT ? '#8b4513' : 
-                       e.type === MATERIALS.STEAM ? 'rgba(200, 200, 200, 0.4)' : '#fff'
+                id: e.id, x: Number(e.body.position.x.toFixed(1)), y: Number(e.body.position.y.toFixed(1)),
+                t: e.type, r: e.body.circleRadius, w: e.w, h: e.h,
+                c: e.type === MATERIALS.SCRAP ? '#ffff00' : 
+                   e.type === MATERIALS.OIL ? '#333' : 
+                   e.type === MATERIALS.FIRE ? '#ff4400' : 
+                   e.type === MATERIALS.WATER ? '#0088ff' : 
+                   e.type === MATERIALS.ELECTRIC ? '#00f2ff' : 
+                   e.type === MATERIALS.ICE ? '#aaddff' : 
+                   e.type === MATERIALS.DIRT ? '#8b4513' : 
+                   e.type === MATERIALS.STEAM ? 'rgba(200, 200, 200, 0.4)' : '#fff'
             }))
         };
         io.to(this.id).emit('state', state);
@@ -1662,6 +1717,7 @@ class Lobby {
         this.setupWorld(playerCount, mapType);
 
         this.active = true;
+        this.syncToDB();
         this.matchTimer = 480; // 8 minutes
         this.scores = { blue: 0, pink: 0 };
         this.gameOver = false;
@@ -1713,6 +1769,7 @@ class Lobby {
                     scrap: p.scrap
                 })).sort((a, b) => b.kills - a.kills)
             });
+            this.syncToDB();
         }
     }
 
@@ -1735,11 +1792,15 @@ class Lobby {
             id: this.id,
             players: Object.values(this.players).map(p => ({ username: p.username, team: p.team, id: p.id }))
         });
+        this.syncToDB();
     }
 
     destroy() {
         clearInterval(this.physicsInterval);
         clearInterval(this.syncInterval);
+        if (MONGO_URL) {
+            LobbyModel.deleteOne({ lobbyId: this.id }).catch(e => console.error('DB Delete Error:', e));
+        }
     }
 }
 
@@ -1813,11 +1874,11 @@ io.on('connection', (socket) => {
         socket.join(bestLobby.id);
         socket.lobbyId = bestLobby.id;
         if (bestLobby.active) socket.emit('game-started');
-        io.to(bestLobby.id).emit('player-event', { text: `${username.toUpperCase()} JOINED THE BATTLE`, color: '#00f2ff' });
         io.to(bestLobby.id).emit('lobby-update', {
             id: bestLobby.id,
-            players: Object.values(bestLobby.players).map(p => ({ username: p.username, team: p.team, id: p.id, chassis: p.chassis }))
+            players: Object.values(bestLobby.players).map(p => ({ u: p.username, t: p.team, id: p.id, ch: p.chassis }))
         });
+        bestLobby.syncToDB();
     });
 
     socket.on('host-game', async (data) => {
@@ -1855,9 +1916,71 @@ io.on('connection', (socket) => {
         lobby.addPlayer(socket, username, chassisType);
         socket.join(id);
         socket.lobbyId = id;
-        socket.emit('lobby-update', {
-            id, players: Object.values(lobby.players).map(p => ({ username: p.username, team: p.team, id: p.id, chassis: p.chassis }))
+        io.to(socket.id).emit('lobby-update', { id: lobby.id, players: Object.values(lobby.players).map(p => ({ u: p.username, t: p.team, id: p.id, ch: p.chassis })) });
+        lobby.syncToDB();
+    });
+
+    socket.on('request-lobbies', async () => {
+        try {
+            if (MONGO_URL) {
+                const list = await LobbyModel.find({}).lean();
+                // Map DB names to what client expects
+                socket.emit('lobbies-list', list.map(l => ({
+                    id: l.lobbyId,
+                    players: l.players,
+                    bots: l.bots,
+                    active: l.active
+                })));
+            } else {
+                // Fallback to memory if DB is down
+                const list = Object.values(lobbies).map(l => ({
+                    id: l.id,
+                    players: Object.values(l.players).filter(p => !p.isBot).length,
+                    bots: Object.values(l.players).filter(p => p.isBot).length,
+                    active: l.active
+                }));
+                socket.emit('lobbies-list', list);
+            }
+        } catch (e) { console.error('Lobby Fetch Error:', e); }
+    });
+
+    socket.on('join-lobby', async (data) => {
+        if (!data || !data.lobbyId || !lobbies[data.lobbyId]) {
+            socket.emit('auth-error', { message: 'LOBBY NOT FOUND!' });
+            return;
+        }
+        const { username, chassisType, pin, lobbyId } = data;
+        if (!username || typeof username !== 'string') return;
+        
+        // PIN Authentication
+        if (playerData[username]) {
+            if (playerData[username].pin) {
+                const match = await bcrypt.compare(pin, playerData[username].pin);
+                if (!match) {
+                    socket.emit('auth-error', { message: 'INVALID PIN!' });
+                    return;
+                }
+            }
+        } else {
+            const hashedPin = pin ? await bcrypt.hash(pin, 10) : null;
+            playerData[username] = { kills: 0, deaths: 0, scrap: 0, lastSeen: Date.now(), pin: hashedPin };
+        }
+
+        const lobby = lobbies[lobbyId];
+        if (Object.keys(lobby.players).length >= 10) {
+            socket.emit('auth-error', { message: 'LOBBY IS FULL!' });
+            return;
+        }
+
+        lobby.addPlayer(socket, username, chassisType);
+        socket.join(lobby.id);
+        socket.lobbyId = lobby.id;
+        if (lobby.active) socket.emit('game-started');
+        io.to(lobby.id).emit('lobby-update', {
+            id: lobby.id,
+            players: Object.values(lobby.players).map(p => ({ u: p.username, t: p.team, id: p.id, ch: p.chassis }))
         });
+        lobby.syncToDB();
     });
 
     socket.on('add-bot', (data) => {
@@ -1866,7 +1989,7 @@ io.on('connection', (socket) => {
             lobby.addBot(data.difficulty, null, true, null, data.chassisType);
             io.to(lobby.id).emit('lobby-update', {
                 id: lobby.id,
-                players: Object.values(lobby.players).map(p => ({ username: p.username, team: p.team, id: p.id, chassis: p.chassis }))
+                players: Object.values(lobby.players).map(p => ({ u: p.username, t: p.team, id: p.id, ch: p.chassis }))
             });
         }
     });
@@ -1880,7 +2003,7 @@ io.on('connection', (socket) => {
                 lobby.removePlayer(botToRemove.id);
                 io.to(lobby.id).emit('lobby-update', {
                     id: lobby.id,
-                    players: Object.values(lobby.players).map(p => ({ username: p.username, team: p.team, id: p.id, chassis: p.chassis }))
+                    players: Object.values(lobby.players).map(p => ({ u: p.username, t: p.team, id: p.id, ch: p.chassis }))
                 });
             }
         }
@@ -1899,6 +2022,9 @@ io.on('connection', (socket) => {
                 aimAngle: typeof data?.aimAngle === 'number' && !isNaN(data.aimAngle) ? data.aimAngle : 0
             };
             lobby.players[socket.id].inputs = sanitized;
+            if (typeof data?.seq === 'number') {
+                lobby.players[socket.id].lastInputSeq = data.seq;
+            }
         }
     });
 
@@ -1994,7 +2120,7 @@ io.on('connection', (socket) => {
                     if (!lobby.active) {
                         io.to(lobby.id).emit('lobby-update', {
                             id: lobby.id,
-                            players: Object.values(lobby.players).map(p => ({ username: p.username, team: p.team, id: p.id, chassis: p.chassis }))
+                            players: Object.values(lobby.players).map(p => ({ u: p.username, t: p.team, id: p.id, ch: p.chassis }))
                         });
                     } else {
                         // Notify match that a player changed (for health bars etc)
@@ -2026,7 +2152,7 @@ io.on('connection', (socket) => {
                 io.to(lobby.id).emit('player-event', { text: `${username.toUpperCase()} LEFT THE BATTLE`, color: '#ff3333' });
                 io.to(lobby.id).emit('lobby-update', {
                     id: lobby.id,
-                    players: Object.values(lobby.players).map(p => ({ username: p.username, team: p.team, id: p.id }))
+                    players: Object.values(lobby.players).map(p => ({ u: p.username, t: p.team, id: p.id, ch: p.chassis }))
                 });
             }
         }

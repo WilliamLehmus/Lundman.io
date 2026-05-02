@@ -37,8 +37,11 @@
                     <div id="loading-progress"></div>
                 </div>
                 <div class="multiplayer-actions">
-                    <button id="host-btn" class="secondary-btn">HOST LOBBY</button>
-                    <button id="join-btn">JOIN BATTLE</button>
+                    <button id="quick-match-btn" class="primary-btn">QUICK MATCH</button>
+                    <div style="display: flex; gap: 10px; width: 100%;">
+                        <button id="host-btn" class="secondary-btn" style="flex: 1;">HOST LOBBY</button>
+                        <button id="join-btn" class="secondary-btn" style="flex: 1;">JOIN LOBBY</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -97,6 +100,21 @@
             <div class="lobby-actions" style="margin-top: 2rem; display: flex; gap: 1rem; justify-content: center; pointer-events: auto;">
                 <button id="leave-lobby-btn" class="secondary-btn" style="border-color: #ff4444 !important; color: #ff4444 !important;">LEAVE LOBBY</button>
                 <button id="start-game-btn" class="hidden">START GAME</button>
+            </div>
+        </div>
+
+        <!-- Server Browser -->
+        <div id="server-browser" class="overlay" style="display: none;">
+            <div class="menu-content server-browser-content">
+                <h1 style="margin-bottom: 2rem; letter-spacing: 4px;">ACTIVE LOBBIES</h1>
+                <div id="server-list" class="server-list" style="max-height: 400px; overflow-y: auto; width: 100%; margin-bottom: 2rem;">
+                    <!-- Populated via JS -->
+                    <div class="server-item empty" style="padding: 2rem; opacity: 0.5; font-style: italic;">NO ACTIVE LOBBIES FOUND</div>
+                </div>
+                <div class="server-browser-actions" style="display: flex; gap: 1rem; width: 100%;">
+                    <button id="refresh-servers-btn" class="secondary-btn" style="flex: 1;">REFRESH</button>
+                    <button id="close-browser-btn" class="btn" style="flex: 1;">BACK</button>
+                </div>
             </div>
         </div>
 

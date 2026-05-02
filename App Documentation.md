@@ -14,8 +14,10 @@ The core of the game engine lives on the **Node.js server**.
 
 ### 2. Real-Time Streaming
 - **Networking**: Powered by `Socket.io`.
-- **State Updates**: The server broadcasts the global game state to all clients at **20Hz (STATE_RATE)**. This includes position, rotation, health, and bullet coordinates.
-- **Input Handling**: Clients send minimal input packets (WASD + Shoot) to the server, which are then processed in the next physics tick.
+- **State Updates**: The server broadcasts the global game state to all clients at **30Hz (STATE_RATE)**. This rate is optimized for bandwidth while maintaining smoothness via client-side interpolation.
+- **Payload Optimization**: The game uses a compressed JSON format with shortened keys and reduced float precision to minimize network overhead.
+- **Input Handling**: Clients send minimal input packets (WASD + Shoot + Seq) to the server.
+- **Client-Side Prediction (CSP)**: The local client predicts tank movement instantly and reconciles with the server's authoritative state using sequence numbers, eliminating perceived input lag.
 
 ### 3. Monorepo Structure
 - **Backend**: `/backend/server.js` (Express + Socket.io + Matter.js)
@@ -60,11 +62,14 @@ The environment is reactive:
     - **DEV**: Standard form with a unique white-neon high-tech glow.
 - **Hazard Damage**: Environmental hazards like **Fire**, **Acid**, and **Gas** damage ALL players within their range, regardless of who created the hazard. **Electric** hazards do not deal HP damage but cause a powerful **Stun** effect to all targets. Standing in your own fire or acid will cause damage.
 
-### 3. Bot AI System
-The game features a server-side AI system:
-- **Replacement Logic**: Bots automatically fill empty slots in lobbies to maintain a 5v5 balance.
-- **Behavior**: Bots lead their shots, avoid hazards like FIRE and ELECTRIC puddles, and have stuck-recovery logic.
-- **Combat Evasion**: Bots can detect incoming projectiles and perform side-stepping maneuvers to dodge.
+### 6. Lobby & Server Management
+- **Lobby State**: Managed in-memory on the server for low-latency physics.
+- **Server Browser**: Synchronized with MongoDB (`MONGO_URL`). 
+    - Lobbies are added to DB on creation.
+    - Player counts and match status (active/lobby) are synced in real-time.
+    - Lobbies are automatically deleted from DB when all human players leave.
+    - DB is cleared on server startup to ensure only "live" lobbies are listed.
+- **Quick Match**: Logic that prioritizes joining the most populated non-full lobby before creating a new one.
 
 ### 4. AI Guardians (Drones)
 - **Deployment**: Defensive drones spawn periodically near the map center.
@@ -84,8 +89,9 @@ The game features a server-side AI system:
 ## 🛠️ Technology Stack
 - **Backend**: Node.js, Express (ES Modules)
 - **Frontend**: Vite 6, Vanilla JavaScript, HTML5 Canvas
-- **Physics**: Matter.js (Server-side)
-- **Real-time**: Socket.io
+- **Persistence**: MongoDB (via Mongoose) for the active server list.
+- **Physics Engine**: Matter.js (v0.20.0).
+- **Icons & UI**: Google Fonts (Outfit), Custom CSS.
 
 ---
 
@@ -140,7 +146,7 @@ The following security measures have been successfully implemented:
 ## 📈 Technical Debt & Future Roadmap
 
 ### 1. Current Limitations
-- **Network Sync**: Currently relies on basic interpolation. Lacks **Client-Side Prediction**, which causes "input lag" on high-latency connections.
+- **Network Sync**: Uses advanced linear interpolation for other players and **Client-Side Prediction** for the local player.
 - **Rendering Performance**: Using **Canvas 2D API** limits us to simple shapes and a few thousand particles. Transitioning to **WebGL** would enable complex shaders and better frame rates.
 - **Monolithic Backend**: `server.js` handles all responsibilities. Future growth will require splitting logic into microservices or modular components (Lobby, Match, Persistence).
 - **Static Environments**: Buildings and terrain are currently indestructible and visually static.
@@ -158,7 +164,7 @@ To transition from a learning project to a **marketable product**, the following
 | :--- | :--- | :--- | :--- |
 | **Rendering** | Canvas 2D | **PixiJS (WebGL)** | GPU acceleration, Shaders, 10x more particles. |
 | **Network** | WebSockets | **WebRTC (Geckos.io)** | UDP-like performance, lower latency, better for fast-paced action. |
-| **Networking Logic** | Interpolation | **Client-Side Prediction** | Eliminates felt input lag for the local player. |
+| **Networking Logic** | Client-Side Prediction | **Server-Side Rollback** | Further improves hit registration for high-latency shots. |
 | **Architecture** | Monolith | **Modular Microservices** | Scalability and easier maintenance. |
 | **Assets** | Procedural Code | **Sprite Sheets / Assets** | High-fidelity visuals, unique character design. |
 
