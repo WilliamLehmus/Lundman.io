@@ -1237,7 +1237,7 @@ function drawMinimap() {
     // Players
     gameState.players.forEach(p => {
         if (p.hidden && p.id !== myId) return;
-        const color = p.team === 'blue' ? '#00f2ff' : '#ff00ff';
+        const color = p.t === 'blue' ? '#00f2ff' : '#ff00ff';
         ctx.fillStyle = color;
         const px = p.x * scale;
         const py = p.y * scale;

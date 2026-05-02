@@ -1765,11 +1765,11 @@ class Lobby {
                 winner, 
                 scores: this.scores,
                 stats: Object.values(this.players).map(p => ({
-                    username: p.username,
-                    team: p.team,
+                    u: p.username,
+                    t: p.team,
                     kills: p.kills,
                     deaths: p.deaths,
-                    scrap: p.scrap
+                    s: p.scrap
                 })).sort((a, b) => b.kills - a.kills)
             });
             this.syncToDB();
