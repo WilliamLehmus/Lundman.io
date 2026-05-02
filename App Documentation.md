@@ -117,14 +117,12 @@ npm run dev
 ### 1. Server-Authoritative Physics
 The game is inherently protected against most cheats (speed, health, walls) because the server calculates all physics centrally.
 
-### 2. Current Vulnerabilities & Roadmap
-The following security measures are currently being implemented:
-- **Dev Mode Locking**: Restricting powerful administrative chassis and tools to local development only.
-- **Input Sanitization**: Filtering incoming socket packets to prevent malicious data from reaching the physics engine.
-- **Identity Protection**: Planned implementation of a PIN/Password system to protect player statistics.
-
-### 3. Rate Limiting
-To prevent denial-of-service attacks, per-socket rate limiting is implemented (or planned) to ensure no single user can overwhelm the game loop.
+### 2. Implemented Security Measures
+The following security measures have been successfully implemented:
+- **Dev Mode Locking**: Restricted administrative chassis (`DEV` tank) and debug tools to local development only.
+- **Input Sanitization**: Validating incoming socket packets to prevent malicious data injection.
+- **Identity Protection**: A secure 4-10 character PIN system (hashed with `bcryptjs`) protects player accounts.
+- **Rate Limiting**: Integrated `helmet`, `express-rate-limit`, and custom WebSocket rate limiting (100 pkts/sec) to prevent DDoS and brute-force attacks.
 
 ---
 

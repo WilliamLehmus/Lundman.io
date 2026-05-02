@@ -1367,7 +1367,7 @@ class Lobby {
                 return;
             }
 
-            if (distToObj < 100) {
+            if (distToObj > 100) {
                 bot.inputs.up = Math.abs(angleDiff) < 1.2;
                 bot.inputs.down = false;
             } else {
@@ -1713,6 +1713,7 @@ class Lobby {
 
         Object.keys(this.bullets).forEach(id => this.destroyBullet(id));
         Object.keys(this.elements).forEach(id => this.destroyElement(id));
+        Object.keys(this.guardians).forEach(id => this.destroyGuardian(id));
         
         Object.values(this.players).forEach(p => this.respawn(p));
         
