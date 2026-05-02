@@ -1223,14 +1223,16 @@ class Lobby {
                 // Puddle Replenishment (Check every second, but only spawn if needed)
                 this.replenishElements();
 
+                /* 
                 // Periodic Guardian Spawn (with cooldown)
                 if (this.active && Object.keys(this.guardians).length < 2 && now > (this.nextGuardianSpawn || 0)) {
                     this.spawnGuardian();
                 }
+                */
             }
 
             this.processBots(now);
-            this.processGuardians(now);
+            // this.processGuardians(now); // Disabled drones
             Object.values(this.players).forEach(p => {
                 // Scrap Buff Feedback
                 const buffLevel = Math.floor(p.scrap / 100);

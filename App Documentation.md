@@ -71,7 +71,10 @@ The environment is reactive:
     - DB is cleared on server startup to ensure only "live" lobbies are listed.
 - **Quick Match**: Logic that prioritizes joining the most populated non-full lobby before creating a new one.
 
-### 4. AI Guardians (Drones)
+### 4. AI Guardians (Drones) [DISABLED]
+> [!NOTE]
+> AI Guardians are currently disabled but the logic remains in the codebase for potential future reactivation.
+
 - **Deployment**: Defensive drones spawn periodically near the map center.
 - **Engagement**: They orbit a fixed point and fire ELECTRIC pulses at any player that enters their range.
 - **Visuals**: Features a rotating red scanning laser and a pulsing thruster glow for high readability.
