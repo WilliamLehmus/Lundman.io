@@ -48,11 +48,16 @@ The environment is reactive:
 - **Ice**: Reduces friction significantly, created by FROST_GUN or freezing WATER. Found naturally in **TUNDRA** biome.
 - **Dirt**: Acts as an **insulator**, blocking ELECTRIC arcs.
 - **Scrap**: Provides linear automated scaling (+100% damage per 100 Scrap, -50% reload per 200 Scrap).
-- **Scrap Shop (Upgrades)**: Manual upgrades accessible via the `ESC` menu. Players can spend collected Scrap on:
+- **Scrap Shop (Upgrades)**: Manual upgrades accessible via the `B` key during matches. Players can spend collected Scrap on:
     - **Armor**: Increases Max HP (+20 per level).
     - **Engine**: Increases Movement & Turn Speed (+15% per level).
     - **Caliber**: Increases Damage (+25% per level) and reduces Reload Time (-10% per level).
-    - *Note: Upgrades go up to Level 5 and reset after each match.*
+    - *Note: Upgrades go up to Level 5. Costs: 100, 250, 500, 1000, 2000. Upgrades reset after each match.*
+- **Chassis Visuals**: Each tank type has a unique aesthetic:
+    - **SCOUT**: Rounded, aerodynamic body with narrow tracks.
+    - **BRAWLER**: Blocky, reinforced body with heavy-duty tracks and extra plating lines.
+    - **ARTILLERY**: Long, narrow chassis with extended tracks for stability.
+    - **DEV**: Standard form with a unique white-neon high-tech glow.
 - **Hazard Damage**: Environmental hazards like **Fire**, **Acid**, and **Gas** damage ALL players within their range, regardless of who created the hazard. **Electric** hazards do not deal HP damage but cause a powerful **Stun** effect to all targets. Standing in your own fire or acid will cause damage.
 
 ### 3. Bot AI System
@@ -94,7 +99,8 @@ npm run dev
 
 ### Controls
 - **Weapons**: `1-6` to switch slots.
-- **Menu/Options**: `ESC` to toggle the options menu (contains volume settings and exit button).
+- **Scrap Shop**: `B` to toggle the upgrade shop (during match).
+- **Options Menu**: `ESC` to toggle volume and exit settings.
 - **Navigation**: "QUIT" buttons in the Options Menu and Lobby Screen allow returning to the main menu.
 
 ---

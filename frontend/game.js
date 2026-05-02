@@ -245,12 +245,42 @@ function toggleShop() {
     shopMenu.style.display = isShopOpen ? 'flex' : 'none';
     if (isShopOpen) {
         if (isMenuOpen) toggleMenu(); // Close options if shop opened
-        const me = gameState.players.find(p => p.id === myId);
-        const shopScrap = document.getElementById('shop-scrap-count');
-        if (me && shopScrap) {
-            shopScrap.innerText = Math.floor(me.scrap);
-        }
+        updateShopUI();
     }
+}
+
+const UPGRADE_COSTS = [100, 250, 500, 1000, 2000];
+function updateShopUI() {
+    if (!gameState || !myId) return;
+    const me = gameState.players.find(p => p.id === myId);
+    if (!me || !me.upgrades) return;
+
+    // Update Scrap count in header
+    const shopScrap = document.getElementById('shop-scrap-count');
+    if (shopScrap) shopScrap.innerText = Math.floor(me.scrap);
+
+    ['health', 'speed', 'power'].forEach(type => {
+        const lvl = me.upgrades[type] || 0;
+        const badge = document.getElementById(`lvl-${type}`);
+        const btn = document.getElementById(`btn-${type}`);
+        
+        if (badge) badge.innerText = `LVL ${lvl}`;
+        if (btn) {
+            if (lvl >= 5) {
+                btn.innerText = 'MAXED';
+                btn.disabled = true;
+                btn.style.opacity = '0.5';
+                btn.style.cursor = 'default';
+            } else {
+                const cost = UPGRADE_COSTS[lvl];
+                btn.innerText = `BUY (${cost})`;
+                const canAfford = me.scrap >= cost;
+                btn.disabled = !canAfford;
+                btn.style.opacity = canAfford ? '1' : '0.5';
+                btn.style.cursor = canAfford ? 'pointer' : 'not-allowed';
+            }
+        }
+    });
 }
 
 if (closeOptionsBtn) closeOptionsBtn.onclick = toggleMenu;
@@ -265,6 +295,7 @@ document.querySelectorAll('.buy-upgrade-btn').forEach(btn => {
 });
 
 socket.on('scrap-update', (newScrap) => {
+    if (isShopOpen) updateShopUI();
     const shopScrap = document.getElementById('shop-scrap-count');
     if (shopScrap) shopScrap.innerText = Math.floor(newScrap);
 });
@@ -830,47 +861,99 @@ function drawTank(p) {
     ctx.save();
     ctx.rotate(p.angle);
 
-    // Tracks (Larvfotter)
+    // Tracks (Larvfotter) - Chassis specific
     ctx.fillStyle = '#111';
     ctx.strokeStyle = '#222';
     ctx.lineWidth = 1;
+    
+    let trackW = TANK_WIDTH + 4;
+    let trackH = 10;
+    let trackOffset = TANK_HEIGHT/2 - 2;
+
+    if (p.chassis === 'BRAWLER') {
+        trackH = 14;
+        trackOffset = TANK_HEIGHT/2 - 4;
+    } else if (p.chassis === 'SCOUT') {
+        trackW = TANK_WIDTH - 4;
+        trackH = 8;
+    } else if (p.chassis === 'ARTILLERY') {
+        trackW = TANK_WIDTH + 12;
+        trackH = 8;
+    }
+
     // Left Track
     ctx.beginPath();
-    ctx.roundRect(-TANK_WIDTH/2 - 2, -TANK_HEIGHT/2 - 2, TANK_WIDTH + 4, 10, 3);
+    ctx.roundRect(-trackW/2, -trackOffset - trackH/2, trackW, trackH, 3);
     ctx.fill();
     ctx.stroke();
     // Right Track
     ctx.beginPath();
-    ctx.roundRect(-TANK_WIDTH/2 - 2, TANK_HEIGHT/2 - 8, TANK_WIDTH + 4, 10, 3);
+    ctx.roundRect(-trackW/2, trackOffset - trackH/2, trackW, trackH, 3);
     ctx.fill();
     ctx.stroke();
 
-    // Body
+    // Body - Chassis specific
     ctx.fillStyle = '#1a1a2e';
     ctx.strokeStyle = color;
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.roundRect(-TANK_WIDTH/2, -TANK_HEIGHT/2, TANK_WIDTH, TANK_HEIGHT, 8);
+
+    if (p.chassis === 'SCOUT') {
+        // Sleeker, more aerodynamic scout
+        ctx.roundRect(-TANK_WIDTH/2 + 4, -TANK_HEIGHT/2 + 2, TANK_WIDTH - 4, TANK_HEIGHT - 4, 15);
+    } else if (p.chassis === 'BRAWLER') {
+        // Heavy, blocky brawler with extra plating lines
+        ctx.roundRect(-TANK_WIDTH/2, -TANK_HEIGHT/2, TANK_WIDTH, TANK_HEIGHT, 4);
+        ctx.fill();
+        ctx.stroke();
+        // Extra armor plates visual
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+        ctx.strokeRect(-TANK_WIDTH/2 + 5, -TANK_HEIGHT/2 + 5, TANK_WIDTH - 10, TANK_HEIGHT - 10);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+    } else if (p.chassis === 'ARTILLERY') {
+        // Long, narrow artillery chassis
+        ctx.roundRect(-TANK_WIDTH/2 - 5, -TANK_HEIGHT/2 + 6, TANK_WIDTH + 10, TANK_HEIGHT - 12, 6);
+    } else {
+        // Default/DEV
+        ctx.roundRect(-TANK_WIDTH/2, -TANK_HEIGHT/2, TANK_WIDTH, TANK_HEIGHT, 8);
+    }
     ctx.fill();
     ctx.stroke();
 
+    // Special DEV tank glow
+    if (p.chassis === 'DEV') {
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(-TANK_WIDTH/2 + 2, -TANK_HEIGHT/2 + 2, TANK_WIDTH - 4, TANK_HEIGHT - 4);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+    }
+
     // Front Indicators (Headlights)
     ctx.fillStyle = 'rgba(255, 255, 100, 0.8)';
+    let headLightX = TANK_WIDTH/2 - 6;
+    if (p.chassis === 'ARTILLERY') headLightX += 4;
+    
     ctx.beginPath();
-    ctx.arc(TANK_WIDTH/2 - 6, -TANK_HEIGHT/4, 3, 0, Math.PI * 2);
+    ctx.arc(headLightX, -TANK_HEIGHT/4, 3, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.arc(TANK_WIDTH/2 - 6, TANK_HEIGHT/4, 3, 0, Math.PI * 2);
+    ctx.arc(headLightX, TANK_HEIGHT/4, 3, 0, Math.PI * 2);
     ctx.fill();
 
     // Back Indicators (Engine Vents)
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
     ctx.lineWidth = 2;
+    let ventX = -TANK_WIDTH/2 + 8;
+    if (p.chassis === 'ARTILLERY') ventX -= 4;
+    
     ctx.beginPath();
-    ctx.moveTo(-TANK_WIDTH/2 + 8, -10);
-    ctx.lineTo(-TANK_WIDTH/2 + 8, 10);
-    ctx.moveTo(-TANK_WIDTH/2 + 12, -10);
-    ctx.lineTo(-TANK_WIDTH/2 + 12, 10);
+    ctx.moveTo(ventX, -10);
+    ctx.lineTo(ventX, 10);
+    ctx.moveTo(ventX + 4, -10);
+    ctx.lineTo(ventX + 4, 10);
     ctx.stroke();
     
     ctx.restore();
@@ -1556,6 +1639,8 @@ function interpolateState(dt) {
             aimAngle: lerpAngle(gp.aimAngle || gp.angle, sp.aimAngle || sp.angle, P)
         };
     });
+
+    if (isShopOpen) updateShopUI();
 
     // Label Avoidance Pre-pass (STRICTER)
     const sorted = [...gameState.players].sort((a, b) => a.y - b.y);

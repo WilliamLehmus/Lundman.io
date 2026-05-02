@@ -680,6 +680,23 @@ input[type="range"]::-webkit-slider-thumb {
     color: rgba(255, 255, 255, 0.4);
 }
 
+.lvl-badge {
+    font-size: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 8px;
+    color: #aaa;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.buy-upgrade-btn:disabled {
+    cursor: not-allowed;
+    filter: grayscale(1);
+    border-color: #444 !important;
+    color: #666 !important;
+}
+
 .buy-upgrade-btn {
     background: rgba(0, 242, 255, 0.1);
     border: 1px solid var(--p1-color);

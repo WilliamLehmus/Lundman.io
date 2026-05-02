@@ -1601,6 +1601,8 @@ class Lobby {
                 aimAngle: p.inputs.aimAngle !== undefined ? p.inputs.aimAngle : p.body.angle,
                 hp: p.hp, maxHp: p.maxHp, weapon: p.slots[p.currentSlot],
                 currentSlot: p.currentSlot, slots: p.slots, scrap: p.scrap, hidden: p.hidden,
+                upgrades: p.upgrades,
+                chassis: p.chassis,
                 stunned: p.statusEffects.stun > Date.now(),
                 slowed: p.statusEffects.slow > Date.now(),
                 burning: p.statusEffects.burn > Date.now(),

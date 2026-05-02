@@ -210,26 +210,26 @@
             </div>
             <div class="shop-grid">
                 <div class="shop-item">
-                    <div class="item-info">
-                        <span class="item-name">ARMOR UPGRADE</span>
-                        <span class="item-desc">+20 MAX HP</span>
-                    </div>
-                    <button class="buy-upgrade-btn" data-type="health">BUY (100)</button>
+                <div class="shop-item-info">
+                    <h3>Armor Plating</h3>
+                    <p>+20 Max HP <span class="lvl-badge" id="lvl-health">LVL 0</span></p>
                 </div>
-                <div class="shop-item">
-                    <div class="item-info">
-                        <span class="item-name">ENGINE TUNING</span>
-                        <span class="item-desc">+15% SPEED</span>
-                    </div>
-                    <button class="buy-upgrade-btn" data-type="speed">BUY (100)</button>
+                <button class="buy-upgrade-btn" data-type="health" id="btn-health">BUY (100)</button>
+            </div>
+            <div class="shop-item">
+                <div class="shop-item-info">
+                    <h3>Engine Tune</h3>
+                    <p>+15% Speed <span class="lvl-badge" id="lvl-speed">LVL 0</span></p>
                 </div>
-                <div class="shop-item">
-                    <div class="item-info">
-                        <span class="item-name">CALIBER UPGRADE</span>
-                        <span class="item-desc">+25% DAMAGE</span>
-                    </div>
-                    <button class="buy-upgrade-btn" data-type="power">BUY (100)</button>
+                <button class="buy-upgrade-btn" data-type="speed" id="btn-speed">BUY (100)</button>
+            </div>
+            <div class="shop-item">
+                <div class="shop-item-info">
+                    <h3>Heavy Caliber</h3>
+                    <p>+25% DMG / -10% Reload <span class="lvl-badge" id="lvl-power">LVL 0</span></p>
                 </div>
+                <button class="buy-upgrade-btn" data-type="power" id="btn-power">BUY (100)</button>
+            </div>
             </div>
             <div id="shop-hint">LVL 5 MAX | COSTS INCREASE PER LEVEL</div>
             <button id="close-shop" class="btn">CLOSE SHOP (B)</button>
