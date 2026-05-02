@@ -49,15 +49,15 @@ export const CHASSIS = {
     SCOUT: {
         name: 'Scout',
         hp: 80,
-        speed: 0.008, // Increased from 0.007
-        turnSpeed: 0.08,
+        speed: 0.008, // Increased from 0.006
+        turnSpeed: 0.065,
         mass: 3,
         weapons: ['STANDARD', 'FLAMETHROWER']
     },
     BRAWLER: {
         name: 'Brawler',
         hp: 200,
-        speed: 0.005, // Increased from 0.004
+        speed: 0.006, // Increased from 0.0045
         turnSpeed: 0.04,
         mass: 10,
         weapons: ['HEAVY_GUN']
@@ -65,7 +65,7 @@ export const CHASSIS = {
     ARTILLERY: {
         name: 'Artillery',
         hp: 60,
-        speed: 0.004,
+        speed: 0.0045, // Increased from 0.0035
         turnSpeed: 0.04,
         mass: 15,
         weapons: ['STANDARD', 'TESLA', 'WATER_CANNON', 'FROST_GUN']

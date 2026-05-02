@@ -201,8 +201,44 @@
         </div>
     </div>
 
-    <div id="ui-hint" style="position: absolute; bottom: 20px; left: 20px; color: rgba(255,255,255,0.5); font-family: 'Outfit'; font-size: 12px; pointer-events: none;">
-        ESC FOR OPTIONS
+    <!-- Scrap Shop Menu -->
+    <div id="shop-menu" class="overlay" style="display: none;">
+        <div class="menu-content shop-content">
+            <div class="shop-header">
+                <h1>SCRAP SHOP</h1>
+                <div class="scrap-total">TOTAL SCRAP: <span id="shop-scrap-count">0</span></div>
+            </div>
+            <div class="shop-grid">
+                <div class="shop-item">
+                    <div class="item-info">
+                        <span class="item-name">ARMOR UPGRADE</span>
+                        <span class="item-desc">+20 MAX HP</span>
+                    </div>
+                    <button class="buy-upgrade-btn" data-type="health">BUY (100)</button>
+                </div>
+                <div class="shop-item">
+                    <div class="item-info">
+                        <span class="item-name">ENGINE TUNING</span>
+                        <span class="item-desc">+15% SPEED</span>
+                    </div>
+                    <button class="buy-upgrade-btn" data-type="speed">BUY (100)</button>
+                </div>
+                <div class="shop-item">
+                    <div class="item-info">
+                        <span class="item-name">CALIBER UPGRADE</span>
+                        <span class="item-desc">+25% DAMAGE</span>
+                    </div>
+                    <button class="buy-upgrade-btn" data-type="power">BUY (100)</button>
+                </div>
+            </div>
+            <div id="shop-hint">LVL 5 MAX | COSTS INCREASE PER LEVEL</div>
+            <button id="close-shop" class="btn">CLOSE SHOP (B)</button>
+        </div>
+    </div>
+
+    <div id="ui-hint" style="position: absolute; bottom: 20px; left: 20px; color: rgba(255,255,255,0.5); font-family: 'Outfit'; font-size: 12px; pointer-events: none; display: flex; flex-direction: column; gap: 4px;">
+        <span>ESC FOR OPTIONS</span>
+        <span>B FOR SCRAP SHOP</span>
     </div>
 
     <div id="debug-menu" class="hidden">

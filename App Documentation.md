@@ -48,6 +48,11 @@ The environment is reactive:
 - **Ice**: Reduces friction significantly, created by FROST_GUN or freezing WATER. Found naturally in **TUNDRA** biome.
 - **Dirt**: Acts as an **insulator**, blocking ELECTRIC arcs.
 - **Scrap**: Provides linear automated scaling (+100% damage per 100 Scrap, -50% reload per 200 Scrap).
+- **Scrap Shop (Upgrades)**: Manual upgrades accessible via the `ESC` menu. Players can spend collected Scrap on:
+    - **Armor**: Increases Max HP (+20 per level).
+    - **Engine**: Increases Movement & Turn Speed (+15% per level).
+    - **Caliber**: Increases Damage (+25% per level) and reduces Reload Time (-10% per level).
+    - *Note: Upgrades go up to Level 5 and reset after each match.*
 - **Hazard Damage**: Environmental hazards like **Fire**, **Acid**, and **Gas** damage ALL players within their range, regardless of who created the hazard. **Electric** hazards do not deal HP damage but cause a powerful **Stun** effect to all targets. Standing in your own fire or acid will cause damage.
 
 ### 3. Bot AI System
@@ -170,4 +175,13 @@ To transition from a learning project to a **marketable product**, the following
 > 3.  **Frontend Logic**: `frontend/game.js` (Rendering, Atmosphere)
 > 4.  **UI Elements**: `frontend/index.html` (Dropdown values, IDs)
 > 
-> Failure to update the `index.html` dropdown value will cause the server to receive an "invalid" key and fallback to random generation.
+### 2. Known Issues & Critical Fixes
+
+#### **Shop Menu (B-key) Non-Responsive**
+- **Date**: 2026-05-02
+- **Issue**: The Scrap Shop menu failed to open when pressing the `B` key, despite the player being in a match with collected Scrap.
+- **Root Cause**: The client-side logic required `gameState.active` to be true. However, the server's `broadcastState()` method was not including the `active` property in the synchronization packets. This caused the client to believe the match was in an invalid state for shopping.
+- **Fix**: 
+    1.  Updated `backend/server.js` to include `active: this.active` in the global state broadcast.
+    2.  Updated `frontend/game.js` to use the more reliable local `gameActive` flag for menu toggling.
+    3.  Moved menu toggle listeners (`B` and `ESC`) to the top of the input handler to bypass `gameActive` checks for UI interactions.

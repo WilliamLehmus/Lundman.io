@@ -79,7 +79,7 @@ const TICK_RATE = 60;
 const TANK_WIDTH = 58;  // Length
 const TANK_HEIGHT = 42; // Width
 const WORLD_SIZE = 4000;
-const MIN_PLAYERS = 2;
+const MIN_PLAYERS = 1;
 
 // Global State
 let lobbies = {};
@@ -230,7 +230,8 @@ class Lobby {
             deaths: 0,
             statusEffects: { stun: 0, slip: 0, slow: 0, burn: 0, wet: 0, stunImmunity: 0, revealed: 0 },
             inputs: { up: false, down: false, left: false, right: false, shoot: false, aimAngle: 0 },
-            lastBuffLevel: 0
+            lastBuffLevel: 0,
+            upgrades: { health: 0, speed: 0, power: 0 }
         };
     }
 
@@ -301,7 +302,8 @@ class Lobby {
             role: Math.random() > 0.6 ? 'FLANKER' : 'ASSAULT',
             strafeDir: Math.random() > 0.5 ? 1 : -1,
             lastRoleSwitch: Date.now(),
-            lastBuffLevel: 0
+            lastBuffLevel: 0,
+            upgrades: { health: 0, speed: 0, power: 0 }
         };
     }
 
@@ -1210,11 +1212,16 @@ class Lobby {
                 const friction = config.speed > 0.005 ? baseFriction : baseFriction * 1.5;
                 if (body.frictionAir !== friction) body.frictionAir = friction;
                 
-                const moveSpeed = config.speed * biome.speedMult * (isSlowed ? 0.5 : 1.0);
-                const turnSpeed = config.turnSpeed * (isSlowed ? 0.6 : 1.0);
+                const upgrades = p.upgrades || { health: 0, speed: 0, power: 0 };
+                const speedBonus = 1 + (upgrades.speed * 0.15); // +15% speed per level
+                const moveSpeed = config.speed * biome.speedMult * (isSlowed ? 0.5 : 1.0) * speedBonus;
+                const turnSpeed = config.turnSpeed * (isSlowed ? 0.6 : 1.0) * speedBonus;
 
-                if (inputs.left) Body.setAngularVelocity(body, -turnSpeed);
-                if (inputs.right) Body.setAngularVelocity(body, turnSpeed);
+                // Smooth Turning (Lerp)
+                const targetAngularVel = inputs.left ? -turnSpeed : (inputs.right ? turnSpeed : 0);
+                const currentAngularVel = body.angularVelocity;
+                const turnLerp = 0.15; // Lower is softer, higher is snappier
+                Body.setAngularVelocity(body, currentAngularVel + (targetAngularVel - currentAngularVel) * turnLerp);
                 if (inputs.up) {
                     Body.applyForce(body, body.position, {
                         x: Math.cos(body.angle) * moveSpeed,
@@ -1237,9 +1244,11 @@ class Lobby {
         const baseWeapon = WEAPON_MODULES[moduleName];
         const now = Date.now();
         
-        // Scrap Bonus: +100% damage per 100 scrap; -50% reload per 200 scrap
-        const scrapBuff = 1 + (p.scrap / 100); 
-        const reloadTime = baseWeapon.reload / (1 + (p.scrap / 200));
+        // Scrap Bonus & Power Upgrades
+        const upgrades = p.upgrades || { health: 0, speed: 0, power: 0 };
+        const upgradeBuff = 1 + (upgrades.power * 0.25); // +25% damage per level
+        const scrapBuff = (1 + (p.scrap / 100)) * upgradeBuff; 
+        const reloadTime = baseWeapon.reload / (1 + (p.scrap / 200) + (upgrades.power * 0.1)); // -10% reload per level
 
         if (now - p.lastShot > reloadTime) {
             // Apply damage bonus in the fire call
@@ -1580,6 +1589,7 @@ class Lobby {
 
     broadcastState() {
         const state = {
+            active: this.active,
             worldSize: this.worldSize,
             timer: this.matchTimer,
             scores: this.scores,
@@ -1926,6 +1936,35 @@ io.on('connection', (socket) => {
             Object.values(lobby.players).forEach(p => {
                 if (p.isBot) p.isActive = active;
             });
+        }
+    });
+
+    socket.on('buy-upgrade', (type) => {
+        const lobby = lobbies[socket.lobbyId];
+        if (!lobby || !lobby.active) return;
+        const p = lobby.players[socket.id];
+        if (!p) return;
+
+        const currentLevel = p.upgrades[type] || 0;
+        if (currentLevel >= 5) return; // Max level 5
+
+        const costs = [100, 250, 500, 1000, 2000];
+        const cost = costs[currentLevel];
+
+        if (p.scrap >= cost) {
+            p.scrap -= cost;
+            p.upgrades[type]++;
+            
+            // Apply immediate effects
+            if (type === 'health') {
+                p.maxHp += 20;
+                p.hp += 20;
+            }
+            
+            socket.emit('player-event', { text: `UPGRADED ${type.toUpperCase()} TO LVL ${p.upgrades[type]}!`, color: '#00ff00' });
+            socket.emit('scrap-update', p.scrap); // Update client immediately
+        } else {
+            socket.emit('player-event', { text: `NOT ENOUGH SCRAP! NEED ${cost}`, color: '#ff0000' });
         }
     });
 

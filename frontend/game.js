@@ -161,9 +161,11 @@ const TANK_HEIGHT = 42; // Width
 
 // Audio setup
 const optionsMenu = document.getElementById('options-menu');
+const shopMenu = document.getElementById('shop-menu');
 const musicSlider = document.getElementById('music-volume');
 const sfxSlider = document.getElementById('sfx-volume');
 const closeOptionsBtn = document.getElementById('close-options');
+const closeShopBtn = document.getElementById('close-shop');
 
 const musicTracks = [
     new Audio('/music_track1.mp3'),
@@ -175,6 +177,7 @@ let currentMusicIndex = 0;
 let musicVolume = parseFloat(localStorage.getItem('tanks_music_vol')) || 0.5;
 let sfxVolume = parseFloat(localStorage.getItem('tanks_sfx_vol')) || 0.7;
 let isMenuOpen = false;
+let isShopOpen = false;
 
 function setupAudio() {
     musicTracks.forEach(track => {
@@ -229,9 +232,42 @@ if (sfxSlider) sfxSlider.oninput = (e) => {
 function toggleMenu() {
     isMenuOpen = !isMenuOpen;
     optionsMenu.style.display = isMenuOpen ? 'flex' : 'none';
+    if (isMenuOpen && isShopOpen) toggleShop(); // Close shop if options opened
+}
+
+function toggleShop() {
+    console.log('toggleShop called. gameActive:', gameActive);
+    if (!gameActive || (gameState && gameState.gameOver)) {
+        console.warn('Cannot open shop: match not active or game over');
+        return;
+    }
+    isShopOpen = !isShopOpen;
+    shopMenu.style.display = isShopOpen ? 'flex' : 'none';
+    if (isShopOpen) {
+        if (isMenuOpen) toggleMenu(); // Close options if shop opened
+        const me = gameState.players.find(p => p.id === myId);
+        const shopScrap = document.getElementById('shop-scrap-count');
+        if (me && shopScrap) {
+            shopScrap.innerText = Math.floor(me.scrap);
+        }
+    }
 }
 
 if (closeOptionsBtn) closeOptionsBtn.onclick = toggleMenu;
+if (closeShopBtn) closeShopBtn.onclick = toggleShop;
+
+// Shop Logic
+document.querySelectorAll('.buy-upgrade-btn').forEach(btn => {
+    btn.onclick = (e) => {
+        const type = e.target.getAttribute('data-type');
+        socket.emit('buy-upgrade', type);
+    };
+});
+
+socket.on('scrap-update', (newScrap) => {
+    const shopScrap = document.getElementById('shop-scrap-count');
+    if (shopScrap) shopScrap.innerText = Math.floor(newScrap);
+});
 
 // MATERIALS is now imported from gameConfig.js
 
@@ -333,6 +369,14 @@ window.addEventListener('keydown', e => handleInput(e.code, true));
 window.addEventListener('keyup', e => handleInput(e.code, false));
 
 function handleInput(code, isPressed) {
+    if (isPressed) {
+        if (code === 'Escape') toggleMenu();
+        if (code === 'KeyB' || code === 'KeyV') {
+            console.log('B or V key pressed');
+            toggleShop();
+        }
+    }
+
     if (!gameActive) return;
 
     let changed = false;
@@ -340,10 +384,7 @@ function handleInput(code, isPressed) {
     if (code === 'KeyS' || code === 'ArrowDown') { keys.down = isPressed; changed = true; }
     if (code === 'KeyA' || code === 'ArrowLeft') { keys.left = isPressed; changed = true; }
     if (code === 'KeyD' || code === 'ArrowRight') { keys.right = isPressed; changed = true; }
-    if (code === 'Space' || code === 'Enter') {
-        keys.shoot = isPressed;
-        changed = true;
-    }
+    // Removed Space/Enter shooting as per user request
 
     if (changed) {
         updateAimAngle();
@@ -352,7 +393,6 @@ function handleInput(code, isPressed) {
 
     // Weapon slot switching
     if (isPressed) {
-        if (code === 'Escape') toggleMenu();
         if (code === 'Digit1') socket.emit('switch-weapon', 0);
         if (code === 'Digit2') socket.emit('switch-weapon', 1);
         if (code === 'Digit3') socket.emit('switch-weapon', 2);
@@ -409,7 +449,7 @@ function updateLobbyUI(id, players) {
     const count = players.length;
     lobbyStatus.innerText = `PLAYERS: ${count}/10`;
     
-    if (count >= 2) {
+    if (count >= 1) {
         startGameBtn.classList.remove('hidden');
     } else {
         startGameBtn.classList.add('hidden');
