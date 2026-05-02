@@ -52,7 +52,8 @@ const { Engine, Bodies, Body, Composite, Vector, Events, Query } = Matter;
 
 // Game Constants
 const TICK_RATE = 60;
-const TANK_SIZE = 45;
+const TANK_WIDTH = 58;  // Length
+const TANK_HEIGHT = 42; // Width
 const WORLD_SIZE = 4000;
 const MIN_PLAYERS = 1;
 
@@ -177,7 +178,7 @@ class Lobby {
             playerData[username] = { kills: 0, deaths: 0, scrap: 0, lastSeen: Date.now() };
         }
 
-        const body = Bodies.rectangle(startPos.x, startPos.y, TANK_SIZE - 2, TANK_SIZE - 2, {
+        const body = Bodies.rectangle(startPos.x, startPos.y, TANK_WIDTH - 2, TANK_HEIGHT - 2, {
             frictionAir: config.speed > 0.005 ? 0.1 : 0.2,
             mass: config.mass,
             label: `tank-${socket.id}`,
@@ -234,7 +235,7 @@ class Lobby {
         
         const config = CHASSIS[chassisType];
         
-        const body = Bodies.rectangle(startPos.x, startPos.y, TANK_SIZE - 2, TANK_SIZE - 2, {
+        const body = Bodies.rectangle(startPos.x, startPos.y, TANK_WIDTH - 2, TANK_HEIGHT - 2, {
             frictionAir: config.speed > 0.005 ? 0.1 : 0.2,
             mass: config.mass,
             label: `tank-${id}`,

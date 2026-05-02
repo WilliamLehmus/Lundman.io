@@ -155,7 +155,8 @@ let lastFrameTime = performance.now();
 const bulletTrails = new Map();
 
 // Constants
-const TANK_SIZE = 45;
+const TANK_WIDTH = 58;  // Length
+const TANK_HEIGHT = 42; // Width
 
 // Audio setup
 const optionsMenu = document.getElementById('options-menu');
@@ -788,12 +789,12 @@ function drawTank(p) {
     ctx.lineWidth = 1;
     // Left Track
     ctx.beginPath();
-    ctx.roundRect(-TANK_SIZE/2 - 4, -TANK_SIZE/2 + 2, TANK_SIZE + 8, 10, 3);
+    ctx.roundRect(-TANK_WIDTH/2 - 2, -TANK_HEIGHT/2 - 2, TANK_WIDTH + 4, 10, 3);
     ctx.fill();
     ctx.stroke();
     // Right Track
     ctx.beginPath();
-    ctx.roundRect(-TANK_SIZE/2 - 4, TANK_SIZE/2 - 12, TANK_SIZE + 8, 10, 3);
+    ctx.roundRect(-TANK_WIDTH/2 - 2, TANK_HEIGHT/2 - 8, TANK_WIDTH + 4, 10, 3);
     ctx.fill();
     ctx.stroke();
 
@@ -802,27 +803,27 @@ function drawTank(p) {
     ctx.strokeStyle = color;
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.roundRect(-TANK_SIZE/2, -TANK_SIZE/2, TANK_SIZE, TANK_SIZE, 8);
+    ctx.roundRect(-TANK_WIDTH/2, -TANK_HEIGHT/2, TANK_WIDTH, TANK_HEIGHT, 8);
     ctx.fill();
     ctx.stroke();
 
     // Front Indicators (Headlights)
     ctx.fillStyle = 'rgba(255, 255, 100, 0.8)';
     ctx.beginPath();
-    ctx.arc(TANK_SIZE/2 - 4, -TANK_SIZE/4, 3, 0, Math.PI * 2);
+    ctx.arc(TANK_WIDTH/2 - 6, -TANK_HEIGHT/4, 3, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.arc(TANK_SIZE/2 - 4, TANK_SIZE/4, 3, 0, Math.PI * 2);
+    ctx.arc(TANK_WIDTH/2 - 6, TANK_HEIGHT/4, 3, 0, Math.PI * 2);
     ctx.fill();
 
     // Back Indicators (Engine Vents)
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(-TANK_SIZE/2 + 6, -10);
-    ctx.lineTo(-TANK_SIZE/2 + 6, 10);
-    ctx.moveTo(-TANK_SIZE/2 + 10, -10);
-    ctx.lineTo(-TANK_SIZE/2 + 10, 10);
+    ctx.moveTo(-TANK_WIDTH/2 + 8, -10);
+    ctx.lineTo(-TANK_WIDTH/2 + 8, 10);
+    ctx.moveTo(-TANK_WIDTH/2 + 12, -10);
+    ctx.lineTo(-TANK_WIDTH/2 + 12, 10);
     ctx.stroke();
     
     ctx.restore();
@@ -906,7 +907,7 @@ function drawTank(p) {
     ctx.fillStyle = 'white';
     ctx.font = '700 12px Outfit';
     ctx.textAlign = 'center';
-    const labelY = -TANK_SIZE - 5 - (p.labelYOffset || 0);
+    const labelY = -TANK_HEIGHT - 10 - (p.labelYOffset || 0);
     ctx.fillText(p.username.toUpperCase(), 0, labelY);
     ctx.restore();
 
@@ -919,14 +920,14 @@ function drawTank(p) {
         ctx.setLineDash([8, 4]);
         ctx.lineDashOffset = -renderTime * 0.15;
         ctx.beginPath();
-        ctx.arc(0, 0, TANK_SIZE * 0.85, 0, Math.PI * 2);
+        ctx.arc(0, 0, TANK_WIDTH * 0.75, 0, Math.PI * 2);
         ctx.stroke();
         
         // Inner glow
         ctx.globalAlpha = 0.2 + Math.sin(renderTime * 0.01) * 0.1;
         ctx.fillStyle = '#fff';
         ctx.beginPath();
-        ctx.arc(0, 0, TANK_SIZE * 0.8, 0, Math.PI * 2);
+        ctx.arc(0, 0, TANK_WIDTH * 0.7, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
     }
@@ -934,7 +935,7 @@ function drawTank(p) {
     // Status Icons
     if (p.stunned || p.slowed || p.burning || p.scrap >= 100) {
         ctx.save();
-        ctx.translate(p.x, p.y - TANK_SIZE - 30);
+        ctx.translate(p.x, p.y - TANK_HEIGHT - 35);
         ctx.textAlign = 'center';
         
         let yOffset = 0;
