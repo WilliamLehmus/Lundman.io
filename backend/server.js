@@ -79,7 +79,7 @@ const TICK_RATE = 60;
 const TANK_WIDTH = 58;  // Length
 const TANK_HEIGHT = 42; // Width
 const WORLD_SIZE = 4000;
-const MIN_PLAYERS = 1;
+const MIN_PLAYERS = 2;
 
 // Global State
 let lobbies = {};

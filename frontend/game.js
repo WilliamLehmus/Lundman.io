@@ -409,7 +409,7 @@ function updateLobbyUI(id, players) {
     const count = players.length;
     lobbyStatus.innerText = `PLAYERS: ${count}/10`;
     
-    if (count >= 1) {
+    if (count >= 2) {
         startGameBtn.classList.remove('hidden');
     } else {
         startGameBtn.classList.add('hidden');
