@@ -503,6 +503,20 @@ if (leaveBtn) {
     };
 }
 
+const leaveLobbyBtn = document.getElementById('leave-lobby-btn');
+if (leaveLobbyBtn) {
+    leaveLobbyBtn.onclick = () => {
+        location.reload();
+    };
+}
+
+const quitToMenuBtn = document.getElementById('quit-to-menu-btn');
+if (quitToMenuBtn) {
+    quitToMenuBtn.onclick = () => {
+        location.reload();
+    };
+}
+
 const lobbyChassisSelect = document.getElementById('lobby-chassis-select');
 if (lobbyChassisSelect) {
     lobbyChassisSelect.onchange = (e) => {

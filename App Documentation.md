@@ -88,9 +88,9 @@ npm run dev
 ```
 
 ### Controls
-- **Movement**: `W, A, S, D` or `Arrow Keys`
-- **Shoot**: `Space` or `Enter`
 - **Weapons**: `1-6` to switch slots.
+- **Menu/Options**: `ESC` to toggle the options menu (contains volume settings and exit button).
+- **Navigation**: "QUIT" buttons in the Options Menu and Lobby Screen allow returning to the main menu.
 
 ---
 
