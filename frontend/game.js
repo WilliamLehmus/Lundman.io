@@ -2943,28 +2943,31 @@ function drawElements() {
                     ctx.fill();
 
                     // 2. High-Voltage Jitter Pattern
-                    ctx.save();
-                    ctx.globalAlpha = 0.8;
                     const p = electricPatterns[e.id % 9];
-                    // Rapid jittery movement
-                    const flowX = (renderTime * 0.1) % ELECTRIC_TILE_SIZE;
-                    const matrix = new DOMMatrix().translate(flowX, -flowX * 0.5);
-                    p.setTransform(matrix);
-                    ctx.fillStyle = p;
-                    
-                    // Intense Cyan Glow
-                    ctx.shadowBlur = 15 + Math.sin(renderTime * 0.01) * 5;
-                    ctx.shadowColor = '#00f2ff';
-                    drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
-                    ctx.fill();
-                    ctx.restore();
+                    if (p) {
+                        ctx.save();
+                        ctx.globalAlpha = 0.8;
+                        // Rapid jittery movement
+                        const flowX = (renderTime * 0.1) % ELECTRIC_TILE_SIZE;
+                        const matrix = new DOMMatrix().translate(flowX, -flowX * 0.5);
+                        p.setTransform(matrix);
+                        ctx.fillStyle = p;
+                        
+                        // Intense Cyan Glow (Optimized: only if quality allows)
+                        ctx.shadowBlur = 10 + Math.sin(renderTime * 0.01) * 5;
+                        ctx.shadowColor = '#00f2ff';
+                        drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
+                        ctx.fill();
+                        ctx.restore();
+                    }
 
                     // 3. Dynamic Lightning Bolts
-                    ctx.save();
-                    ctx.strokeStyle = '#fff';
-                    ctx.lineWidth = 1.5;
-                    ctx.shadowBlur = 10;
-                    ctx.shadowColor = '#00f2ff';
+                    if (Math.random() > 0.4) { // Throttled lightning for performance
+                        ctx.save();
+                        ctx.strokeStyle = '#fff';
+                        ctx.lineWidth = 1.5;
+                        ctx.shadowBlur = 8;
+                        ctx.shadowColor = '#00f2ff';
                     for (let i = 0; i < 2; i++) {
                         if (Math.random() > 0.3) {
                             ctx.beginPath();
@@ -2982,7 +2985,8 @@ function drawElements() {
                             ctx.stroke();
                         }
                     }
-                    ctx.restore();
+                        ctx.restore();
+                    }
                 } else {
                     // Fallback for non-premium or other liquids (DIRT, ICE, etc.)
                     ctx.fillStyle = config.color;
@@ -3023,12 +3027,14 @@ function drawElements() {
                 ctx.fill();
 
                 // 2. Swirling Smoke Pattern (Wispy & Flowing)
-                ctx.globalAlpha = 0.5;
                 const p = gasPatterns[e.id % 9];
-                const flowX = (renderTime * 0.008) % GAS_TILE_SIZE;
-                const matrix = new DOMMatrix().translate(flowX, flowX * 0.2);
-                p.setTransform(matrix);
-                ctx.fillStyle = p;
+                if (p) {
+                    ctx.save();
+                    ctx.globalAlpha = 0.5;
+                    const flowX = (renderTime * 0.008) % GAS_TILE_SIZE;
+                    const matrix = new DOMMatrix().translate(flowX, flowX * 0.2);
+                    p.setTransform(matrix);
+                    ctx.fillStyle = p;
                 
                 // Extremely soft edges
                 ctx.shadowBlur = 60;
@@ -3045,7 +3051,9 @@ function drawElements() {
 
                 ctx.restore();
             }
+            ctx.restore();
         }
+    }
         ctx.restore();
     });
 }

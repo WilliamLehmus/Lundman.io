@@ -24,9 +24,8 @@ body {
     align-items: center;
 }
 
-/* Global Cursor Override when game is active */
-body.game-active-cursor,
-body.game-active-cursor * {
+/* Hide cursor ONLY over the game canvas when active, never over UI */
+body.game-active-cursor #gameCanvas {
     cursor: none !important;
 }
 
@@ -46,7 +45,7 @@ body.game-active-cursor * {
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    z-index: 10;
+    z-index: 10000; /* Ensure UI is always on top */
 }
 
 #fps-counter {
