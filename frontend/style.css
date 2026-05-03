@@ -498,7 +498,142 @@ button {
     flex-shrink: 0;
 }
 
-.lobby-chassis-select, .lobby-map-select {
+#tank-selection-area {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    justify-content: center;
+    margin-bottom: 2rem;
+    flex-shrink: 0;
+    pointer-events: auto;
+    width: 100%;
+}
+
+.tank-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--glass-border);
+    border-radius: 15px;
+    padding: 1.2rem;
+    width: 200px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.tank-card:hover {
+    background: rgba(255, 255, 255, 0.08);
+    transform: translateY(-5px);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.tank-card.selected {
+    border-color: var(--p1-color);
+    background: rgba(0, 242, 255, 0.05);
+    box-shadow: 0 0 20px rgba(0, 242, 255, 0.2);
+}
+
+.tank-card .tank-img-container {
+    width: 100%;
+    height: 100px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+.tank-card img {
+    width: 110px;
+    height: 110px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 8px rgba(0,0,0,0.8));
+    transition: transform 0.3s;
+}
+
+.tank-card.selected img {
+    transform: scale(1.15);
+    filter: drop-shadow(0 0 12px var(--p1-color));
+}
+
+.tank-card h4 {
+    margin: 0;
+    font-size: 1rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #fff;
+}
+
+.tank-card .tank-stats {
+    font-size: 0.65rem;
+    color: rgba(255, 255, 255, 0.4);
+    display: flex;
+    gap: 8px;
+    font-weight: 700;
+}
+
+.tank-loadout-slots {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    width: 100%;
+    justify-content: center;
+    min-height: 40px;
+}
+
+.loadout-slot {
+    width: 48px; /* Increased size to fit text */
+    height: 58px;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    padding: 4px 0;
+}
+
+.loadout-slot.empty {
+    opacity: 0.3;
+    border-style: dashed;
+}
+
+.loadout-slot .weapon-img {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 5px rgba(0,0,0,0.5));
+}
+
+.weapon-slot-label {
+    font-size: 0.55rem;
+    font-weight: 900;
+    color: var(--p1-color);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+    text-align: center;
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.weapon-slot .weapon-slot-label {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.weapon-slot.active .weapon-slot-label {
+    color: #fff;
+}
+
+.lobby-map-select {
     margin-bottom: 1.5rem;
     display: flex;
     flex-direction: column;
@@ -508,14 +643,14 @@ button {
     flex-shrink: 0;
 }
 
-.lobby-chassis-select label, .lobby-map-select label {
+.lobby-map-select label {
     font-size: 0.75rem;
     letter-spacing: 2px;
     color: var(--p1-color);
     font-weight: 700;
 }
 
-.lobby-chassis-select .premium-select, .lobby-map-select .premium-select {
+.lobby-map-select .premium-select {
     margin-top: 0;
     width: 350px;
     max-width: 100%;
@@ -711,14 +846,19 @@ button:active {
 
 .weapon-slot {
     width: 62px;
-    height: 62px;
+    height: 72px; /* Increased to fit name */
     background: #1a1a2e;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 6px;
     position: relative;
     cursor: pointer;
     transition: all 0.2s;
-    pointer-events: auto; /* Re-enable for the icons */
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding-top: 4px;
 }
 
 .weapon-slot.active {
@@ -739,7 +879,7 @@ button:active {
 
 .weapon-icon-new {
     width: 100%;
-    height: 100%;
+    height: 45px; /* Fixed height for icon area */
     display: flex;
     justify-content: center;
     align-items: center;
@@ -747,8 +887,8 @@ button:active {
 }
 
 .weapon-img {
-    width: 90%;
-    height: 90%;
+    width: 38px;
+    height: 38px;
     object-fit: contain;
 }
 
