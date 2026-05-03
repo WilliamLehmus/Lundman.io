@@ -542,7 +542,8 @@ if (openShopBtn) {
 
 const musicTracks = [
     new Audio('/music_track1.mp3'),
-    new Audio('/music_track2.mp3')
+    new Audio('/music_track2.mp3'),
+    new Audio('/music_track3.mp3')
 ];
 const shotSFX = new Audio('/tank_shot.mp3');
 const flameSFX = new Audio('/flamethrower.mp3');
