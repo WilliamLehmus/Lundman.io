@@ -99,6 +99,54 @@ let playerEvents = []; // { text, color, time }
 let mousePos = { x: 0, y: 0 };
 let renderTime = 0;
 
+// Water Tile System
+let waterPattern = null;
+let lastWaterPatternUpdate = 0;
+const WATER_TILE_SIZE = 128;
+const waterTileCanvas = document.createElement('canvas');
+waterTileCanvas.width = WATER_TILE_SIZE;
+waterTileCanvas.height = WATER_TILE_SIZE;
+const waterTileCtx = waterTileCanvas.getContext('2d');
+
+function updateWaterPattern(time) {
+    if (time - lastWaterPatternUpdate < 50) return; // 20fps update for pattern
+    lastWaterPatternUpdate = time;
+
+    const ctx = waterTileCtx;
+    ctx.clearRect(0, 0, WATER_TILE_SIZE, WATER_TILE_SIZE);
+    
+    // Base color - Deep Murky Blue
+    ctx.fillStyle = 'rgba(0, 40, 100, 0.5)';
+    ctx.fillRect(0, 0, WATER_TILE_SIZE, WATER_TILE_SIZE);
+
+    // Animated Waves (Procedural)
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        for (let x = 0; x <= WATER_TILE_SIZE; x += 8) {
+            const y = (i * WATER_TILE_SIZE / 3) + Math.sin(x * 0.08 + time * 0.002 + i) * 6;
+            if (x === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+    }
+
+    // Caustics / Glimmer (Light refraction)
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
+    for (let i = 0; i < 6; i++) {
+        const x = ((time * 0.05 + i * 40) % WATER_TILE_SIZE);
+        const y = ((time * 0.03 + i * 70) % WATER_TILE_SIZE);
+        ctx.beginPath();
+        ctx.arc(x, y, 8 + Math.sin(time * 0.003 + i) * 4, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    if (ctx) {
+        waterPattern = ctx.createPattern(waterTileCanvas, 'repeat');
+    }
+}
+
 // Premium Visuals Toggle (Set to true to enable high-end atmosphere/effects)
 let ENABLE_PREMIUM_VISUALS = localStorage.getItem('tanks_premium_visuals') === 'true';
 
@@ -873,14 +921,16 @@ function renderLoop(now) {
         ctx.translate(-camera.x + shake.x, -camera.y + shake.y);
 
         // 1. Clipping Mask (Prevents anything from leaking outside the map)
+        const wSize = gameState.worldSize || 4000;
         ctx.beginPath();
-        ctx.rect(0, 0, gameState.worldSize, gameState.worldSize);
+        ctx.rect(0, 0, wSize, wSize);
         ctx.clip();
 
         drawZones();
         drawGrid();
-        
+
         if (ENABLE_PREMIUM_VISUALS) {
+            updateWaterPattern(renderTime);
             updateAtmosphere(dt);
             updateEnvironmentalObjects(dt);
             drawAtmosphere();
@@ -904,11 +954,34 @@ function renderLoop(now) {
                 const currentBiome = gameState.zones && gameState.zones[0] ? gameState.zones[0].t : 'RANDOM';
                 const isMoving = p.id === myId ? (keys.up || keys.down || keys.left || keys.right) : true; 
                 if (isMoving) {
-                    // More intense dust in wasteland/tundra
-                    const pCount = (currentBiome === 'WASTELAND' || currentBiome === 'TUNDRA') ? 2 : 1;
-                    const pColor = currentBiome === 'WASTELAND' ? 'rgba(150, 100, 50, 0.3)' : 
-                                   (currentBiome === 'TUNDRA' ? 'rgba(230, 250, 255, 0.4)' : 'rgba(100,100,100,0.2)');
-                    spawnParticles(p.x - Math.cos(p.a) * 20, p.y - Math.sin(p.a) * 20, pColor, pCount, 0.5);
+                    const overWater = currentBiome === 'WETLAND' || (p.wet); // Simplification: if player has 'wet' status or is in wetland
+                    
+                    if (overWater && ENABLE_PREMIUM_VISUALS) {
+                        // Water Wakes (Tails)
+                        if (renderTime % 4 < 1) {
+                            const cos = Math.cos(p.a);
+                            const sin = Math.sin(p.a);
+                            // Two ripples behind tracks
+                            for (let side = -1; side <= 1; side += 2) {
+                                particles.push({
+                                    x: p.x - cos * 25 + sin * (18 * side),
+                                    y: p.y - sin * 25 - cos * (18 * side),
+                                    vx: -cos * 2 + (Math.random() - 0.5),
+                                    vy: -sin * 2 + (Math.random() - 0.5),
+                                    life: 1.0,
+                                    color: 'rgba(255, 255, 255, 0.3)',
+                                    size: 4 + Math.random() * 4,
+                                    isWaterWake: true
+                                });
+                            }
+                        }
+                    } else {
+                        // More intense dust in wasteland/tundra
+                        const pCount = (currentBiome === 'WASTELAND' || currentBiome === 'TUNDRA') ? 2 : 1;
+                        const pColor = currentBiome === 'WASTELAND' ? 'rgba(150, 100, 50, 0.3)' : 
+                                       (currentBiome === 'TUNDRA' ? 'rgba(230, 250, 255, 0.4)' : 'rgba(100,100,100,0.2)');
+                        spawnParticles(p.x - Math.cos(p.a) * 20, p.y - Math.sin(p.a) * 20, pColor, pCount, 0.5);
+                    }
                 }
             }
         });
@@ -1711,8 +1784,8 @@ function interpolateState(dt) {
     gameState.bullets   = serverState.bullets;
     gameState.elements  = serverState.elements;
     gameState.guardians = serverState.guardians;
-    gameState.zones     = serverState.zones;
-    gameState.worldSize = serverState.worldSize;
+    gameState.zones     = serverState.zones ? serverState.zones.map(z => ({ ...z, type: z.t || z.type })) : [];
+    gameState.worldSize = serverState.worldSize || 4000;
 
     const P_POS = 1 - Math.pow(0.1, dt); // Stiff interpolation for CSP reconciliation
     gameState.players = serverState.players.map(sp => {
@@ -2179,14 +2252,32 @@ function drawElements() {
             ctx.strokeRect(-e.w/2 + 8, -e.h/2 + 8, e.w - 16, e.h - 16);
         } else {
             ctx.fillStyle = config.color;
-            ctx.beginPath();
             if (e.t === MATERIALS.DIRT) {
+                ctx.beginPath();
                 ctx.roundRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h, 5);
+                ctx.fill();
+            } else if (e.t === MATERIALS.WATER) {
+                // Tiled Water Pattern
+                if (ENABLE_PREMIUM_VISUALS && waterPattern) {
+                    ctx.save();
+                    ctx.fillStyle = waterPattern;
+                    ctx.beginPath();
+                    // Render as a square tile at world coordinates
+                    ctx.rect(e.x - e.w/2, e.y - e.h/2, e.w, e.h);
+                    ctx.fill();
+                    ctx.restore();
+                    
+                    // Soft edge highlight
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h);
+                } else {
+                    ctx.fillRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h);
+                }
             } else {
-                // Draw puddles as blobs
-                ctx.arc(e.x, e.y, e.w/2, 0, Math.PI * 2);
+                // Draw other puddles as squares (Tiled style)
+                ctx.fillRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h);
             }
-            ctx.fill();
 
             // Add animated lightning for electric pools
             if (e.t === MATERIALS.ELECTRIC) {
@@ -2869,6 +2960,10 @@ function updateParticles(dt) {
         p.x += p.vx * dt;
         p.y += p.vy * dt;
         p.life -= 0.02 * dt;
+        if (p.isWaterWake) {
+            p.size += 0.5 * dt; // Ripples grow
+            p.life -= 0.01 * dt; // But fade faster
+        }
     });
     particles = particles.filter(p => p.life > 0);
 }
