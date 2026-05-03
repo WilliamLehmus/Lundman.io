@@ -104,15 +104,20 @@ let renderTime = 0;
 // Liquid Patterns (9 Variations each for variety)
 let waterPatterns = []; 
 let oilPatterns = [];
+let acidPatterns = [];
 let lastWaterPatternUpdate = 0;
 let lastOilPatternUpdate = 0;
+let lastAcidPatternUpdate = 0;
 const WATER_TILE_SIZE = 128;
 const OIL_TILE_SIZE = 128;
+const ACID_TILE_SIZE = 128;
 
 const waterCanvases = [];
 const waterContexts = [];
 const oilCanvases = [];
 const oilContexts = [];
+const acidCanvases = [];
+const acidContexts = [];
 
 // Initialize canvases
 for (let i = 0; i < 9; i++) {
@@ -127,11 +132,74 @@ for (let i = 0; i < 9; i++) {
     oCanv.height = OIL_TILE_SIZE;
     oilCanvases.push(oCanv);
     oilContexts.push(oCanv.getContext('2d'));
+
+    const aCanv = document.createElement('canvas');
+    aCanv.width = ACID_TILE_SIZE;
+    aCanv.height = ACID_TILE_SIZE;
+    acidCanvases.push(aCanv);
+    acidContexts.push(aCanv.getContext('2d'));
 }
 
 // Global pattern variable for backward compatibility
 let waterPattern = null;
 let oilPattern = null;
+let acidPattern = null;
+
+function updateAcidPattern(time) {
+    if (time - lastAcidPatternUpdate < 60) return;
+    lastAcidPatternUpdate = time;
+
+    for (let p = 0; p < 9; p++) {
+        const ctx = acidContexts[p];
+        ctx.clearRect(0, 0, ACID_TILE_SIZE, ACID_TILE_SIZE);
+        
+        // 1. Toxic Base
+        ctx.fillStyle = '#0a2a0a';
+        ctx.fillRect(0, 0, ACID_TILE_SIZE, ACID_TILE_SIZE);
+
+        // 2. Radioactive Glow
+        const grad = ctx.createRadialGradient(ACID_TILE_SIZE/2, ACID_TILE_SIZE/2, 0, ACID_TILE_SIZE/2, ACID_TILE_SIZE/2, ACID_TILE_SIZE);
+        grad.addColorStop(0, 'rgba(0, 255, 0, 0.15)');
+        grad.addColorStop(1, 'rgba(0, 50, 0, 0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, ACID_TILE_SIZE, ACID_TILE_SIZE);
+
+        // 3. Corrosive Bubbles
+        ctx.fillStyle = 'rgba(100, 255, 0, 0.3)';
+        for (let i = 0; i < 6; i++) {
+            const phase = time * 0.002 + i + p;
+            const bx = (getStableRandom(p + i) * ACID_TILE_SIZE + time * 0.01) % ACID_TILE_SIZE;
+            const by = (getStableRandom(p + i + 1) * ACID_TILE_SIZE) % ACID_TILE_SIZE;
+            const r = 1.5 + Math.sin(phase) * 2;
+            if (r > 0.5) {
+                ctx.beginPath();
+                ctx.arc(bx, by, r, 0, Math.PI * 2);
+                ctx.fill();
+                // Glow around bubble
+                ctx.shadowBlur = 5;
+                ctx.shadowColor = '#0f0';
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        // 4. Toxic Swirls
+        ctx.strokeStyle = 'rgba(0, 255, 0, 0.1)';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 2; i++) {
+            ctx.beginPath();
+            const offset = time * 0.001 + i;
+            for (let x = 0; x <= ACID_TILE_SIZE; x += 10) {
+                const y = (i * 40 + 30) + Math.sin(x * 0.05 + offset) * 15;
+                if (x === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+        }
+
+        acidPatterns[p] = ctx.createPattern(acidCanvases[p], 'repeat');
+    }
+}
 
 function updateOilPattern(time) {
     if (time - lastOilPatternUpdate < 60) return; 
@@ -201,60 +269,88 @@ function updateWaterPattern(time) {
         const ctx = waterContexts[p];
         ctx.clearRect(0, 0, WATER_TILE_SIZE, WATER_TILE_SIZE);
         
-        // Base depth with slight hue shifts for variety
-        const blueVal = 120 + (p * 10);
-        ctx.fillStyle = `rgba(0, 30, ${blueVal}, 0.4)`;
+        // 1. Deep Base Depth with parallax-like layers
+        const hueShift = Math.sin(time * 0.001 + p) * 10;
+        ctx.fillStyle = `hsl(${210 + hueShift}, 80%, 15%)`;
         ctx.fillRect(0, 0, WATER_TILE_SIZE, WATER_TILE_SIZE);
 
-        // VARIATION STYLES (9 different personalities)
+        // 2. Mid-layer Glow
+        const grad = ctx.createRadialGradient(WATER_TILE_SIZE/2, WATER_TILE_SIZE/2, 0, WATER_TILE_SIZE/2, WATER_TILE_SIZE/2, WATER_TILE_SIZE);
+        grad.addColorStop(0, `hsla(${200 + hueShift}, 70%, 30%, 0.3)`);
+        grad.addColorStop(1, `hsla(${220 + hueShift}, 90%, 10%, 0)`);
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, WATER_TILE_SIZE, WATER_TILE_SIZE);
+
+        // 3. VARIATION STYLES (9 different personalities)
         ctx.lineWidth = 2;
         
-        if (p % 3 === 0) { // STYLE: Ripply/Active
-            ctx.strokeStyle = 'rgba(0, 242, 255, 0.1)';
-            for (let i = 0; i < 4; i++) {
+        if (p % 3 === 0) { // STYLE: Ripply/Active - Neon Cyan highlights
+            ctx.strokeStyle = 'rgba(0, 242, 255, 0.15)';
+            for (let i = 0; i < 5; i++) {
                 ctx.beginPath();
-                const freq = 0.05 + (p * 0.01);
+                const freq = 0.04 + (p * 0.005);
+                const offset = time * 0.002 + i * 1.5;
                 for (let x = 0; x <= WATER_TILE_SIZE; x += 10) {
-                    const y = (i * WATER_TILE_SIZE / 4) + Math.sin(x * freq + time * 0.003 + i) * 10;
+                    const y = (i * WATER_TILE_SIZE / 5) + Math.sin(x * freq + offset) * 12;
                     if (x === 0) ctx.moveTo(x, y);
                     else ctx.lineTo(x, y);
                 }
                 ctx.stroke();
             }
-        } else if (p % 3 === 1) { // STYLE: Bubbly/Murky
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
-            for (let i = 0; i < 8; i++) {
-                const phase = time * 0.002 + i + p;
-                const bx = ((i * 50 + p * 10) % WATER_TILE_SIZE);
-                const by = ((Math.sin(phase) * 20 + i * 40) % WATER_TILE_SIZE);
+        } else if (p % 3 === 1) { // STYLE: Bubbly/Murky - Deep Cyan
+            ctx.fillStyle = 'rgba(0, 242, 255, 0.08)';
+            for (let i = 0; i < 12; i++) {
+                const phase = time * 0.0015 + i + p;
+                const bx = ((i * 45 + p * 15) % WATER_TILE_SIZE);
+                const by = ((Math.sin(phase) * 30 + i * 35) % WATER_TILE_SIZE);
+                const r = 2 + Math.sin(phase) * 3;
+                if (r > 0.5) {
+                    ctx.beginPath();
+                    ctx.arc(bx, by, r, 0, Math.PI * 2);
+                    ctx.fill();
+                    // Tiny bubble highlight
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+                    ctx.beginPath(); ctx.arc(bx - r/3, by - r/3, r/4, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = 'rgba(0, 242, 255, 0.08)';
+                }
+            }
+        } else { // STYLE: Deep/Calm - Soft Blue
+            ctx.fillStyle = 'rgba(0, 150, 255, 0.05)';
+            for (let i = 0; i < 3; i++) {
                 ctx.beginPath();
-                ctx.arc(bx, by, 3 + Math.sin(phase) * 2, 0, Math.PI * 2);
+                const x = getStableRandom(p + i) * WATER_TILE_SIZE;
+                const y = getStableRandom(p + i + 1) * WATER_TILE_SIZE;
+                const r = 20 + getStableRandom(p + i + 2) * 30;
+                ctx.arc(x, y, r, 0, Math.PI * 2);
                 ctx.fill();
             }
-        } else { // STYLE: Deep/Calm
-            ctx.strokeStyle = 'rgba(0, 150, 255, 0.08)';
+        }
+
+        // 4. Premium Caustics (Light shimmer / Network look)
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 3; i++) {
+            const cx = (time * 0.02 + i * 40 + p * 10) % WATER_TILE_SIZE;
+            const cy = (time * 0.01 + i * 60 + p * 20) % WATER_TILE_SIZE;
             ctx.beginPath();
-            ctx.arc(WATER_TILE_SIZE/2, WATER_TILE_SIZE/2, 40 + Math.sin(time * 0.001 + p) * 10, 0, Math.PI * 2);
+            ctx.moveTo(cx - 20, cy);
+            ctx.lineTo(cx + 20, cy);
+            ctx.moveTo(cx, cy - 20);
+            ctx.lineTo(cx, cy + 20);
             ctx.stroke();
         }
+        ctx.restore();
 
-        // Shared Caustics (Light shimmer)
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
-        for (let i = 0; i < 4; i++) {
-            const x = ((time * (0.03 + p * 0.002) + i * 60) % WATER_TILE_SIZE);
-            const y = ((time * (0.02 + p * 0.001) + i * 80) % WATER_TILE_SIZE);
-            ctx.beginPath();
-            ctx.arc(x, y, 10 + Math.sin(time * 0.002 + i) * 5, 0, Math.PI * 2);
-            ctx.fill();
-        }
-
-        // Tiny "Neon Dust" particles for life
-        ctx.fillStyle = 'rgba(0, 242, 255, 0.2)';
-        for (let i = 0; i < 3; i++) {
-            const px = (Math.sin(time * 0.001 + i * 10 + p) * 0.4 + 0.5) * WATER_TILE_SIZE;
-            const py = (Math.cos(time * 0.0008 + i * 5 + p) * 0.4 + 0.5) * WATER_TILE_SIZE;
-            ctx.fillRect(px, py, 1.5, 1.5);
-        }
+        // 5. Flowing Highlights (Linear sheen)
+        const flowX = (time * 0.05) % (WATER_TILE_SIZE * 2);
+        const flowGrad = ctx.createLinearGradient(flowX - 50, 0, flowX, 0);
+        flowGrad.addColorStop(0, 'rgba(0, 242, 255, 0)');
+        flowGrad.addColorStop(0.5, 'rgba(0, 242, 255, 0.05)');
+        flowGrad.addColorStop(1, 'rgba(0, 242, 255, 0)');
+        ctx.fillStyle = flowGrad;
+        ctx.fillRect(0, 0, WATER_TILE_SIZE, WATER_TILE_SIZE);
 
         waterPatterns[p] = ctx.createPattern(waterCanvases[p], 'repeat');
     }
@@ -511,6 +607,12 @@ function lerpAngle(a, b, t) {
     while (d > Math.PI)  d -= Math.PI * 2;
     while (d < -Math.PI) d += Math.PI * 2;
     return a + d * t;
+}
+
+// Deterministic random for stable procedural shapes
+function getStableRandom(seed) {
+    const x = Math.sin(seed) * 10000;
+    return x - Math.floor(x);
 }
 
 function init() {
@@ -1101,6 +1203,7 @@ function renderLoop(now) {
         if (ENABLE_PREMIUM_VISUALS) {
             updateWaterPattern(renderTime);
             updateOilPattern(renderTime);
+            updateAcidPattern(renderTime);
             updateAtmosphere(dt);
             updateEnvironmentalObjects(dt);
             drawAtmosphere();
@@ -2481,117 +2584,159 @@ function drawElements() {
             ctx.strokeRect(-e.w/2 + 8, -e.h/2 + 8, e.w - 16, e.h - 16);
         } else {
             ctx.fillStyle = config.color;
-            const isLiquid = [MATERIALS.WATER, MATERIALS.OIL, MATERIALS.DIRT, MATERIALS.ELECTRIC, MATERIALS.ICE].includes(e.t);
-            const hasSpecialRendering = [MATERIALS.ACID, MATERIALS.GAS, MATERIALS.STEAM].includes(e.t);
-
+            const isLiquid = [MATERIALS.WATER, MATERIALS.OIL, MATERIALS.DIRT, MATERIALS.ELECTRIC, MATERIALS.ICE, MATERIALS.ACID].includes(e.t);
+            const hasSpecialRendering = [MATERIALS.GAS, MATERIALS.STEAM].includes(e.t);
             if (isLiquid) {
-                // Organic Circular Tiling (Overlapping circles for a "metaball" feel)
-                const radius = e.w * 0.65; // Overlap for smoothness
-                ctx.beginPath();
-                ctx.arc(e.x, e.y, radius, 0, Math.PI * 2);
+                // Organic Metaball Tiling (Overlapping circles for a natural blob feel)
+                const baseRadius = e.w * 0.5;
+                const pulse = (e.t === MATERIALS.WATER || e.t === MATERIALS.OIL) ? (1.0 + Math.sin(renderTime * (e.t === MATERIALS.WATER ? 0.002 : 0.0012) + e.id) * 0.03) : 1.0;
                 
+                // Helper to draw the complex organic path
+                const drawOrganicPath = (ctx, x, y, radius, id) => {
+                    ctx.beginPath();
+                    // Center blob
+                    ctx.arc(x, y, radius, 0, Math.PI * 2);
+                    
+                    // Peripheral blobs (Deterministic based on e.id)
+                    const blobCount = 4;
+                    for (let i = 0; i < blobCount; i++) {
+                        const seed = id * 1.37 + i * 2.41;
+                        const angle = getStableRandom(seed) * Math.PI * 2;
+                        const dist = radius * 0.45;
+                        const bx = x + Math.cos(angle) * dist;
+                        const by = y + Math.sin(angle) * dist;
+                        const br = radius * (0.5 + getStableRandom(seed + 0.5) * 0.3);
+                        ctx.moveTo(bx + br, by);
+                        ctx.arc(bx, by, br, 0, Math.PI * 2);
+                    }
+                };
+
                 if (e.t === MATERIALS.WATER && ENABLE_PREMIUM_VISUALS && waterPatterns.length > 0) {
-                    ctx.save();
+                    const drawRadius = baseRadius * pulse;
                     
-                    // Dynamic Soft Pulse (Makes it feel alive)
-                    const pulse = 1.0 + Math.sin(renderTime * 0.002 + e.id) * 0.05;
-                    const drawRadius = radius * pulse;
-
-                    // High-Fidelity Depth Gradient (Softer edges)
-                    const grad = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, drawRadius);
-                    grad.addColorStop(0, 'rgba(0, 80, 220, 0.4)');
-                    grad.addColorStop(0.8, 'rgba(0, 40, 150, 0.6)');
-                    grad.addColorStop(1, 'rgba(0, 20, 80, 0)'); // Fades to transparent at edge
+                    // 1. Depth Gradient
+                    const grad = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, drawRadius * 1.5);
+                    grad.addColorStop(0, 'rgba(0, 80, 220, 0.45)');
+                    grad.addColorStop(0.7, 'rgba(0, 40, 150, 0.5)');
+                    grad.addColorStop(1, 'rgba(0, 20, 80, 0)'); 
                     ctx.fillStyle = grad;
-                    
-                    ctx.beginPath();
-                    ctx.arc(e.x, e.y, drawRadius, 0, Math.PI * 2);
+                    drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
                     ctx.fill();
 
-                    // Pattern overlay with selective selection
-                    ctx.globalAlpha = 0.8;
-                    ctx.fillStyle = waterPatterns[e.id % 9];
+                    // 2. Pattern Layer (Seamless flow)
+                    ctx.save();
+                    ctx.globalAlpha = 0.85;
+                    const p = waterPatterns[e.id % 9];
+                    const flowX = (renderTime * 0.02) % WATER_TILE_SIZE;
+                    const flowY = (renderTime * 0.01) % WATER_TILE_SIZE;
+                    
+                    const matrix = new DOMMatrix().translate(flowX, flowY);
+                    p.setTransform(matrix);
+                    
+                    ctx.fillStyle = p;
+                    drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
+                    
+                    // 3. Polished Rim Glow & Shoreline Foam
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = 'rgba(0, 242, 255, 0.6)';
                     ctx.fill();
                     
-                    // Surface Glimmer
-                    const specPhase = renderTime * 0.0008 + e.id;
-                    const specX = e.x + Math.cos(specPhase) * (drawRadius * 0.3);
-                    const specY = e.y + Math.sin(specPhase) * (drawRadius * 0.3);
-                    const specGrad = ctx.createRadialGradient(specX, specY, 0, specX, specY, drawRadius * 0.5);
-                    specGrad.addColorStop(0, 'rgba(255, 255, 255, 0.1)');
-                    specGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
-                    ctx.fillStyle = specGrad;
-                    ctx.fill();
-
                     ctx.restore();
-                    // Subtle Glowing Rim
-                    ctx.strokeStyle = `rgba(0, 242, 255, ${0.1 + Math.sin(renderTime * 0.003 + e.id) * 0.05})`;
-                    ctx.lineWidth = 1.5;
-                    ctx.beginPath();
-                    ctx.arc(e.x, e.y, drawRadius, 0, Math.PI * 2);
-                    ctx.stroke();
+                } else if (e.t === MATERIALS.OIL && ENABLE_PREMIUM_VISUALS && oilPatterns.length > 0) {
                 } else if (e.t === MATERIALS.OIL && ENABLE_PREMIUM_VISUALS && oilPatterns.length > 0) {
                     ctx.save();
-                    const pulse = 1.0 + Math.sin(renderTime * 0.0012 + e.id) * 0.02;
-                    const drawRadius = radius * pulse;
+                    const drawRadius = baseRadius * pulse;
 
                     // Oil Depth (Viscous & Dark)
-                    const grad = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, drawRadius);
+                    const grad = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, drawRadius * 1.5);
                     grad.addColorStop(0, 'rgba(30, 30, 35, 0.95)');
                     grad.addColorStop(0.6, 'rgba(15, 15, 20, 0.98)');
                     grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
                     ctx.fillStyle = grad;
                     
-                    ctx.beginPath();
-                    ctx.arc(e.x, e.y, drawRadius, 0, Math.PI * 2);
+                    drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
                     ctx.fill();
 
-                    // Thick Pattern Overlay
-                    ctx.globalAlpha = 0.9;
-                    ctx.fillStyle = oilPatterns[e.id % 9];
+                    // Thick Pattern Overlay (Seamless flow)
+                    ctx.save();
+                    ctx.globalAlpha = 0.95;
+                    const p = oilPatterns[e.id % 9];
+                    const flowX = -(renderTime * 0.01) % OIL_TILE_SIZE;
+                    const flowY = (renderTime * 0.005) % OIL_TILE_SIZE;
+                    
+                    const matrix = new DOMMatrix().translate(flowX, flowY);
+                    p.setTransform(matrix);
+                    
+                    ctx.fillStyle = p;
+                    drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
                     ctx.fill();
 
-                    // Dynamic Oily Bubbles (Increased for effect)
-                    ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
-                    for (let i = 0; i < 6; i++) {
-                        const phase = renderTime * (0.0008 + i * 0.0002) + e.id + i * 5;
-                        const dist = (0.2 + (i % 3) * 0.15) * drawRadius;
-                        const bx = e.x + Math.cos(phase * 0.7) * dist;
-                        const by = e.y + Math.sin(phase * 1.1) * dist;
-                        const bSize = (Math.sin(phase * 2) + 1) * (2 + (i % 3));
+                    // Dynamic Oily Bubbles
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+                    for (let i = 0; i < 5; i++) {
+                        const seed = e.id + i * 10;
+                        const phase = renderTime * (0.0006 + i * 0.0001) + seed;
+                        const dist = (0.1 + (i % 3) * 0.2) * drawRadius;
+                        const angle = getStableRandom(seed) * Math.PI * 2 + phase;
+                        const bx = e.x + Math.cos(angle) * dist;
+                        const by = e.y + Math.sin(angle) * dist;
+                        const bSize = (Math.sin(phase * 1.5) + 1) * (2 + (i % 2));
                         
                         if (bSize > 1) {
                             ctx.beginPath();
                             ctx.arc(bx, by, bSize, 0, Math.PI * 2);
                             ctx.fill();
-                            // Specular on bubble
-                            ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
-                            ctx.beginPath();
-                            ctx.arc(bx - bSize/3, by - bSize/3, bSize/4, 0, Math.PI * 2);
-                            ctx.fill();
-                            ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
+                            ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+                            ctx.beginPath(); ctx.arc(bx - bSize/3, by - bSize/3, bSize/4, 0, Math.PI * 2); ctx.fill();
+                            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
                         }
                     }
 
                     ctx.restore();
-                    // Thick Oily Rim (Glossy black)
-                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
-                    ctx.lineWidth = 2;
-                    ctx.beginPath();
-                    ctx.arc(e.x, e.y, drawRadius, 0, Math.PI * 2);
-                    ctx.stroke();
+                } else if (e.t === MATERIALS.ACID && ENABLE_PREMIUM_VISUALS && acidPatterns.length > 0) {
+                    ctx.save();
+                    const drawRadius = baseRadius * pulse;
+
+                    // 1. Radioactive Base
+                    const grad = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, drawRadius * 1.5);
+                    grad.addColorStop(0, 'rgba(20, 100, 20, 0.6)');
+                    grad.addColorStop(0.7, 'rgba(10, 50, 10, 0.8)');
+                    grad.addColorStop(1, 'rgba(0, 20, 0, 0)');
+                    ctx.fillStyle = grad;
+                    drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
+                    ctx.fill();
+
+                    // 2. Toxic Pattern
+                    ctx.globalAlpha = 0.9;
+                    const p = acidPatterns[e.id % 9];
+                    const flowX = (renderTime * 0.015) % ACID_TILE_SIZE;
+                    const matrix = new DOMMatrix().translate(flowX, flowX * 0.5);
+                    p.setTransform(matrix);
+                    ctx.fillStyle = p;
+                    drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
+                    ctx.fill();
+
+                    // 3. Rising Toxic Fumes (No edge glow)
+                    ctx.fill(); 
                     
-                    // Subtle Surface Shine
-                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+                    // NEW: Rising Toxic Wisps
+                    ctx.globalAlpha = 0.2;
+                    ctx.strokeStyle = '#8f8';
                     ctx.lineWidth = 1;
-                    ctx.beginPath();
-                    ctx.arc(e.x, e.y, drawRadius - 2, 0, Math.PI * 2);
-                    ctx.stroke();
+                    for (let i = 0; i < 2; i++) {
+                        const drift = (renderTime * 0.05 + e.id * 100) % 100;
+                        ctx.beginPath();
+                        ctx.arc(e.x + Math.sin(renderTime * 0.002 + i) * 30, e.y - drift, 5 + drift/10, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+                    
+                    ctx.restore();
                 } else {
+                    // Fallback for non-premium or other liquids
                     ctx.fillStyle = config.color;
+                    drawOrganicPath(ctx, e.x, e.y, baseRadius, e.id);
                     ctx.fill();
                     
-                    // Subtle edge for non-water liquids
                     if (e.t === MATERIALS.OIL) {
                         ctx.strokeStyle = 'rgba(0,0,0,0.3)';
                         ctx.lineWidth = 1;
@@ -2633,68 +2778,41 @@ function drawElements() {
                 ctx.restore();
             }
 
-            // Acid / Radioactive Pools
-            if (e.t === MATERIALS.ACID) {
-                ctx.save();
-                const pulse = 0.7 + Math.sin(renderTime * 0.005 + e.id) * 0.3;
-                ctx.shadowBlur = 15 * pulse;
-                ctx.shadowColor = '#00ff00';
-                
-                // Core puddle
-                ctx.fillStyle = 'rgba(50, 200, 50, 0.3)';
-                ctx.beginPath();
-                ctx.arc(e.x, e.y, e.w/2, 0, Math.PI * 2);
-                ctx.fill();
-
-                // Pulsing glow
-                ctx.fillStyle = `rgba(100, 255, 0, ${0.1 * pulse})`;
-                ctx.beginPath();
-                ctx.arc(e.x, e.y, e.w/2 + 10, 0, Math.PI * 2);
-                ctx.fill();
-                
-                // Bubbles
-                ctx.fillStyle = 'rgba(200, 255, 150, 0.5)';
-                for (let i = 0; i < 4; i++) {
-                    const phase = renderTime * 0.01 + e.id + i * 2;
-                    const bx = e.x + Math.cos(phase * 0.7) * (e.w/3);
-                    const by = e.y + Math.sin(phase * 1.3) * (e.h/3);
-                    const bSize = (Math.sin(phase * 2) + 1) * 3;
-                    if (bSize > 0.5) {
-                        ctx.beginPath();
-                        ctx.arc(bx, by, bSize, 0, Math.PI * 2);
-                        ctx.fill();
-                        // Tiny highlight on bubble
-                        ctx.fillStyle = 'rgba(255,255,255,0.4)';
-                        ctx.beginPath();
-                        ctx.arc(bx - bSize/3, by - bSize/3, bSize/4, 0, Math.PI*2);
-                        ctx.fill();
-                        ctx.fillStyle = 'rgba(200, 255, 150, 0.5)'; // Reset
-                    }
-                }
-                ctx.restore();
-            }
-
-            // Gas clouds
+            // Gas clouds (Toxic Organic Clouds V2)
             if (e.t === MATERIALS.GAS) {
                 ctx.save();
-                const pulse = Math.sin(renderTime * 0.003 + e.id) * 0.1;
-                ctx.globalAlpha = 0.4 + pulse;
-                const gGrad = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, e.w/2);
-                gGrad.addColorStop(0, 'rgba(100, 200, 50, 0.5)');
-                gGrad.addColorStop(0.6, 'rgba(100, 200, 50, 0.2)');
-                gGrad.addColorStop(1, 'rgba(100, 200, 50, 0)');
-                ctx.fillStyle = gGrad;
-                ctx.beginPath();
-                ctx.arc(e.x, e.y, e.w/2, 0, Math.PI * 2);
-                ctx.fill();
+                const timeScale = renderTime * 0.002;
                 
-                // Wisps
-                ctx.strokeStyle = 'rgba(150, 255, 100, 0.1)';
-                ctx.lineWidth = 2;
+                // 1. Core Toxic Cloud
+                const gGrad = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, e.w * 0.7);
+                gGrad.addColorStop(0, 'rgba(120, 255, 60, 0.3)');
+                gGrad.addColorStop(0.5, 'rgba(100, 230, 50, 0.15)');
+                gGrad.addColorStop(1, 'rgba(80, 200, 40, 0)');
+                ctx.fillStyle = gGrad;
+                
+                // Draw multiple overlapping "puffs" that drift
+                for (let i = 0; i < 6; i++) {
+                    const seed = e.id + i;
+                    const angle = (timeScale * (0.5 + getStableRandom(seed) * 0.5)) + (i * Math.PI * 2 / 6);
+                    const dist = (e.w * 0.2) * Math.sin(timeScale * 0.5 + i);
+                    const px = e.x + Math.cos(angle) * dist;
+                    const py = e.y + Math.sin(angle) * dist;
+                    const pr = (e.w * 0.45) * (0.8 + Math.sin(timeScale + i) * 0.2);
+                    
+                    ctx.beginPath();
+                    ctx.arc(px, py, pr, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // 2. Swirling Toxic Wisps
+                ctx.strokeStyle = 'rgba(150, 255, 100, 0.08)';
+                ctx.lineWidth = 1.5;
                 for (let i = 0; i < 3; i++) {
                     ctx.beginPath();
-                    const rot = renderTime * 0.001 + i * 2;
-                    ctx.ellipse(e.x, e.y, e.w/3, e.h/4, rot, 0, Math.PI * 2);
+                    const rot = timeScale * 0.8 + i * 2.1;
+                    const rx = e.w * (0.3 + Math.sin(timeScale * 0.5 + i) * 0.1);
+                    const ry = e.h * (0.2 + Math.cos(timeScale * 0.3 + i) * 0.05);
+                    ctx.ellipse(e.x, e.y, rx, ry, rot, 0, Math.PI * 2);
                     ctx.stroke();
                 }
                 ctx.restore();

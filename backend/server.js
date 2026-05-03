@@ -1000,9 +1000,25 @@ class Lobby {
                     .filter(e => solidTypes.includes(e.type))
                     .map(e => e.body);
                 
-                // Increased spacing to prevent tight clustering
+                // Increased spacing for physical objects to prevent tight clustering
                 const spacing = 120; 
                 const overlaps = Query.region(otherSolids, {
+                    min: { x: pos.x - spacing, y: pos.y - spacing },
+                    max: { x: pos.x + spacing, y: pos.y + spacing }
+                });
+                if (overlaps.length > 0) return null;
+            }
+
+            // NEW: Spacing for liquids to prevent overlapping large puddles
+            const liquidTypes = [MATERIALS.WATER, MATERIALS.OIL, MATERIALS.ACID, MATERIALS.GAS];
+            if (liquidTypes.includes(type)) {
+                const otherLiquids = Object.values(this.elements)
+                    .filter(e => liquidTypes.includes(e.type))
+                    .map(e => e.body);
+                
+                // Dynamic spacing: Large puddles need more room, small ones can be closer
+                const spacing = ew * 1.2; 
+                const overlaps = Query.region(otherLiquids, {
                     min: { x: pos.x - spacing, y: pos.y - spacing },
                     max: { x: pos.x + spacing, y: pos.y + spacing }
                 });
