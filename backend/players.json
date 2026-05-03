@@ -28,9 +28,16 @@
   },
   "Stroggo1": {
     "kills": 0,
-    "deaths": 4,
-    "scrap": 0,
-    "lastSeen": 1777744253838,
+    "deaths": 9,
+    "scrap": 90,
+    "lastSeen": 1777810550798,
     "pin": "$2b$10$oP609sRXZZMUk8lq2J4VCuAC.ALHRpg1tw2uZx6uM4cBU16lifMdO"
+  },
+  "Tester": {
+    "kills": 0,
+    "deaths": 0,
+    "scrap": 0,
+    "lastSeen": 1777810550813,
+    "pin": "$2b$10$Z7FtOxIEiIdHICCGJhm.be9q1b448bIJpdzv5g0vKALVTMvrER3n6"
   }
 }

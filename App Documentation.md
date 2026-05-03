@@ -241,3 +241,12 @@ To transition from a learning project to a **marketable product**, the following
 - **Root Cause**: When adding the custom crosshair, I used the `WEAPON_MODULES` constant but forgot to add it to the `import` statement at the top of `game.js`.
 - **Fix**: Added `WEAPON_MODULES` to the curly-brace import list from `../backend/gameConfig.js`.
 - **Lesson**: Always verify that all constants used in a new function are properly imported, especially when working with shared config files.
+#### **Lobby UI Overlap on Small Screens**
+- **Date**: 2026-05-03
+- **Issue**: On smaller desktop screens or narrow browser windows, the lobby status and host selectors (chassis/map) were vertically overlapping the player lists.
+- **Root Cause**: The `#lobby-screen` flex container was squashing the `flex: 1` columns to zero height when fixed-height elements below them took up too much vertical space. Since the columns had `overflow: visible`, their content remained visible but the siblings moved up into their space.
+- **Fix**: 
+    1.  Removed messy inline styles from `index.html` and migrated them to standardized CSS classes.
+    2.  Added `flex-shrink: 0` to all control elements (status, chassis, map, actions) to ensure they maintain their intended size.
+    3.  Enabled `overflow-y: auto` on the main lobby panel as a fallback for extreme aspect ratios.
+    4.  Implemented height-based media queries (`@media (max-height: ...)` ) to dynamically scale down UI elements (font sizes, margins, slot heights) on smaller screens.
