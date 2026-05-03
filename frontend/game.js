@@ -121,16 +121,22 @@ let oilPatterns = [];
 let acidPatterns = [];
 let gasPatterns = [];
 let electricPatterns = [];
+let firePatterns = [];
+let steamPatterns = [];
 let lastWaterPatternUpdate = 0;
 let lastOilPatternUpdate = 0;
 let lastAcidPatternUpdate = 0;
 let lastGasPatternUpdate = 0;
 let lastElectricPatternUpdate = 0;
+let lastFirePatternUpdate = 0;
+let lastSteamPatternUpdate = 0;
 const WATER_TILE_SIZE = 128;
 const OIL_TILE_SIZE = 128;
 const ACID_TILE_SIZE = 128;
 const GAS_TILE_SIZE = 128;
 const ELECTRIC_TILE_SIZE = 128;
+const FIRE_TILE_SIZE = 128;
+const STEAM_TILE_SIZE = 128;
 
 const waterCanvases = [];
 const waterContexts = [];
@@ -142,6 +148,10 @@ const gasCanvases = [];
 const gasContexts = [];
 const electricCanvases = [];
 const electricContexts = [];
+const fireCanvases = [];
+const fireContexts = [];
+const steamCanvases = [];
+const steamContexts = [];
 
 // Initialize canvases
 for (let i = 0; i < 9; i++) {
@@ -174,6 +184,18 @@ for (let i = 0; i < 9; i++) {
     eCanv.height = ELECTRIC_TILE_SIZE;
     electricCanvases.push(eCanv);
     electricContexts.push(eCanv.getContext('2d'));
+
+    const fCanv = document.createElement('canvas');
+    fCanv.width = FIRE_TILE_SIZE;
+    fCanv.height = FIRE_TILE_SIZE;
+    fireCanvases.push(fCanv);
+    fireContexts.push(fCanv.getContext('2d'));
+
+    const sCanv = document.createElement('canvas');
+    sCanv.width = STEAM_TILE_SIZE;
+    sCanv.height = STEAM_TILE_SIZE;
+    steamCanvases.push(sCanv);
+    steamContexts.push(sCanv.getContext('2d'));
 }
 
 // Global pattern variable for backward compatibility
@@ -182,6 +204,8 @@ let oilPattern = null;
 let acidPattern = null;
 let gasPattern = null;
 let electricPattern = null;
+let firePattern = null;
+let steamPattern = null;
 
 function updateElectricPattern(time) {
     if (time - lastElectricPatternUpdate < 30) return; // Faster updates for jitter
@@ -466,6 +490,78 @@ function updateWaterPattern(time) {
         waterPatterns[p] = ctx.createPattern(waterCanvases[p], 'repeat');
     }
     waterPattern = waterPatterns[0];
+}
+
+function updateFirePattern(time) {
+    if (time - lastFirePatternUpdate < 40) return; 
+    lastFirePatternUpdate = time;
+
+    for (let p = 0; p < 9; p++) {
+        const ctx = fireContexts[p];
+        ctx.clearRect(0, 0, FIRE_TILE_SIZE, FIRE_TILE_SIZE);
+        
+        // 1. Core Heat (Intense Glowing Red)
+        ctx.fillStyle = '#661100';
+        ctx.fillRect(0, 0, FIRE_TILE_SIZE, FIRE_TILE_SIZE);
+
+        // 2. Rising Flames (Denser & More intense)
+        for (let i = 0; i < 15; i++) {
+            const seed = p * 15 + i;
+            const phase = time * 0.005 + seed;
+            const fx = (getStableRandom(seed) * FIRE_TILE_SIZE + Math.sin(phase) * 20) % FIRE_TILE_SIZE;
+            const fy = (getStableRandom(seed + 1) * FIRE_TILE_SIZE - time * 0.12) % FIRE_TILE_SIZE;
+            const r = 15 + getStableRandom(seed + 2) * 45;
+            
+            const g = ctx.createRadialGradient(fx, fy, 0, fx, fy, r);
+            g.addColorStop(0, 'rgba(255, 255, 200, 0.9)'); // White-Hot core
+            g.addColorStop(0.2, 'rgba(255, 230, 0, 0.8)'); // Yellow
+            g.addColorStop(0.5, 'rgba(255, 80, 0, 0.6)');  // Orange
+            g.addColorStop(1, 'rgba(150, 0, 0, 0)');
+            
+            ctx.fillStyle = g;
+            ctx.beginPath();
+            ctx.arc(fx, fy, r, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // 3. Flickering White-Hot Embers
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        for (let i = 0; i < 4; i++) {
+            const ex = getStableRandom(time + i + p) * FIRE_TILE_SIZE;
+            const ey = getStableRandom(time + i + p + 1) * FIRE_TILE_SIZE;
+            ctx.fillRect(ex, ey, 2, 2);
+        }
+
+        firePatterns[p] = ctx.createPattern(fireCanvases[p], 'repeat');
+    }
+    firePattern = firePatterns[0];
+}
+
+function updateSteamPattern(time) {
+    if (time - lastSteamPatternUpdate < 70) return;
+    lastSteamPatternUpdate = time;
+
+    for (let p = 0; p < 9; p++) {
+        const ctx = steamContexts[p];
+        ctx.clearRect(0, 0, STEAM_TILE_SIZE, STEAM_TILE_SIZE);
+        
+        for (let i = 0; i < 5; i++) {
+            const seed = p * 12 + i;
+            const sx = (getStableRandom(seed) * STEAM_TILE_SIZE + time * 0.02) % STEAM_TILE_SIZE;
+            const sy = (getStableRandom(seed + 1) * STEAM_TILE_SIZE - time * 0.04) % STEAM_TILE_SIZE;
+            const r = 25 + getStableRandom(seed + 2) * 35;
+            
+            const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, r);
+            g.addColorStop(0, 'rgba(255, 255, 255, 0.15)');
+            g.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            ctx.fillStyle = g;
+            ctx.beginPath();
+            ctx.arc(sx, sy, r, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        steamPatterns[p] = ctx.createPattern(steamCanvases[p], 'repeat');
+    }
+    steamPattern = steamPatterns[0];
 }
 
 // Premium Visuals Toggle (Set to true to enable high-end atmosphere/effects)
@@ -1417,6 +1513,8 @@ function renderLoop(now) {
             updateAcidPattern(renderTime);
             updateGasPattern(renderTime);
             updateElectricPattern(renderTime);
+            updateFirePattern(renderTime);
+            updateSteamPattern(renderTime);
             updateAtmosphere(dt);
             updateEnvironmentalObjects(dt);
             drawAtmosphere();
@@ -2420,6 +2518,23 @@ function interpolateState(dt) {
 
 
 
+// Helper to draw the complex organic path (Used by liquids and gas)
+const drawOrganicPath = (ctx, x, y, radius, id) => {
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    const blobCount = 4;
+    for (let i = 0; i < blobCount; i++) {
+        const seed = id * 1.37 + i * 2.41;
+        const angle = getStableRandom(seed) * Math.PI * 2;
+        const dist = radius * 0.45;
+        const bx = x + Math.cos(angle) * dist;
+        const by = y + Math.sin(angle) * dist;
+        const br = radius * (0.5 + getStableRandom(seed + 0.5) * 0.3);
+        ctx.moveTo(bx + br, by);
+        ctx.arc(bx, by, br, 0, Math.PI * 2);
+    }
+};
+
 function drawElements() {
     if (!gameState.elements) return;
     const currentBiome = gameState.zones && gameState.zones[0] ? gameState.zones[0].t : 'RANDOM';
@@ -2796,29 +2911,11 @@ function drawElements() {
             ctx.moveTo(-e.w/2+5, -e.h/2+5); ctx.lineTo(e.w/2-5, e.h/2-5);
             ctx.moveTo(e.w/2-5, -e.h/2+5); ctx.lineTo(-e.w/2+5, e.h/2-5);
             ctx.stroke();
-            ctx.strokeStyle = '#222';
             ctx.strokeRect(-e.w/2 + 8, -e.h/2 + 8, e.w - 16, e.h - 16);
         } else {
             ctx.fillStyle = config.color;
-            const isLiquid = [MATERIALS.WATER, MATERIALS.OIL, MATERIALS.DIRT, MATERIALS.ELECTRIC, MATERIALS.ICE, MATERIALS.ACID].includes(e.t);
-            const hasSpecialRendering = [MATERIALS.GAS, MATERIALS.STEAM].includes(e.t);
-
-            // Helper to draw the complex organic path (Used by liquids and gas)
-            const drawOrganicPath = (ctx, x, y, radius, id) => {
-                ctx.beginPath();
-                ctx.arc(x, y, radius, 0, Math.PI * 2);
-                const blobCount = 4;
-                for (let i = 0; i < blobCount; i++) {
-                    const seed = id * 1.37 + i * 2.41;
-                    const angle = getStableRandom(seed) * Math.PI * 2;
-                    const dist = radius * 0.45;
-                    const bx = x + Math.cos(angle) * dist;
-                    const by = y + Math.sin(angle) * dist;
-                    const br = radius * (0.5 + getStableRandom(seed + 0.5) * 0.3);
-                    ctx.moveTo(bx + br, by);
-                    ctx.arc(bx, by, br, 0, Math.PI * 2);
-                }
-            };
+            const isLiquid = [MATERIALS.WATER, MATERIALS.OIL, MATERIALS.DIRT, MATERIALS.ELECTRIC, MATERIALS.ICE, MATERIALS.ACID, MATERIALS.FIRE].includes(e.t);
+            const hasSpecialRendering = [MATERIALS.GAS, MATERIALS.STEAM, MATERIALS.FIRE].includes(e.t);
 
             if (isLiquid) {
                 // Organic Metaball Tiling (Overlapping circles for a natural blob feel)
@@ -3004,30 +3101,88 @@ function drawElements() {
                     }
                     ctx.restore();
                 }
-            } else {
-                // Fallback for non-premium or other liquids (DIRT, ICE, etc.)
-                ctx.fillStyle = config.color;
-                drawOrganicPath(ctx, e.x, e.y, baseRadius, e.id);
+            } else if (e.t === MATERIALS.FIRE && ENABLE_PREMIUM_VISUALS && firePatterns.length > 0) {
+                ctx.save();
+                const drawRadius = baseRadius * pulse;
+                
+                // 1. Intense Heat Aura (Large radial glow)
+                const auraRad = drawRadius * 2.2;
+                const g = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, auraRad);
+                g.addColorStop(0, 'rgba(255, 100, 0, 0.4)');
+                g.addColorStop(0.4, 'rgba(255, 50, 0, 0.2)');
+                g.addColorStop(1, 'rgba(150, 0, 0, 0)');
+                ctx.fillStyle = g;
+                drawOrganicPath(ctx, e.x, e.y, auraRad, e.id);
+                ctx.fill();
+
+                // 2. Animated Hellfire Pattern
+                const p = firePatterns[e.id % 9];
+                const flowY = -(renderTime * 0.08) % FIRE_TILE_SIZE;
+                const matrix = new DOMMatrix().translate(0, flowY);
+                p.setTransform(matrix);
+                ctx.fillStyle = p;
+                
+                // Intense Pulsing Glow
+                ctx.shadowBlur = 25 + Math.sin(renderTime * 0.015) * 15;
+                ctx.shadowColor = '#ff6600';
+                drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
                 ctx.fill();
                 
-                if (e.t === MATERIALS.OIL) {
-                    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-                    ctx.lineWidth = 1;
-                    ctx.stroke();
-                } else if (e.t === MATERIALS.DIRT) {
-                    ctx.strokeStyle = 'rgba(0,0,0,0.1)';
-                    ctx.lineWidth = 1;
-                    ctx.stroke();
-                } else if (e.t === MATERIALS.ICE) {
-                    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-                    ctx.lineWidth = 1;
-                    ctx.stroke();
+                // Core White-Hot Path (Actually bright center)
+                ctx.save();
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = '#fff';
+                ctx.fillStyle = '#fff'; // Solid white fill for the heat core
+                ctx.globalAlpha = 0.8;
+                drawOrganicPath(ctx, e.x, e.y, drawRadius * 0.35, e.id + 1);
+                ctx.fill();
+                ctx.restore();
+
+                // 3. Rising Embers
+                if (renderTime % 12 < 1) {
+                    particles.push({
+                        x: e.x + (getStableRandom(renderTime) - 0.5) * e.w,
+                        y: e.y + (getStableRandom(renderTime + 1) - 0.5) * e.h,
+                        vx: (getStableRandom(renderTime + 2) - 0.5) * 1.5,
+                        vy: -1.5 - getStableRandom(renderTime + 3) * 2,
+                        life: 1.0,
+                        color: getStableRandom(renderTime + 4) > 0.5 ? '#ffcc00' : '#ff4400',
+                        size: 2 + getStableRandom(renderTime + 5) * 3,
+                        isEmber: true
+                    });
                 }
+                ctx.restore();
+            } else {
+                // UNIVERSAL FALLBACK FOR LIQUIDS & ORGANIC HAZARDS
+                // This ensures they NEVER appear as squares, even if premium visuals are off
+                if (e.t === MATERIALS.FIRE) {
+                    const g = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, baseRadius * 1.4);
+                    g.addColorStop(0, '#fff');
+                    g.addColorStop(0.2, '#ffcc00');
+                    g.addColorStop(0.5, '#ff6600');
+                    g.addColorStop(0.8, 'rgba(255, 30, 0, 0.8)');
+                    g.addColorStop(1, 'rgba(255, 0, 0, 0)');
+                    ctx.fillStyle = g;
+                    ctx.shadowBlur = 20;
+                    ctx.shadowColor = '#ff4400';
+                } else if (e.t === MATERIALS.OIL) {
+                    ctx.fillStyle = 'rgba(20, 20, 20, 0.95)';
+                } else {
+                    ctx.fillStyle = config.color;
+                }
+                
+                drawOrganicPath(ctx, e.x, e.y, baseRadius, e.id);
+                ctx.fill();
+                ctx.shadowBlur = 0;
             }
         } else if (!hasSpecialRendering) {
-            // Buildings and other solid objects stay rectangular
-            ctx.fillRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h);
+            // Buildings and other solid objects (fallback for non-liquid, non-special)
+            if (e.t !== MATERIALS.GAS && e.t !== MATERIALS.STEAM) {
+                ctx.fillStyle = config.color;
+                ctx.fillRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h);
+            }
         }
+    }
 
         // Gas clouds (Toxic Organic Clouds V4 - Mustard Gas Theme)
         if (e.t === MATERIALS.GAS && ENABLE_PREMIUM_VISUALS && gasPatterns.length > 0) {
@@ -3070,6 +3225,24 @@ function drawElements() {
             }
             ctx.restore();
         }
+
+        // Steam clouds (Soft white wisps)
+        if (e.t === MATERIALS.STEAM && ENABLE_PREMIUM_VISUALS && steamPatterns.length > 0) {
+            ctx.save();
+            const drawRadius = e.w * 0.7;
+            const p = steamPatterns[e.id % 9];
+            if (p) {
+                ctx.globalAlpha = 0.5;
+                const flowX = (renderTime * 0.01) % STEAM_TILE_SIZE;
+                const matrix = new DOMMatrix().translate(flowX, -flowX * 0.3);
+                p.setTransform(matrix);
+                ctx.fillStyle = p;
+                ctx.shadowBlur = 25;
+                ctx.shadowColor = 'rgba(255, 255, 255, 0.1)';
+                drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
+                ctx.fill();
+            }
+            ctx.restore();
         }
         ctx.restore(); // Final balance for ctx.save() at top of forEach
     });
@@ -3666,6 +3839,10 @@ function updateParticles(dt) {
         if (p.isWaterWake) {
             p.size += 0.5 * dt; // Ripples grow
             p.life -= 0.01 * dt; // But fade faster
+        }
+        if (p.isEmber) {
+            p.vx += (Math.random() - 0.5) * 0.2 * dt;
+            p.size *= 0.98; // Shrink as they rise
         }
     });
     particles = particles.filter(p => p.life > 0);

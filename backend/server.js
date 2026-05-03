@@ -12,7 +12,7 @@ import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import { MATERIALS, MATERIAL_PROPERTIES, BIOMES, CHASSIS, WEAPON_MODULES, ALL_WEAPONS } from './gameConfig.js';
 
-dotenv.config(); // Force restart triggered by Antigravity
+dotenv.config(); // Force restart triggered by Antigravity - PIN removed for Lundixz
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const ENVIRONMENT = process.env.ENVIRONMENT || process.env.NODE_ENV || 'development';
@@ -738,12 +738,11 @@ class Lobby {
                 const isFireVSAcid = (bulletData.type === MATERIALS.FIRE && element.type === MATERIALS.ACID);
 
                 if (isFireVSOil) {
-                    const pos = { x: element.body.position.x, y: element.body.position.y };
-                    const ew = element.w;
-                    const eh = element.h;
-                    this.destroyElement(element.id);
-                    // Spawn fire with the SAME size as the oil puddle
-                    this.spawnElement(pos, MATERIALS.FIRE, 5000, 100, bulletData.ownerId, ew, eh);
+                    // TRANSFORM Oil into Fire instead of destroy/create
+                    // This is safer and preserves the collision body
+                    element.type = MATERIALS.FIRE;
+                    element.expiresAt = Date.now() + 6000;
+                    element.hp = 100;
                     this.destroyBullet(bullet.id);
                     return;
                 }
@@ -858,6 +857,15 @@ class Lobby {
                 (elementB.type === MATERIALS.FIRE && elementA.type === MATERIALS.ICE)) {
                 this.destroyElement(elementA.id);
                 this.destroyElement(elementB.id);
+            }
+
+            // NEW: Fire vs Oil Chain Reaction (Spread the fire!)
+            if ((elementA.type === MATERIALS.FIRE && elementB.type === MATERIALS.OIL) ||
+                (elementB.type === MATERIALS.FIRE && elementA.type === MATERIALS.OIL)) {
+                const oil = elementA.type === MATERIALS.OIL ? elementA : elementB;
+                oil.type = MATERIALS.FIRE;
+                oil.expiresAt = Date.now() + 6000;
+                oil.hp = 100;
             }
 
             // Fire vs Acid -> GAS
@@ -988,8 +996,8 @@ class Lobby {
             });
             if (overlaps.length > 0) return null;
 
-            // NEW: Sidewalk check for URBAN biome
-            if (this.mapType === 'URBAN') {
+            // Sidewalk check for URBAN biome (Only for buildings/solids, hazards can spread anywhere)
+            if (this.mapType === 'URBAN' && solidTypes.includes(type)) {
                 const blockSize = 350;
                 const streetWidth = 150;
                 const padding = 150;
@@ -999,7 +1007,6 @@ class Lobby {
                 const relativeX = (pos.x - (padding - buffer)) % step;
                 const relativeY = (pos.y - (padding - buffer)) % step;
                 
-                // If we are within the blockSize + buffer*2 area, we are on a sidewalk/building lot
                 if (relativeX >= 0 && relativeX < blockSize + buffer * 2 &&
                     relativeY >= 0 && relativeY < blockSize + buffer * 2) {
                     return null;

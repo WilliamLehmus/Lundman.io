@@ -249,6 +249,8 @@ To transition from a learning project to a **marketable product**, the following
         - **Water**: Calming waves, neon-cyan highlights, and light glimmer.
         - **Oil**: Viscous black base, iridescent (rainbow) sheen, and thick spherical bubbles with specular highlights.
         - **Acid/Gas**: Pulsing radioactive glow and corrosive bubbling.
+        - **Fire (Hellfire)**: Organic spreading pools with intense heat aura, animated rising flames, white-hot flickering, and dynamic rising ember particles.
+        - **Steam**: Soft, wispy white clouds with low-alpha procedural movement. (Reveals hidden units when electrified).
 
 
 #### **Weapon Shooting & HUD Click Blocking**
@@ -284,3 +286,20 @@ To transition from a learning project to a **marketable product**, the following
     2.  Added `flex-shrink: 0` to all control elements (status, chassis, map, actions) to ensure they maintain their intended size.
     3.  Enabled `overflow-y: auto` on the main lobby panel as a fallback for extreme aspect ratios.
     4.  Implemented height-based media queries (`@media (max-height: ...)` ) to dynamically scale down UI elements (font sizes, margins, slot heights) on smaller screens.
+
+#### **Invisible Steam & Square Fire Fix**
+- **Date**: 2026-05-03
+- **Issue**: Eld (Fire) renderades som en enkel orange kvadrat, och ånga (Steam) var helt osynlig trots att den fanns i spelets logik.
+- **Root Cause**: Eld saknade specifik rendering i `drawElements` och föll tillbaka på en rektangulär standardform. Ånga fanns med i listan för `hasSpecialRendering` men saknade kod för att faktiskt ritas ut.
+- **Fix**: 
+    3.  Implementerade "Hellfire"-systemet med organiska former, flammande mönster, vit-glödande kärnor och stigande gnist-partiklar.
+    4.  Lade till en ny renderings-block för `MATERIALS.STEAM` som ritar ut mjuka, genomskinliga ångmoln.
+    5.  Skapade `updateFirePattern` och `updateSteamPattern` för att animera mönstren i realtid.
+
+#### **Hellfire Visibility & Syntax Fix (Brace Nesting)**
+- **Date**: 2026-05-03
+- **Issue**: Hellfire (Fire hazards) were invisible or causing a total game freeze with a `SyntaxError: Unexpected token 'else'`.
+- **Root Cause**: A severe brace nesting error in `drawElements`. The fire rendering logic was accidentally nested inside the `ELECTRIC` block, making it unreachable. Additionally, mismatched closing braces caused the `isLiquid` chain to terminate prematurely, making the subsequent `else if` statements invalid.
+- **Fix**: Re-balanced the `if/else` ladder within `drawElements`, ensuring each material (Water, Oil, Electric, Fire) occupies its own distinct branch. Cleaned up trailing braces to correctly close the main element loop.
+- **Aesthetic Update**: Improved the `firePattern` density (15 blobs) and replaced the dark core with a solid white-hot fill (`#fff`) to eliminate the "biological/meatball" look and achieve a premium "Hellfire" aesthetic.
+- **Verification**: Validated using `node -c frontend/game.js`.
