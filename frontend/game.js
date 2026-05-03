@@ -105,12 +105,15 @@ let renderTime = 0;
 let waterPatterns = []; 
 let oilPatterns = [];
 let acidPatterns = [];
+let gasPatterns = [];
 let lastWaterPatternUpdate = 0;
 let lastOilPatternUpdate = 0;
 let lastAcidPatternUpdate = 0;
+let lastGasPatternUpdate = 0;
 const WATER_TILE_SIZE = 128;
 const OIL_TILE_SIZE = 128;
 const ACID_TILE_SIZE = 128;
+const GAS_TILE_SIZE = 128;
 
 const waterCanvases = [];
 const waterContexts = [];
@@ -118,6 +121,8 @@ const oilCanvases = [];
 const oilContexts = [];
 const acidCanvases = [];
 const acidContexts = [];
+const gasCanvases = [];
+const gasContexts = [];
 
 // Initialize canvases
 for (let i = 0; i < 9; i++) {
@@ -138,12 +143,61 @@ for (let i = 0; i < 9; i++) {
     aCanv.height = ACID_TILE_SIZE;
     acidCanvases.push(aCanv);
     acidContexts.push(aCanv.getContext('2d'));
+
+    const gCanv = document.createElement('canvas');
+    gCanv.width = GAS_TILE_SIZE;
+    gCanv.height = GAS_TILE_SIZE;
+    gasCanvases.push(gCanv);
+    gasContexts.push(gCanv.getContext('2d'));
 }
 
 // Global pattern variable for backward compatibility
 let waterPattern = null;
 let oilPattern = null;
 let acidPattern = null;
+let gasPattern = null;
+
+function updateGasPattern(time) {
+    if (time - lastGasPatternUpdate < 60) return;
+    lastGasPatternUpdate = time;
+
+    for (let p = 0; p < 9; p++) {
+        const ctx = gasContexts[p];
+        ctx.clearRect(0, 0, GAS_TILE_SIZE, GAS_TILE_SIZE);
+        
+        // Wispy Toxic Smoke Texture (Soft Puffs, no lines)
+        for (let i = 0; i < 6; i++) {
+            const seed = p * 10 + i;
+            const gx = getStableRandom(seed) * GAS_TILE_SIZE;
+            const gy = getStableRandom(seed + 1) * GAS_TILE_SIZE;
+            const r = 30 + getStableRandom(seed + 2) * 30;
+            
+            const g = ctx.createRadialGradient(gx, gy, 0, gx, gy, r);
+            g.addColorStop(0, 'rgba(212, 255, 0, 0.15)'); // More Yellowish
+            g.addColorStop(1, 'rgba(212, 255, 0, 0)');
+            ctx.fillStyle = g;
+            ctx.beginPath();
+            ctx.arc(gx, gy, r, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Add soft swirling wisps
+        ctx.strokeStyle = 'rgba(212, 255, 0, 0.05)';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 2; i++) {
+            const drift = time * 0.0005 + p + i;
+            ctx.beginPath();
+            for (let x = 0; x <= GAS_TILE_SIZE; x += 20) {
+                const y = (i * 60 + 30) + Math.cos(x * 0.03 + drift) * 20;
+                if (x === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+        }
+
+        gasPatterns[p] = ctx.createPattern(gasCanvases[p], 'repeat');
+    }
+}
 
 function updateAcidPattern(time) {
     if (time - lastAcidPatternUpdate < 60) return;
@@ -153,19 +207,19 @@ function updateAcidPattern(time) {
         const ctx = acidContexts[p];
         ctx.clearRect(0, 0, ACID_TILE_SIZE, ACID_TILE_SIZE);
         
-        // 1. Toxic Base
-        ctx.fillStyle = '#0a2a0a';
+        // 1. Toxic Base (More vibrant)
+        ctx.fillStyle = '#051a05';
         ctx.fillRect(0, 0, ACID_TILE_SIZE, ACID_TILE_SIZE);
 
         // 2. Radioactive Glow
         const grad = ctx.createRadialGradient(ACID_TILE_SIZE/2, ACID_TILE_SIZE/2, 0, ACID_TILE_SIZE/2, ACID_TILE_SIZE/2, ACID_TILE_SIZE);
-        grad.addColorStop(0, 'rgba(0, 255, 0, 0.15)');
+        grad.addColorStop(0, 'rgba(0, 255, 100, 0.25)');
         grad.addColorStop(1, 'rgba(0, 50, 0, 0)');
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, ACID_TILE_SIZE, ACID_TILE_SIZE);
 
-        // 3. Corrosive Bubbles
-        ctx.fillStyle = 'rgba(100, 255, 0, 0.3)';
+        // 3. Corrosive Bubbles (Brighter)
+        ctx.fillStyle = 'rgba(0, 255, 50, 0.5)';
         for (let i = 0; i < 6; i++) {
             const phase = time * 0.002 + i + p;
             const bx = (getStableRandom(p + i) * ACID_TILE_SIZE + time * 0.01) % ACID_TILE_SIZE;
@@ -176,16 +230,16 @@ function updateAcidPattern(time) {
                 ctx.arc(bx, by, r, 0, Math.PI * 2);
                 ctx.fill();
                 // Glow around bubble
-                ctx.shadowBlur = 5;
+                ctx.shadowBlur = 4;
                 ctx.shadowColor = '#0f0';
                 ctx.stroke();
                 ctx.shadowBlur = 0;
             }
         }
 
-        // 4. Toxic Swirls
-        ctx.strokeStyle = 'rgba(0, 255, 0, 0.1)';
-        ctx.lineWidth = 1;
+        // 4. Toxic Swirls (More visible)
+        ctx.strokeStyle = 'rgba(0, 255, 100, 0.2)';
+        ctx.lineWidth = 2;
         for (let i = 0; i < 2; i++) {
             ctx.beginPath();
             const offset = time * 0.001 + i;
@@ -1204,6 +1258,7 @@ function renderLoop(now) {
             updateWaterPattern(renderTime);
             updateOilPattern(renderTime);
             updateAcidPattern(renderTime);
+            updateGasPattern(renderTime);
             updateAtmosphere(dt);
             updateEnvironmentalObjects(dt);
             drawAtmosphere();
@@ -2586,30 +2641,29 @@ function drawElements() {
             ctx.fillStyle = config.color;
             const isLiquid = [MATERIALS.WATER, MATERIALS.OIL, MATERIALS.DIRT, MATERIALS.ELECTRIC, MATERIALS.ICE, MATERIALS.ACID].includes(e.t);
             const hasSpecialRendering = [MATERIALS.GAS, MATERIALS.STEAM].includes(e.t);
+
+            // Helper to draw the complex organic path (Used by liquids and gas)
+            const drawOrganicPath = (ctx, x, y, radius, id) => {
+                ctx.beginPath();
+                ctx.arc(x, y, radius, 0, Math.PI * 2);
+                const blobCount = 4;
+                for (let i = 0; i < blobCount; i++) {
+                    const seed = id * 1.37 + i * 2.41;
+                    const angle = getStableRandom(seed) * Math.PI * 2;
+                    const dist = radius * 0.45;
+                    const bx = x + Math.cos(angle) * dist;
+                    const by = y + Math.sin(angle) * dist;
+                    const br = radius * (0.5 + getStableRandom(seed + 0.5) * 0.3);
+                    ctx.moveTo(bx + br, by);
+                    ctx.arc(bx, by, br, 0, Math.PI * 2);
+                }
+            };
+
             if (isLiquid) {
                 // Organic Metaball Tiling (Overlapping circles for a natural blob feel)
                 const baseRadius = e.w * 0.5;
                 const pulse = (e.t === MATERIALS.WATER || e.t === MATERIALS.OIL) ? (1.0 + Math.sin(renderTime * (e.t === MATERIALS.WATER ? 0.002 : 0.0012) + e.id) * 0.03) : 1.0;
                 
-                // Helper to draw the complex organic path
-                const drawOrganicPath = (ctx, x, y, radius, id) => {
-                    ctx.beginPath();
-                    // Center blob
-                    ctx.arc(x, y, radius, 0, Math.PI * 2);
-                    
-                    // Peripheral blobs (Deterministic based on e.id)
-                    const blobCount = 4;
-                    for (let i = 0; i < blobCount; i++) {
-                        const seed = id * 1.37 + i * 2.41;
-                        const angle = getStableRandom(seed) * Math.PI * 2;
-                        const dist = radius * 0.45;
-                        const bx = x + Math.cos(angle) * dist;
-                        const by = y + Math.sin(angle) * dist;
-                        const br = radius * (0.5 + getStableRandom(seed + 0.5) * 0.3);
-                        ctx.moveTo(bx + br, by);
-                        ctx.arc(bx, by, br, 0, Math.PI * 2);
-                    }
-                };
 
                 if (e.t === MATERIALS.WATER && ENABLE_PREMIUM_VISUALS && waterPatterns.length > 0) {
                     const drawRadius = baseRadius * pulse;
@@ -2642,7 +2696,6 @@ function drawElements() {
                     ctx.fill();
                     
                     ctx.restore();
-                } else if (e.t === MATERIALS.OIL && ENABLE_PREMIUM_VISUALS && oilPatterns.length > 0) {
                 } else if (e.t === MATERIALS.OIL && ENABLE_PREMIUM_VISUALS && oilPatterns.length > 0) {
                     ctx.save();
                     const drawRadius = baseRadius * pulse;
@@ -2697,17 +2750,17 @@ function drawElements() {
                     ctx.save();
                     const drawRadius = baseRadius * pulse;
 
-                    // 1. Radioactive Base
+                    // 1. Radioactive Base (More vibrant)
                     const grad = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, drawRadius * 1.5);
-                    grad.addColorStop(0, 'rgba(20, 100, 20, 0.6)');
-                    grad.addColorStop(0.7, 'rgba(10, 50, 10, 0.8)');
+                    grad.addColorStop(0, 'rgba(0, 255, 0, 0.4)'); // Saturated Neon
+                    grad.addColorStop(0.7, 'rgba(0, 100, 0, 0.6)');
                     grad.addColorStop(1, 'rgba(0, 20, 0, 0)');
                     ctx.fillStyle = grad;
                     drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
                     ctx.fill();
 
                     // 2. Toxic Pattern
-                    ctx.globalAlpha = 0.9;
+                    ctx.globalAlpha = 1.0; // Full intensity
                     const p = acidPatterns[e.id % 9];
                     const flowX = (renderTime * 0.015) % ACID_TILE_SIZE;
                     const matrix = new DOMMatrix().translate(flowX, flowX * 0.5);
@@ -2716,7 +2769,9 @@ function drawElements() {
                     drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
                     ctx.fill();
 
-                    // 3. Rising Toxic Fumes (No edge glow)
+                    // 3. Radioactive Glow (Tight & Intense neon)
+                    ctx.shadowBlur = 12;
+                    ctx.shadowColor = 'rgba(0, 255, 100, 0.8)';
                     ctx.fill(); 
                     
                     // NEW: Rising Toxic Wisps
@@ -2778,43 +2833,41 @@ function drawElements() {
                 ctx.restore();
             }
 
-            // Gas clouds (Toxic Organic Clouds V2)
-            if (e.t === MATERIALS.GAS) {
+            // Gas clouds (Toxic Organic Clouds V4 - Mustard Gas Theme)
+            if (e.t === MATERIALS.GAS && ENABLE_PREMIUM_VISUALS && gasPatterns.length > 0) {
                 ctx.save();
-                const timeScale = renderTime * 0.002;
+                const drawRadius = e.w * 0.65;
                 
-                // 1. Core Toxic Cloud
-                const gGrad = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, e.w * 0.7);
-                gGrad.addColorStop(0, 'rgba(120, 255, 60, 0.3)');
-                gGrad.addColorStop(0.5, 'rgba(100, 230, 50, 0.15)');
-                gGrad.addColorStop(1, 'rgba(80, 200, 40, 0)');
+                // 1. Base Atmospheric Glow (More yellowish)
+                const gGrad = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, drawRadius * 1.5);
+                gGrad.addColorStop(0, 'rgba(212, 255, 0, 0.08)');
+                gGrad.addColorStop(0.7, 'rgba(180, 220, 0, 0.04)');
+                gGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
                 ctx.fillStyle = gGrad;
-                
-                // Draw multiple overlapping "puffs" that drift
-                for (let i = 0; i < 6; i++) {
-                    const seed = e.id + i;
-                    const angle = (timeScale * (0.5 + getStableRandom(seed) * 0.5)) + (i * Math.PI * 2 / 6);
-                    const dist = (e.w * 0.2) * Math.sin(timeScale * 0.5 + i);
-                    const px = e.x + Math.cos(angle) * dist;
-                    const py = e.y + Math.sin(angle) * dist;
-                    const pr = (e.w * 0.45) * (0.8 + Math.sin(timeScale + i) * 0.2);
-                    
-                    ctx.beginPath();
-                    ctx.arc(px, py, pr, 0, Math.PI * 2);
-                    ctx.fill();
-                }
+                drawOrganicPath(ctx, e.x, e.y, drawRadius * 1.2, e.id);
+                ctx.fill();
 
-                // 2. Swirling Toxic Wisps
-                ctx.strokeStyle = 'rgba(150, 255, 100, 0.08)';
-                ctx.lineWidth = 1.5;
-                for (let i = 0; i < 3; i++) {
-                    ctx.beginPath();
-                    const rot = timeScale * 0.8 + i * 2.1;
-                    const rx = e.w * (0.3 + Math.sin(timeScale * 0.5 + i) * 0.1);
-                    const ry = e.h * (0.2 + Math.cos(timeScale * 0.3 + i) * 0.05);
-                    ctx.ellipse(e.x, e.y, rx, ry, rot, 0, Math.PI * 2);
-                    ctx.stroke();
-                }
+                // 2. Swirling Smoke Pattern (Wispy & Flowing)
+                ctx.globalAlpha = 0.5;
+                const p = gasPatterns[e.id % 9];
+                const flowX = (renderTime * 0.008) % GAS_TILE_SIZE;
+                const matrix = new DOMMatrix().translate(flowX, flowX * 0.2);
+                p.setTransform(matrix);
+                ctx.fillStyle = p;
+                
+                // Extremely soft edges
+                ctx.shadowBlur = 60;
+                ctx.shadowColor = 'rgba(212, 255, 0, 0.15)';
+                drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
+                ctx.fill();
+
+                // 3. Secondary Drifting Layer (Volume)
+                ctx.globalAlpha = 0.25;
+                const matrix2 = new DOMMatrix().translate(-flowX * 0.6, flowX * 0.1);
+                p.setTransform(matrix2);
+                drawOrganicPath(ctx, e.x + Math.sin(renderTime * 0.0008) * 30, e.y, drawRadius * 0.95, e.id + 5);
+                ctx.fill();
+
                 ctx.restore();
             }
         }
