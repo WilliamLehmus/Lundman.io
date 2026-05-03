@@ -3001,56 +3001,56 @@ function drawElements() {
                             ctx.stroke();
                         }
                     }
-                        ctx.restore();
-                    }
-                } else {
-                    // Fallback for non-premium or other liquids (DIRT, ICE, etc.)
-                    ctx.fillStyle = config.color;
-                    drawOrganicPath(ctx, e.x, e.y, baseRadius, e.id);
-                    ctx.fill();
-                    
-                    if (e.t === MATERIALS.OIL) {
-                        ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-                        ctx.lineWidth = 1;
-                        ctx.stroke();
-                    } else if (e.t === MATERIALS.DIRT) {
-                        ctx.strokeStyle = 'rgba(0,0,0,0.1)';
-                        ctx.lineWidth = 1;
-                        ctx.stroke();
-                    } else if (e.t === MATERIALS.ICE) {
-                        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-                        ctx.lineWidth = 1;
-                        ctx.stroke();
-                    }
+                    ctx.restore();
                 }
-            } else if (!hasSpecialRendering) {
-                // Buildings and other solid objects stay rectangular
-                ctx.fillRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h);
-            }
-
-            // Gas clouds (Toxic Organic Clouds V4 - Mustard Gas Theme)
-            if (e.t === MATERIALS.GAS && ENABLE_PREMIUM_VISUALS && gasPatterns.length > 0) {
-                ctx.save();
-                const drawRadius = e.w * 0.65;
-                
-                // 1. Base Atmospheric Glow (More yellowish)
-                const gGrad = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, drawRadius * 1.5);
-                gGrad.addColorStop(0, 'rgba(212, 255, 0, 0.08)');
-                gGrad.addColorStop(0.7, 'rgba(180, 220, 0, 0.04)');
-                gGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-                ctx.fillStyle = gGrad;
-                drawOrganicPath(ctx, e.x, e.y, drawRadius * 1.2, e.id);
+            } else {
+                // Fallback for non-premium or other liquids (DIRT, ICE, etc.)
+                ctx.fillStyle = config.color;
+                drawOrganicPath(ctx, e.x, e.y, baseRadius, e.id);
                 ctx.fill();
+                
+                if (e.t === MATERIALS.OIL) {
+                    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                } else if (e.t === MATERIALS.DIRT) {
+                    ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                } else if (e.t === MATERIALS.ICE) {
+                    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                }
+            }
+        } else if (!hasSpecialRendering) {
+            // Buildings and other solid objects stay rectangular
+            ctx.fillRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h);
+        }
 
-                // 2. Swirling Smoke Pattern (Wispy & Flowing)
-                const p = gasPatterns[e.id % 9];
-                if (p) {
-                    ctx.save();
-                    ctx.globalAlpha = 0.5;
-                    const flowX = (renderTime * 0.008) % GAS_TILE_SIZE;
-                    const matrix = new DOMMatrix().translate(flowX, flowX * 0.2);
-                    p.setTransform(matrix);
-                    ctx.fillStyle = p;
+        // Gas clouds (Toxic Organic Clouds V4 - Mustard Gas Theme)
+        if (e.t === MATERIALS.GAS && ENABLE_PREMIUM_VISUALS && gasPatterns.length > 0) {
+            ctx.save();
+            const drawRadius = e.w * 0.65;
+            
+            // 1. Base Atmospheric Glow (More yellowish)
+            const gGrad = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, drawRadius * 1.5);
+            gGrad.addColorStop(0, 'rgba(212, 255, 0, 0.08)');
+            gGrad.addColorStop(0.7, 'rgba(180, 220, 0, 0.04)');
+            gGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = gGrad;
+            drawOrganicPath(ctx, e.x, e.y, drawRadius * 1.2, e.id);
+            ctx.fill();
+
+            // 2. Swirling Smoke Pattern (Wispy & Flowing)
+            const p = gasPatterns[e.id % 9];
+            if (p) {
+                ctx.save();
+                ctx.globalAlpha = 0.5;
+                const flowX = (renderTime * 0.008) % GAS_TILE_SIZE;
+                const matrix = new DOMMatrix().translate(flowX, flowX * 0.2);
+                p.setTransform(matrix);
+                ctx.fillStyle = p;
                 
                 // Extremely soft edges
                 ctx.shadowBlur = 60;
@@ -3069,8 +3069,8 @@ function drawElements() {
             }
             ctx.restore();
         }
-    }
-        ctx.restore();
+        }
+        ctx.restore(); // Final balance for ctx.save() at top of forEach
     });
 }
 
