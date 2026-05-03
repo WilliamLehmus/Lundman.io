@@ -106,14 +106,17 @@ let waterPatterns = [];
 let oilPatterns = [];
 let acidPatterns = [];
 let gasPatterns = [];
+let electricPatterns = [];
 let lastWaterPatternUpdate = 0;
 let lastOilPatternUpdate = 0;
 let lastAcidPatternUpdate = 0;
 let lastGasPatternUpdate = 0;
+let lastElectricPatternUpdate = 0;
 const WATER_TILE_SIZE = 128;
 const OIL_TILE_SIZE = 128;
 const ACID_TILE_SIZE = 128;
 const GAS_TILE_SIZE = 128;
+const ELECTRIC_TILE_SIZE = 128;
 
 const waterCanvases = [];
 const waterContexts = [];
@@ -123,6 +126,8 @@ const acidCanvases = [];
 const acidContexts = [];
 const gasCanvases = [];
 const gasContexts = [];
+const electricCanvases = [];
+const electricContexts = [];
 
 // Initialize canvases
 for (let i = 0; i < 9; i++) {
@@ -149,6 +154,12 @@ for (let i = 0; i < 9; i++) {
     gCanv.height = GAS_TILE_SIZE;
     gasCanvases.push(gCanv);
     gasContexts.push(gCanv.getContext('2d'));
+
+    const eCanv = document.createElement('canvas');
+    eCanv.width = ELECTRIC_TILE_SIZE;
+    eCanv.height = ELECTRIC_TILE_SIZE;
+    electricCanvases.push(eCanv);
+    electricContexts.push(eCanv.getContext('2d'));
 }
 
 // Global pattern variable for backward compatibility
@@ -156,6 +167,38 @@ let waterPattern = null;
 let oilPattern = null;
 let acidPattern = null;
 let gasPattern = null;
+let electricPattern = null;
+
+function updateElectricPattern(time) {
+    if (time - lastElectricPatternUpdate < 30) return; // Faster updates for jitter
+    lastElectricPatternUpdate = time;
+
+    for (let p = 0; p < 9; p++) {
+        const ctx = electricContexts[p];
+        ctx.clearRect(0, 0, ELECTRIC_TILE_SIZE, ELECTRIC_TILE_SIZE);
+        
+        // Jittery Static Noise Pattern
+        ctx.strokeStyle = 'rgba(0, 242, 255, 0.4)';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 15; i++) {
+            const x1 = getStableRandom(p + i + time) * ELECTRIC_TILE_SIZE;
+            const y1 = getStableRandom(p + i + 1 + time) * ELECTRIC_TILE_SIZE;
+            const x2 = x1 + (getStableRandom(p + i + 2) - 0.5) * 20;
+            const y2 = y1 + (getStableRandom(p + i + 3) - 0.5) * 20;
+            
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+        }
+
+        // Faint Cyan Glow base
+        ctx.fillStyle = 'rgba(0, 80, 150, 0.1)';
+        ctx.fillRect(0, 0, ELECTRIC_TILE_SIZE, ELECTRIC_TILE_SIZE);
+
+        electricPatterns[p] = ctx.createPattern(electricCanvases[p], 'repeat');
+    }
+}
 
 function updateGasPattern(time) {
     if (time - lastGasPatternUpdate < 60) return;
@@ -1358,6 +1401,7 @@ function renderLoop(now) {
             updateOilPattern(renderTime);
             updateAcidPattern(renderTime);
             updateGasPattern(renderTime);
+            updateElectricPattern(renderTime);
             updateAtmosphere(dt);
             updateEnvironmentalObjects(dt);
             drawAtmosphere();
@@ -2885,8 +2929,61 @@ function drawElements() {
                     }
                     
                     ctx.restore();
+                } else if (e.t === MATERIALS.ELECTRIC && ENABLE_PREMIUM_VISUALS && electricPatterns.length > 0) {
+                    const drawRadius = baseRadius;
+                    
+                    // 1. Electric Depth (Deep Blue Glow)
+                    const grad = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, drawRadius * 1.5);
+                    grad.addColorStop(0, 'rgba(0, 100, 255, 0.4)');
+                    grad.addColorStop(0.7, 'rgba(0, 50, 150, 0.5)');
+                    grad.addColorStop(1, 'rgba(0, 0, 50, 0)');
+                    ctx.fillStyle = grad;
+                    drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
+                    ctx.fill();
+
+                    // 2. High-Voltage Jitter Pattern
+                    ctx.save();
+                    ctx.globalAlpha = 0.8;
+                    const p = electricPatterns[e.id % 9];
+                    // Rapid jittery movement
+                    const flowX = (renderTime * 0.1) % ELECTRIC_TILE_SIZE;
+                    const matrix = new DOMMatrix().translate(flowX, -flowX * 0.5);
+                    p.setTransform(matrix);
+                    ctx.fillStyle = p;
+                    
+                    // Intense Cyan Glow
+                    ctx.shadowBlur = 15 + Math.sin(renderTime * 0.01) * 5;
+                    ctx.shadowColor = '#00f2ff';
+                    drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
+                    ctx.fill();
+                    ctx.restore();
+
+                    // 3. Dynamic Lightning Bolts
+                    ctx.save();
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 1.5;
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = '#00f2ff';
+                    for (let i = 0; i < 2; i++) {
+                        if (Math.random() > 0.3) {
+                            ctx.beginPath();
+                            const seed = renderTime + i + e.id;
+                            const angle = getStableRandom(seed) * Math.PI * 2;
+                            const startDist = drawRadius * 0.2;
+                            let lx = e.x + Math.cos(angle) * startDist;
+                            let ly = e.y + Math.sin(angle) * startDist;
+                            ctx.moveTo(lx, ly);
+                            for (let j = 0; j < 4; j++) {
+                                lx += (Math.random() - 0.5) * 30;
+                                ly += (Math.random() - 0.5) * 30;
+                                ctx.lineTo(lx, ly);
+                            }
+                            ctx.stroke();
+                        }
+                    }
+                    ctx.restore();
                 } else {
-                    // Fallback for non-premium or other liquids
+                    // Fallback for non-premium or other liquids (DIRT, ICE, etc.)
                     ctx.fillStyle = config.color;
                     drawOrganicPath(ctx, e.x, e.y, baseRadius, e.id);
                     ctx.fill();
@@ -2908,28 +3005,6 @@ function drawElements() {
             } else if (!hasSpecialRendering) {
                 // Buildings and other solid objects stay rectangular
                 ctx.fillRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h);
-            }
-
-            // Add animated lightning for electric pools
-            if (e.t === MATERIALS.ELECTRIC) {
-                ctx.save();
-                ctx.strokeStyle = '#fff';
-                ctx.lineWidth = 2;
-                ctx.shadowBlur = 10;
-                ctx.shadowColor = '#00f2ff';
-                ctx.beginPath();
-                for (let i = 0; i < 2; i++) {
-                    let lx = e.x + (Math.random() - 0.5) * e.w * 0.7;
-                    let ly = e.y + (Math.random() - 0.5) * e.h * 0.7;
-                    ctx.moveTo(lx, ly);
-                    for (let j = 0; j < 3; j++) {
-                        lx += (Math.random() - 0.5) * 25;
-                        ly += (Math.random() - 0.5) * 25;
-                        ctx.lineTo(lx, ly);
-                    }
-                }
-                ctx.stroke();
-                ctx.restore();
             }
 
             // Gas clouds (Toxic Organic Clouds V4 - Mustard Gas Theme)
