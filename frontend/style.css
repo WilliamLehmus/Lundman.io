@@ -24,10 +24,15 @@ body {
     align-items: center;
 }
 
+/* Global Cursor Override when game is active */
+body.game-active-cursor,
+body.game-active-cursor * {
+    cursor: none !important;
+}
+
 #gameCanvas {
     display: block;
     background: #06060a;
-    cursor: none;
 }
 
 #ui-layer {

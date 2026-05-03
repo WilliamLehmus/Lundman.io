@@ -417,10 +417,11 @@ function toggleMenu() {
 }
 
 function updateCursorState() {
-    if (gameActive && !isMenuOpen && !isShopOpen && !(gameState && gameState.gameOver)) {
-        canvas.style.cursor = 'none';
+    const shouldHide = gameActive && !isMenuOpen && !isShopOpen && !(gameState && gameState.gameOver);
+    if (shouldHide) {
+        document.body.classList.add('game-active-cursor');
     } else {
-        canvas.style.cursor = 'default';
+        document.body.classList.remove('game-active-cursor');
     }
 }
 

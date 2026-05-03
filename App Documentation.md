@@ -233,6 +233,7 @@ To transition from a learning project to a **marketable product**, the following
     2.  Set `.dashboard-panel` to `pointer-events: none` and explicitly enabled it only for interactive buttons.
     3.  Re-added **Space** and **Enter** as shooting keys for better accessibility.
     4.  Added **Cooldown Broadcasting** (`c` property) to the server state to ensure the HUD cooldown bar reflects real-time weapon readiness.
+    5.  **Global Cursor Hide**: Implemented `body.game-active-cursor` CSS class to ensure the system cursor is hidden across all UI layers during gameplay, preventing the "double cursor" effect.
 
 #### **Missing Imports (ReferenceError)**
 - **Date**: 2026-05-03
