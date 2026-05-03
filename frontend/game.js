@@ -2252,30 +2252,45 @@ function drawElements() {
             ctx.strokeRect(-e.w/2 + 8, -e.h/2 + 8, e.w - 16, e.h - 16);
         } else {
             ctx.fillStyle = config.color;
-            if (e.t === MATERIALS.DIRT) {
+            const isLiquid = [MATERIALS.WATER, MATERIALS.OIL, MATERIALS.DIRT, MATERIALS.ELECTRIC, MATERIALS.ICE].includes(e.t);
+            const hasSpecialRendering = [MATERIALS.ACID, MATERIALS.GAS, MATERIALS.STEAM].includes(e.t);
+
+            if (isLiquid) {
+                // Organic Circular Tiling (Overlapping circles for a "metaball" feel)
+                const radius = e.w * 0.65; // Overlap for smoothness
                 ctx.beginPath();
-                ctx.roundRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h, 5);
-                ctx.fill();
-            } else if (e.t === MATERIALS.WATER) {
-                // Tiled Water Pattern
-                if (ENABLE_PREMIUM_VISUALS && waterPattern) {
+                ctx.arc(e.x, e.y, radius, 0, Math.PI * 2);
+                
+                if (e.t === MATERIALS.WATER && ENABLE_PREMIUM_VISUALS && waterPattern) {
                     ctx.save();
                     ctx.fillStyle = waterPattern;
-                    ctx.beginPath();
-                    // Render as a square tile at world coordinates
-                    ctx.rect(e.x - e.w/2, e.y - e.h/2, e.w, e.h);
                     ctx.fill();
                     ctx.restore();
-                    
-                    // Soft edge highlight
+                    // Edge highlight
                     ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-                    ctx.lineWidth = 1;
-                    ctx.strokeRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h);
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
                 } else {
-                    ctx.fillRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h);
+                    ctx.fillStyle = config.color;
+                    ctx.fill();
+                    
+                    // Subtle edge for non-water liquids
+                    if (e.t === MATERIALS.OIL) {
+                        ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+                        ctx.lineWidth = 1;
+                        ctx.stroke();
+                    } else if (e.t === MATERIALS.DIRT) {
+                        ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+                        ctx.lineWidth = 1;
+                        ctx.stroke();
+                    } else if (e.t === MATERIALS.ICE) {
+                        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+                        ctx.lineWidth = 1;
+                        ctx.stroke();
+                    }
                 }
-            } else {
-                // Draw other puddles as squares (Tiled style)
+            } else if (!hasSpecialRendering) {
+                // Buildings and other solid objects stay rectangular
                 ctx.fillRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h);
             }
 
