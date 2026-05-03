@@ -55,11 +55,12 @@ The environment is reactive:
     - **Engine**: Increases Movement & Turn Speed (+15% per level).
     - **Caliber**: Increases Damage (+25% per level) and reduces Reload Time (-10% per level).
     - *Note: Upgrades go up to Level 5. Costs: 100, 250, 500, 1000, 2000. Upgrades reset after each match.*
-- **Chassis Visuals**: Each tank type has a unique aesthetic:
-    - **SCOUT**: Rounded, aerodynamic body with narrow tracks.
-    - **BRAWLER**: Blocky, reinforced body with heavy-duty tracks and extra plating lines.
-    - **ARTILLERY**: Long, narrow chassis with extended tracks for stability.
-    - **DEV**: Standard form with a unique white-neon high-tech glow.
+- **Chassis Visuals**: Each tank type has a unique aesthetic and high-fidelity image:
+    - **SCOUT**: Rounded, aerodynamic body with narrow tracks. (2 Weapon Slots)
+    - **BRAWLER**: Blocky, reinforced body with heavy-duty tracks and extra plating lines. (1 Weapon Slot)
+    - **ARTILLERY**: Long, narrow chassis with extended tracks for stability. (4 Weapon Slots)
+- **Visual Tank Selector**: The lobby features a visual interface where players can select their chassis by clicking on high-fidelity tank cards.
+- **Weapon Loadout Customization**: Each chassis has a specific number of weapon slots. In the lobby, players can click on these slots to cycle through allowed weapons for that chassis, allowing for custom loadouts (e.g., a Scout with a Flamethrower and a Frost Gun).
 - **Hazard Damage**: Environmental hazards like **Fire**, **Acid**, and **Gas** damage ALL players within their range, regardless of who created the hazard. **Electric** hazards do not deal HP damage but cause a powerful **Stun** effect to all targets. Standing in your own fire or acid will cause damage.
 
 ### 6. Lobby & Slot Management
@@ -134,8 +135,6 @@ npm run dev
 - **Server Logs**: Watch the `npm run dev` output for logic debugging.
 
 ### 3. Developer Tools (Hidden)
-- **Dev Tank**: High-performance tank with all weapons.
-    - **How to activate**: Open browser console (F12) and type `activateDevTank()`.
 - **Debug Menu**: Enables bot/terrain spawning if `debugMode` is active.
 - **Security Check**: The server validates all critical actions. (See Security section).
 

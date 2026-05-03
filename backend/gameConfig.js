@@ -49,34 +49,32 @@ export const CHASSIS = {
     SCOUT: {
         name: 'Scout',
         hp: 80,
-        speed: 0.008, // Increased from 0.006
+        speed: 0.008, 
         turnSpeed: 0.065,
         mass: 3,
-        weapons: ['STANDARD', 'FLAMETHROWER']
+        slots: 2,
+        allowedWeapons: ['STANDARD', 'FLAMETHROWER', 'WATER_CANNON', 'FROST_GUN'],
+        weapons: ['STANDARD', 'FLAMETHROWER'] // Default loadout
     },
     BRAWLER: {
         name: 'Brawler',
         hp: 200,
-        speed: 0.006, // Increased from 0.0045
+        speed: 0.006, 
         turnSpeed: 0.04,
         mass: 10,
+        slots: 1,
+        allowedWeapons: ['HEAVY_GUN', 'STANDARD', 'DIRT_GUN'],
         weapons: ['HEAVY_GUN']
     },
     ARTILLERY: {
         name: 'Artillery',
         hp: 60,
-        speed: 0.0045, // Increased from 0.0035
+        speed: 0.0045, 
         turnSpeed: 0.04,
         mass: 15,
+        slots: 4,
+        allowedWeapons: ['STANDARD', 'TESLA', 'WATER_CANNON', 'FROST_GUN', 'DIRT_GUN'],
         weapons: ['STANDARD', 'TESLA', 'WATER_CANNON', 'FROST_GUN']
-    },
-    DEV: {
-        name: 'Dev Tank (Admin)',
-        hp: 200,
-        speed: 0.018,
-        turnSpeed: 0.15,
-        mass: 10,
-        weapons: ['STANDARD', 'HEAVY_GUN', 'FLAMETHROWER', 'WATER_CANNON', 'TESLA', 'FROST_GUN', 'DIRT_GUN']
     }
 };
 

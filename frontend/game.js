@@ -542,7 +542,8 @@ if (openShopBtn) {
 
 const musicTracks = [
     new Audio('/music_track1.mp3'),
-    new Audio('/music_track2.mp3')
+    new Audio('/music_track2.mp3'),
+    new Audio('/music_track3.mp3')
 ];
 const shotSFX = new Audio('/tank_shot.mp3');
 const flameSFX = new Audio('/flamethrower.mp3');
@@ -708,6 +709,19 @@ const WEAPON_ABBR = {
     STANDARD: 'GUN', FLAMETHROWER: 'FIRE', WATER_CANNON: 'H\u2082O',
     DIRT_GUN: 'DIRT', TESLA: 'ARC', FROST_GUN: 'ICE', HEAVY_GUN: 'HVY'
 };
+
+function getWeaponIcon(weaponType) {
+    const name = weaponType.toUpperCase();
+    if (name.includes('STANDARD')) return 'assets/icon_standard.png';
+    if (name.includes('HEAVY')) return 'assets/icon_launcher.png';
+    if (name.includes('FLAME')) return 'assets/icon_flame.png';
+    if (name.includes('WATER')) return 'assets/icon_water.png';
+    if (name.includes('TESLA')) return 'assets/icon_tesla.png';
+    if (name.includes('FROST')) return 'assets/icon_frost.png';
+    if (name.includes('DIRT')) return 'assets/icon_dirt.png';
+    if (name.includes('SHOTGUN')) return 'assets/icon_shotgun.png';
+    return null;
+}
 const TRAIL_LENGTHS  = { metal: 6, fire: 4, water: 3, dirt: 3, electric: 8, ice: 7 };
 const TRAIL_COLORS   = { metal: '#ffcc44', fire: '#ff6600', water: '#00aaff', dirt: '#6b3410', electric: '#ffff44', ice: '#aaddff' };
 const TRAIL_WIDTHS   = { metal: 3, fire: 5, water: 4, dirt: 3, electric: 4, ice: 3 };
@@ -867,9 +881,91 @@ socket.on('dev-reload', () => {
 });
 
 function updateLobbyUI(id, players) {
-    lobbyIdSpan.innerText = id.toUpperCase();
+    if (lobbyIdSpan) lobbyIdSpan.innerText = id.toUpperCase();
+    
+    // 1. Tank Selection Rendering
+    const selectionArea = document.getElementById('tank-selection-area');
+    const me = players.find(p => p.id === myId);
+    if (selectionArea && me) {
+        selectionArea.innerHTML = '';
+        Object.entries(CHASSIS).forEach(([type, config]) => {
+
+            const card = document.createElement('div');
+            card.className = `tank-card ${me.ch === type ? 'selected' : ''}`;
+            
+            const imgContainer = document.createElement('div');
+            imgContainer.className = 'tank-img-container';
+            const img = document.createElement('img');
+            img.src = `assets/tanks/${type.toLowerCase()}.png`;
+            imgContainer.appendChild(img);
+            card.appendChild(imgContainer);
+
+            const title = document.createElement('h4');
+            title.innerText = config.name;
+            card.appendChild(title);
+
+            const stats = document.createElement('div');
+            stats.className = 'tank-stats';
+            stats.innerHTML = `<span>HP: ${config.hp}</span><span>SLOTS: ${config.slots}</span>`;
+            card.appendChild(stats);
+
+            // Loadout Slots
+            const loadout = document.createElement('div');
+            loadout.className = 'tank-loadout-slots';
+            
+            // For the selected tank, show interactive slots
+            if (me.ch === type) {
+                for (let i = 0; i < config.slots; i++) {
+                    const slot = document.createElement('div');
+                    slot.className = 'loadout-slot';
+                    const weaponType = (me.sl && me.sl[i]) ? me.sl[i] : 'EMPTY';
+                    const icon = getWeaponIcon(weaponType);
+                    if (icon) {
+                        const iconImg = document.createElement('img');
+                        iconImg.src = icon;
+                        iconImg.className = 'weapon-img';
+                        slot.appendChild(iconImg);
+                    }
+                    
+                    const label = document.createElement('div');
+                    label.className = 'weapon-slot-label';
+                    label.innerText = WEAPON_ABBR[weaponType] || weaponType.substring(0, 3);
+                    slot.appendChild(label);
+                    
+                    slot.title = `Click to cycle: ${WEAPON_NAMES[weaponType] || weaponType}`;
+
+                    slot.onclick = (e) => {
+                        e.stopPropagation();
+                        // Cycle through allowed weapons
+                        const currentIdx = config.allowedWeapons.indexOf(weaponType);
+                        const nextIdx = (currentIdx + 1) % config.allowedWeapons.length;
+                        const nextWeapon = config.allowedWeapons[nextIdx];
+                        socket.emit('change-loadout', { slotIndex: i, weaponType: nextWeapon });
+                    };
+                    loadout.appendChild(slot);
+                }
+            } else {
+                // For non-selected tanks, show empty/preview slots
+                for (let i = 0; i < config.slots; i++) {
+                    const slot = document.createElement('div');
+                    slot.className = 'loadout-slot empty';
+                    loadout.appendChild(slot);
+                }
+            }
+            card.appendChild(loadout);
+
+            card.onclick = () => {
+                if (me.ch !== type) {
+                    socket.emit('change-chassis', type);
+                }
+            };
+
+            selectionArea.appendChild(card);
+        });
+    }
     
     const renderTeam = (teamName, container) => {
+        if (!container) return;
         container.innerHTML = '';
         const teamPlayers = players.filter(p => p.t === teamName);
         const slotsCount = 5;
@@ -919,13 +1015,6 @@ function updateLobbyUI(id, players) {
                 }
                 
                 slot.appendChild(actions);
-
-                if (player.id === myId) {
-                    const lobbyChassisSelect = document.getElementById('lobby-chassis-select');
-                    if (lobbyChassisSelect && lobbyChassisSelect.value !== player.ch) {
-                        lobbyChassisSelect.value = player.ch;
-                    }
-                }
             } else {
                 slot.classList.add('empty');
                 slot.innerHTML = `
@@ -1084,12 +1173,7 @@ if (quitToMenuBtn) {
     };
 }
 
-const lobbyChassisSelect = document.getElementById('lobby-chassis-select');
-if (lobbyChassisSelect) {
-    lobbyChassisSelect.onchange = (e) => {
-        socket.emit('change-chassis', e.target.value);
-    };
-}
+// Removed legacy chassis select listener as it's replaced by visual selector
 
 const knownBulletIds = new Set();
 socket.on('player-event', (data) => {
@@ -1187,11 +1271,7 @@ function updateHUD() {
                     
                     // Weapon Icon Mapping
                     const weaponName = (MATERIAL_PROPERTIES[slot]?.name || slot.toString()).toUpperCase();
-                    let iconSrc = null;
-                    if (weaponName.includes('STANDARD')) iconSrc = 'assets/icon_standard.png';
-                    else if (weaponName.includes('SHOTGUN')) iconSrc = 'assets/icon_shotgun.png';
-                    else if (weaponName.includes('FLAME')) iconSrc = 'assets/icon_flame.png';
-                    else if (weaponName.includes('LAUNCH')) iconSrc = 'assets/icon_launcher.png';
+                    const iconSrc = getWeaponIcon(weaponName);
 
                     if (iconSrc) {
                         const img = document.createElement('img');
@@ -1207,6 +1287,12 @@ function updateHUD() {
                     
                     slotDiv.appendChild(keySpan);
                     slotDiv.appendChild(iconDiv);
+                    
+                    const label = document.createElement('div');
+                    label.className = 'weapon-slot-label';
+                    label.innerText = WEAPON_ABBR[slot] || slot.toString().substring(0, 3);
+                    slotDiv.appendChild(label);
+                    
                     weaponContainer.appendChild(slotDiv);
                 });
                 weaponContainer.dataset.currentSlot = me.cs;
@@ -3860,14 +3946,3 @@ if (closeBrowserBtn) {
         serverBrowser.style.display = 'none';
     };
 }
-
-// Hidden Dev Command (Globally accessible)
-window.activateDevTank = () => {
-    if (typeof socket !== 'undefined' && socket.connected) {
-        console.log("%c [DEV] Switching to Dev Tank... ", "background: #222; color: #00ff00; font-weight: bold;");
-        socket.emit('change-chassis', 'DEV');
-    } else {
-        console.error("[DEV] Socket not connected. Join a lobby first.");
-    }
-};
-
