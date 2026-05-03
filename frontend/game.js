@@ -545,6 +545,8 @@ const musicTracks = [
     new Audio('/music_track2.mp3')
 ];
 const shotSFX = new Audio('/tank_shot.mp3');
+const flameSFX = new Audio('/flamethrower.mp3');
+const teslaSFX = new Audio('/tesla_gun.mp3');
 
 let currentMusicIndex = 0;
 let musicVolume = parseFloat(localStorage.getItem('tanks_music_vol')) || 0.5;
@@ -562,6 +564,8 @@ function setupAudio() {
         };
     });
     shotSFX.volume = sfxVolume;
+    flameSFX.volume = sfxVolume;
+    teslaSFX.volume = sfxVolume;
 }
 
 function playMusic() {
@@ -577,14 +581,22 @@ function playWeaponSound(weaponType, x, y) {
     
     if (finalVol <= 0.01) return;
 
-    const sfx = shotSFX.cloneNode();
+    let sfx;
+    if (weaponType === 'FLAMETHROWER') {
+        sfx = flameSFX.cloneNode();
+    } else if (weaponType === 'TESLA') {
+        sfx = teslaSFX.cloneNode();
+    } else {
+        sfx = shotSFX.cloneNode();
+    }
+    
     sfx.volume = finalVol;
     
-    // Pitch shifting for different weapons
-    if (weaponType === 'TESLA') {
-        sfx.playbackRate = 2.0; // Sharp electric snap
-    } else if (weaponType === 'ARTILLERY') {
+    // Pitch shifting for specialized weapons using generic shot
+    if (weaponType === 'ARTILLERY') {
         sfx.playbackRate = 0.7; // Deep heavy boom
+    } else if (weaponType === 'STANDARD' || weaponType === 'HEAVY_GUN') {
+        sfx.playbackRate = 0.9 + Math.random() * 0.2; // Slight variation
     }
     
     sfx.play();
@@ -599,6 +611,8 @@ if (musicSlider) musicSlider.oninput = (e) => {
 if (sfxSlider) sfxSlider.oninput = (e) => {
     sfxVolume = e.target.value;
     shotSFX.volume = sfxVolume;
+    flameSFX.volume = sfxVolume;
+    teslaSFX.volume = sfxVolume;
     localStorage.setItem('tanks_sfx_vol', sfxVolume);
 };
 

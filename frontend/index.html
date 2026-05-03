@@ -60,20 +60,18 @@
             </div>
             <div id="lobby-status">WAITING FOR PLAYERS (2/10)...</div>
             
-            <div class="lobby-chassis-select" style="margin-bottom: 1.5rem; display: flex; flex-direction: column; align-items: center; gap: 0.5rem; pointer-events: auto;">
-                <label style="font-size: 0.8rem; letter-spacing: 2px; color: var(--p1-color);">SWITCH CHASSIS:</label>
-                <select id="lobby-chassis-select" class="premium-select" style="margin-top: 0; width: 350px;">
+            <div class="lobby-chassis-select">
+                <label>SWITCH CHASSIS:</label>
+                <select id="lobby-chassis-select" class="premium-select">
                     <option value="SCOUT">SCOUT (2 SLOTS, FAST)</option>
                     <option value="BRAWLER">BRAWLER (1 SLOT, TANKY)</option>
                     <option value="ARTILLERY">ARTILLERY (4 SLOTS, SLOW)</option>
                 </select>
             </div>
 
-
-
-            <div class="lobby-map-select" style="margin-bottom: 1.5rem; display: flex; flex-direction: column; align-items: center; gap: 0.5rem; pointer-events: auto;">
-                <label style="font-size: 0.8rem; letter-spacing: 2px; color: var(--p1-color);">SELECT MAP / BIOME:</label>
-                <select id="map-select" class="premium-select" style="margin-top: 0; width: 350px;">
+            <div class="lobby-map-select">
+                <label>SELECT MAP / BIOME:</label>
+                <select id="map-select" class="premium-select">
                     <option value="RANDOM">RANDOM BIOME</option>
                     <option value="URBAN">URBAN (CITY)</option>
                     <option value="WASTELAND">WASTELAND (DESERT)</option>
@@ -83,8 +81,8 @@
                 </select>
             </div>
 
-            <div class="lobby-actions" style="margin-top: 2rem; display: flex; gap: 1rem; justify-content: center; pointer-events: auto;">
-                <button id="leave-lobby-btn" class="secondary-btn" style="border-color: #ff4444 !important; color: #ff4444 !important;">LEAVE LOBBY</button>
+            <div class="lobby-actions">
+                <button id="leave-lobby-btn" class="secondary-btn btn-danger">LEAVE LOBBY</button>
                 <button id="start-game-btn" class="hidden">START GAME</button>
             </div>
         </div>
