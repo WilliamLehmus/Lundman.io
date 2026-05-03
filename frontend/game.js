@@ -2418,6 +2418,8 @@ function interpolateState(dt) {
     });
 }
 
+
+
 function drawElements() {
     if (!gameState.elements) return;
     const currentBiome = gameState.zones && gameState.zones[0] ? gameState.zones[0].t : 'RANDOM';
