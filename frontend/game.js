@@ -99,52 +99,91 @@ let playerEvents = []; // { text, color, time }
 let mousePos = { x: 0, y: 0 };
 let renderTime = 0;
 
-// Water Tile System
-let waterPattern = null;
+// Water Tile System (9 Variations for high-fidelity diversity)
+let waterPatterns = []; 
 let lastWaterPatternUpdate = 0;
 const WATER_TILE_SIZE = 128;
-const waterTileCanvas = document.createElement('canvas');
-waterTileCanvas.width = WATER_TILE_SIZE;
-waterTileCanvas.height = WATER_TILE_SIZE;
-const waterTileCtx = waterTileCanvas.getContext('2d');
+const waterCanvases = [];
+const waterContexts = [];
+
+// Initialize 9 canvases for variety
+for (let i = 0; i < 9; i++) {
+    const canv = document.createElement('canvas');
+    canv.width = WATER_TILE_SIZE;
+    canv.height = WATER_TILE_SIZE;
+    waterCanvases.push(canv);
+    waterContexts.push(canv.getContext('2d'));
+}
+
+// Global pattern variable for backward compatibility
+let waterPattern = null;
 
 function updateWaterPattern(time) {
-    if (time - lastWaterPatternUpdate < 50) return; // 20fps update for pattern
+    if (time - lastWaterPatternUpdate < 50) return; // 20fps update
     lastWaterPatternUpdate = time;
 
-    const ctx = waterTileCtx;
-    ctx.clearRect(0, 0, WATER_TILE_SIZE, WATER_TILE_SIZE);
-    
-    // Base color - Deep Murky Blue
-    ctx.fillStyle = 'rgba(0, 40, 100, 0.5)';
-    ctx.fillRect(0, 0, WATER_TILE_SIZE, WATER_TILE_SIZE);
+    for (let p = 0; p < 9; p++) {
+        const ctx = waterContexts[p];
+        ctx.clearRect(0, 0, WATER_TILE_SIZE, WATER_TILE_SIZE);
+        
+        // Base depth with slight hue shifts for variety
+        const blueVal = 120 + (p * 10);
+        ctx.fillStyle = `rgba(0, 30, ${blueVal}, 0.4)`;
+        ctx.fillRect(0, 0, WATER_TILE_SIZE, WATER_TILE_SIZE);
 
-    // Animated Waves (Procedural)
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
-    ctx.lineWidth = 1;
-    for (let i = 0; i < 3; i++) {
-        ctx.beginPath();
-        for (let x = 0; x <= WATER_TILE_SIZE; x += 8) {
-            const y = (i * WATER_TILE_SIZE / 3) + Math.sin(x * 0.08 + time * 0.002 + i) * 6;
-            if (x === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
+        // VARIATION STYLES (9 different personalities)
+        ctx.lineWidth = 2;
+        
+        if (p % 3 === 0) { // STYLE: Ripply/Active
+            ctx.strokeStyle = 'rgba(0, 242, 255, 0.1)';
+            for (let i = 0; i < 4; i++) {
+                ctx.beginPath();
+                const freq = 0.05 + (p * 0.01);
+                for (let x = 0; x <= WATER_TILE_SIZE; x += 10) {
+                    const y = (i * WATER_TILE_SIZE / 4) + Math.sin(x * freq + time * 0.003 + i) * 10;
+                    if (x === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+            }
+        } else if (p % 3 === 1) { // STYLE: Bubbly/Murky
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+            for (let i = 0; i < 8; i++) {
+                const phase = time * 0.002 + i + p;
+                const bx = ((i * 50 + p * 10) % WATER_TILE_SIZE);
+                const by = ((Math.sin(phase) * 20 + i * 40) % WATER_TILE_SIZE);
+                ctx.beginPath();
+                ctx.arc(bx, by, 3 + Math.sin(phase) * 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        } else { // STYLE: Deep/Calm
+            ctx.strokeStyle = 'rgba(0, 150, 255, 0.08)';
+            ctx.beginPath();
+            ctx.arc(WATER_TILE_SIZE/2, WATER_TILE_SIZE/2, 40 + Math.sin(time * 0.001 + p) * 10, 0, Math.PI * 2);
+            ctx.stroke();
         }
-        ctx.stroke();
-    }
 
-    // Caustics / Glimmer (Light refraction)
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
-    for (let i = 0; i < 6; i++) {
-        const x = ((time * 0.05 + i * 40) % WATER_TILE_SIZE);
-        const y = ((time * 0.03 + i * 70) % WATER_TILE_SIZE);
-        ctx.beginPath();
-        ctx.arc(x, y, 8 + Math.sin(time * 0.003 + i) * 4, 0, Math.PI * 2);
-        ctx.fill();
-    }
+        // Shared Caustics (Light shimmer)
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+        for (let i = 0; i < 4; i++) {
+            const x = ((time * (0.03 + p * 0.002) + i * 60) % WATER_TILE_SIZE);
+            const y = ((time * (0.02 + p * 0.001) + i * 80) % WATER_TILE_SIZE);
+            ctx.beginPath();
+            ctx.arc(x, y, 10 + Math.sin(time * 0.002 + i) * 5, 0, Math.PI * 2);
+            ctx.fill();
+        }
 
-    if (ctx) {
-        waterPattern = ctx.createPattern(waterTileCanvas, 'repeat');
+        // Tiny "Neon Dust" particles for life
+        ctx.fillStyle = 'rgba(0, 242, 255, 0.2)';
+        for (let i = 0; i < 3; i++) {
+            const px = (Math.sin(time * 0.001 + i * 10 + p) * 0.4 + 0.5) * WATER_TILE_SIZE;
+            const py = (Math.cos(time * 0.0008 + i * 5 + p) * 0.4 + 0.5) * WATER_TILE_SIZE;
+            ctx.fillRect(px, py, 1.5, 1.5);
+        }
+
+        waterPatterns[p] = ctx.createPattern(waterCanvases[p], 'repeat');
     }
+    waterPattern = waterPatterns[0];
 }
 
 // Premium Visuals Toggle (Set to true to enable high-end atmosphere/effects)
@@ -2261,14 +2300,45 @@ function drawElements() {
                 ctx.beginPath();
                 ctx.arc(e.x, e.y, radius, 0, Math.PI * 2);
                 
-                if (e.t === MATERIALS.WATER && ENABLE_PREMIUM_VISUALS && waterPattern) {
+                if (e.t === MATERIALS.WATER && ENABLE_PREMIUM_VISUALS && waterPatterns.length > 0) {
                     ctx.save();
-                    ctx.fillStyle = waterPattern;
+                    
+                    // Dynamic Soft Pulse (Makes it feel alive)
+                    const pulse = 1.0 + Math.sin(renderTime * 0.002 + e.id) * 0.05;
+                    const drawRadius = radius * pulse;
+
+                    // High-Fidelity Depth Gradient (Softer edges)
+                    const grad = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, drawRadius);
+                    grad.addColorStop(0, 'rgba(0, 80, 220, 0.4)');
+                    grad.addColorStop(0.8, 'rgba(0, 40, 150, 0.6)');
+                    grad.addColorStop(1, 'rgba(0, 20, 80, 0)'); // Fades to transparent at edge
+                    ctx.fillStyle = grad;
+                    
+                    ctx.beginPath();
+                    ctx.arc(e.x, e.y, drawRadius, 0, Math.PI * 2);
                     ctx.fill();
+
+                    // Pattern overlay with selective selection
+                    ctx.globalAlpha = 0.8;
+                    ctx.fillStyle = waterPatterns[e.id % 9];
+                    ctx.fill();
+                    
+                    // Surface Glimmer
+                    const specPhase = renderTime * 0.0008 + e.id;
+                    const specX = e.x + Math.cos(specPhase) * (drawRadius * 0.3);
+                    const specY = e.y + Math.sin(specPhase) * (drawRadius * 0.3);
+                    const specGrad = ctx.createRadialGradient(specX, specY, 0, specX, specY, drawRadius * 0.5);
+                    specGrad.addColorStop(0, 'rgba(255, 255, 255, 0.1)');
+                    specGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                    ctx.fillStyle = specGrad;
+                    ctx.fill();
+
                     ctx.restore();
-                    // Edge highlight
-                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-                    ctx.lineWidth = 2;
+                    // Subtle Glowing Rim
+                    ctx.strokeStyle = `rgba(0, 242, 255, ${0.1 + Math.sin(renderTime * 0.003 + e.id) * 0.05})`;
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.arc(e.x, e.y, drawRadius, 0, Math.PI * 2);
                     ctx.stroke();
                 } else {
                     ctx.fillStyle = config.color;
