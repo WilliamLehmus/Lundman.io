@@ -1,6 +1,6 @@
 import { io } from "socket.io-client";
 import versionData from './version.json';
-import { MATERIALS, MATERIAL_PROPERTIES, BIOMES, CHASSIS } from '../backend/gameConfig.js';
+import { MATERIALS, MATERIAL_PROPERTIES, BIOMES, CHASSIS, WEAPON_MODULES } from '../backend/gameConfig.js';
 
 // Connect to the same host the game is served from
 const socket = io({
@@ -413,6 +413,15 @@ function toggleMenu() {
     isMenuOpen = !isMenuOpen;
     optionsMenu.style.display = isMenuOpen ? 'flex' : 'none';
     if (isMenuOpen && isShopOpen) toggleShop(); // Close shop if options opened
+    updateCursorState();
+}
+
+function updateCursorState() {
+    if (gameActive && !isMenuOpen && !isShopOpen && !(gameState && gameState.gameOver)) {
+        canvas.style.cursor = 'none';
+    } else {
+        canvas.style.cursor = 'default';
+    }
 }
 
 function toggleShop() {
@@ -427,6 +436,7 @@ function toggleShop() {
         if (isMenuOpen) toggleMenu(); // Close options if shop opened
         updateShopUI();
     }
+    updateCursorState();
 }
 
 const UPGRADE_COSTS = [100, 250, 500, 1000, 2000];
@@ -484,11 +494,11 @@ socket.on('scrap-update', (newScrap) => {
 
 const WEAPON_NAMES = {
     STANDARD: 'Main Gun', FLAMETHROWER: 'Flamethrower', WATER_CANNON: 'Water Cannon',
-    DIRT_GUN: 'Dirt Gun', TESLA: 'Tesla Coil', FROST_GUN: 'Frost Gun'
+    DIRT_GUN: 'Dirt Gun', TESLA: 'Tesla Coil', FROST_GUN: 'Frost Gun', HEAVY_GUN: 'Heavy Cannon'
 };
 const WEAPON_ABBR = {
     STANDARD: 'GUN', FLAMETHROWER: 'FIRE', WATER_CANNON: 'H\u2082O',
-    DIRT_GUN: 'DIRT', TESLA: 'ARC', FROST_GUN: 'ICE'
+    DIRT_GUN: 'DIRT', TESLA: 'ARC', FROST_GUN: 'ICE', HEAVY_GUN: 'HVY'
 };
 const TRAIL_LENGTHS  = { metal: 6, fire: 4, water: 3, dirt: 3, electric: 8, ice: 7 };
 const TRAIL_COLORS   = { metal: '#ffcc44', fire: '#ff6600', water: '#00aaff', dirt: '#6b3410', electric: '#ffff44', ice: '#aaddff' };
@@ -602,7 +612,7 @@ function handleInput(code, isPressed) {
     if (code === 'KeyS' || code === 'ArrowDown') { keys.down = isPressed; changed = true; }
     if (code === 'KeyA' || code === 'ArrowLeft') { keys.left = isPressed; changed = true; }
     if (code === 'KeyD' || code === 'ArrowRight') { keys.right = isPressed; changed = true; }
-    // Removed Space/Enter shooting as per user request
+    if (code === 'Space' || code === 'Enter') { keys.shoot = isPressed; changed = true; }
 
     if (changed) {
         updateAimAngle();
@@ -766,6 +776,7 @@ socket.on('game-started', () => {
         document.getElementById('mobile-controls').classList.remove('hidden');
     }
     gameActive = true;
+    updateCursorState();
 });
 
 socket.on('scrap-buff', ({ text }) => {
@@ -784,6 +795,7 @@ socket.on('scrap-buff', ({ text }) => {
 socket.on('match-ended', ({ winner, scores, stats }) => {
     gameActive = false;
     gameOverScreen.classList.remove('hidden');
+    updateCursorState();
     
     const winnerText = document.getElementById('winner-text');
     if (winnerText) {
@@ -827,6 +839,7 @@ socket.on('lobby-reset', ({ id, players }) => {
     hud.classList.add('hidden');
     lobbyScreen.classList.remove('hidden');
     updateLobbyUI(id, players);
+    updateCursorState();
 });
 
 const restartBtn = document.getElementById('restart-btn');
@@ -1148,6 +1161,7 @@ function renderLoop(now) {
         ctx.restore();
 
         drawMinimap();
+        drawCrosshair();
         drawKillFeed();
         drawPlayerEvents();
         if (ENABLE_PREMIUM_VISUALS) {
@@ -1425,6 +1439,64 @@ function drawTank(p) {
         }
         ctx.restore();
     }
+}
+
+function drawCrosshair() {
+    if (!gameActive || isMenuOpen || isShopOpen || (gameState && gameState.gameOver)) return;
+
+    const me = serverState?.players?.find(p => p.id === myId);
+    if (!me) return;
+
+    ctx.save();
+    ctx.translate(mousePos.x, mousePos.y);
+
+    const currentWeapon = me.w; // w is the current weapon name from server
+    const weaponMod = WEAPON_MODULES[currentWeapon];
+    const weaponType = weaponMod ? weaponMod.type : 'metal';
+    const color = TRAIL_COLORS[weaponType] || '#fff';
+    
+    // Outer reload circle
+    const reloadProgress = (me.c / 100); // me.c is 0-100
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, 18, 0, Math.PI * 2);
+    ctx.stroke();
+
+    if (reloadProgress < 1.0) {
+        ctx.strokeStyle = color;
+        ctx.beginPath();
+        ctx.arc(0, 0, 18, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * reloadProgress));
+        ctx.stroke();
+    } else {
+        // Ready glow
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = color;
+        ctx.strokeStyle = color;
+        ctx.beginPath();
+        ctx.arc(0, 0, 18, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+
+    // Inner crosshair
+    const pulse = keys.shoot ? 1.4 : 1.0;
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = color;
+    
+    // 4 dots
+    for (let i = 0; i < 4; i++) {
+        ctx.rotate(Math.PI / 2);
+        ctx.beginPath();
+        ctx.arc(10 * pulse, 0, 2, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Center dot
+    ctx.beginPath();
+    ctx.arc(0, 0, 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
 }
 
 function drawMinimap() {
@@ -3342,8 +3414,11 @@ if (spawnWallBtn) {
     };
 }
 
-canvas.addEventListener('mousedown', (e) => {
-    if (!gameActive) return;
+window.addEventListener('mousedown', (e) => {
+    if (!gameActive || isMenuOpen || isShopOpen) return;
+    
+    // Check if we clicked on a UI element that should block shooting
+    if (e.target.closest('button') || e.target.closest('input') || e.target.closest('.weapon-slot')) return;
 
     if (debugMode && debugSpawnType) {
         const rect = canvas.getBoundingClientRect();
@@ -3371,14 +3446,14 @@ canvas.addEventListener('mousedown', (e) => {
     if (e.button === 0) {
         keys.shoot = true;
         updateAimAngle();
-        socket.emit('input', keys);
+        sendInput();
     }
 });
 
 window.addEventListener('mouseup', (e) => {
     if (e.button === 0 && keys.shoot) {
         keys.shoot = false;
-        socket.emit('input', keys);
+        sendInput();
     }
 });
 

@@ -1288,14 +1288,16 @@ class Lobby {
                         y: -Math.sin(body.angle) * moveSpeed
                     });
                 }
-                if (inputs.shoot) this.playerShoot(p);
+                if (inputs.shoot && p.hp > 0) this.playerShoot(p);
             });
         }
     }
 
     playerShoot(p) {
         const moduleName = p.slots[p.currentSlot];
+        if (!moduleName) return;
         const baseWeapon = WEAPON_MODULES[moduleName];
+        if (!baseWeapon) return;
         const now = Date.now();
         
         // Scrap Bonus & Power Upgrades
@@ -1631,14 +1633,14 @@ class Lobby {
         if (weapon.type === MATERIALS.FIRE) {
             // Spawn fire elements slightly ahead to avoid immediate collision
             this.spawnElement({
-                x: pos.x + Math.cos(p.body.angle) * 20,
-                y: pos.y + Math.sin(p.body.angle) * 20
+                x: pos.x + Math.cos(aimAngle) * 20,
+                y: pos.y + Math.sin(aimAngle) * 20
             }, MATERIALS.FIRE, 1500, undefined, p.id);
         }
         if (weapon.type === MATERIALS.ICE) {
             this.spawnElement({
-                x: pos.x + Math.cos(p.body.angle) * 20,
-                y: pos.y + Math.sin(p.body.angle) * 20
+                x: pos.x + Math.cos(aimAngle) * 20,
+                y: pos.y + Math.sin(aimAngle) * 20
             }, MATERIALS.ICE, 2000, undefined, p.id);
         }
     }
@@ -1664,6 +1666,13 @@ class Lobby {
                 slw: p.statusEffects.slow > now,
                 brn: p.statusEffects.burn > now,
                 wt: p.statusEffects.wet > now,
+                c: (() => {
+                    const mod = p.slots[p.currentSlot];
+                    const bw = WEAPON_MODULES[mod];
+                    if (!bw) return 100;
+                    const rt = bw.reload / (1 + (p.scrap / 200) + (p.upgrades.power * 0.1));
+                    return Math.min(100, Math.floor(((now - p.lastShot) / rt) * 100));
+                })(),
                 inv: p.invulnerableUntil && now < p.invulnerableUntil,
                 seq: p.lastInputSeq
             })),

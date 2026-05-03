@@ -222,3 +222,21 @@ To transition from a learning project to a **marketable product**, the following
         - **Oil**: Viscous black base, iridescent (rainbow) sheen, and thick spherical bubbles with specular highlights.
         - **Acid/Gas**: Pulsing radioactive glow and corrosive bubbling.
 
+
+#### **Weapon Shooting & HUD Click Blocking**
+- **Date**: 2026-05-03
+- **Issue**: Players reported being unable to shoot. Two causes were found:
+    1.  **HUD Blocking**: The Dota-style dashboard panels were capturing mouse clicks (`pointer-events: auto`), preventing them from reaching the canvas.
+    2.  **Input Listeners**: The `mousedown` listener was on the `canvas`, which is layered behind the `ui-layer`.
+- **Fix**: 
+    1.  Moved shooting listeners (`mousedown`/`mouseup`) to the `window` to bypass UI layering issues.
+    2.  Set `.dashboard-panel` to `pointer-events: none` and explicitly enabled it only for interactive buttons.
+    3.  Re-added **Space** and **Enter** as shooting keys for better accessibility.
+    4.  Added **Cooldown Broadcasting** (`c` property) to the server state to ensure the HUD cooldown bar reflects real-time weapon readiness.
+
+#### **Missing Imports (ReferenceError)**
+- **Date**: 2026-05-03
+- **Issue**: `Uncaught ReferenceError: WEAPON_MODULES is not defined`.
+- **Root Cause**: When adding the custom crosshair, I used the `WEAPON_MODULES` constant but forgot to add it to the `import` statement at the top of `game.js`.
+- **Fix**: Added `WEAPON_MODULES` to the curly-brace import list from `../backend/gameConfig.js`.
+- **Lesson**: Always verify that all constants used in a new function are properly imported, especially when working with shared config files.

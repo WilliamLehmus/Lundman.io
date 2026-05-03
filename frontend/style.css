@@ -27,7 +27,7 @@ body {
 #gameCanvas {
     display: block;
     background: #06060a;
-    cursor: crosshair;
+    cursor: none;
 }
 
 #ui-layer {
@@ -59,12 +59,12 @@ body {
 
 #version-number {
     position: absolute;
-    top: 20px;
-    right: 20px;
+    top: 45px; /* Moved down to avoid ESC hint */
+    right: 25px;
     color: rgba(255, 255, 255, 0.3);
-    font-size: 1rem;
+    font-size: 0.7rem;
     font-weight: 300;
-    letter-spacing: 0.2rem;
+    letter-spacing: 0.1rem;
     z-index: 1000;
     pointer-events: none;
 }
@@ -85,8 +85,9 @@ body {
 
 #splash-screen {
     position: fixed;
-    top: 0;
-    left: 0;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     width: 100%;
     height: 100%;
     background: url('splash.png') no-repeat center center;
@@ -94,8 +95,8 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    z-index: 100;
-    pointer-events: auto; /* Allow interaction with splash content */
+    z-index: 500;
+    pointer-events: auto;
     transition: opacity 1s ease-out, transform 1s ease-out;
 }
 
@@ -281,12 +282,17 @@ button {
 
 /* Lobby Styles */
 #lobby-screen {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     width: 800px;
     max-width: 95vw;
     pointer-events: auto;
     max-height: 90vh;
     display: flex;
     flex-direction: column;
+    z-index: 600;
 }
 
 .lobby-columns {
@@ -547,7 +553,7 @@ button:active {
 
 /* Panels Common */
 .dashboard-panel {
-    pointer-events: auto;
+    pointer-events: none; /* Allow clicks through empty areas to the game */
     background: #0f0f1a;
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-bottom: none;
@@ -649,6 +655,7 @@ button:active {
     position: relative;
     cursor: pointer;
     transition: all 0.2s;
+    pointer-events: auto; /* Re-enable for the icons */
 }
 
 .weapon-slot.active {
@@ -730,6 +737,7 @@ button:active {
     cursor: pointer;
     font-weight: 700;
     transition: all 0.2s;
+    pointer-events: auto; /* Re-enable for the button */
 }
 
 .quick-shop-btn:hover {
@@ -1000,7 +1008,7 @@ input[type="range"]::-webkit-slider-thumb {
     border-radius: 10px;
     z-index: 5000;
     pointer-events: auto;
-    display: flex;
+    display: none;
     flex-direction: column;
     gap: 10px;
     box-shadow: 0 0 20px rgba(255, 0, 255, 0.3);
