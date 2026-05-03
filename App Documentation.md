@@ -198,7 +198,36 @@ To transition from a learning project to a **marketable product**, the following
 > 3.  **Frontend Logic**: `frontend/game.js` (Rendering, Atmosphere)
 > 4.  **UI Elements**: `frontend/index.html` (Dropdown values, IDs)
 > 
-### 2. Known Issues & Critical Fixes
+#### **Canvas Stack Overflow (OIL Rendering)**
+- **Date**: 2026-05-03
+- **Issue**: Rendering would "freeze" after a few seconds of gameplay, although sounds and logic continued.
+- **Root Cause**: A mismatched `ctx.save()` and `ctx.restore()` in the `OIL` material rendering block. For every oil puddle on screen, the canvas state stack grew by 1 every frame, hitting the browser limit almost instantly.
+- **Fix**: Added the missing `ctx.restore()` call to correctly balance the stack.
+- **Verification**: Balanced the total counts of `save()` and `restore()` calls to exactly 52 each in the codebase.
+
+#### **Deterministic Randomness (getStableRandom)**
+- **Date**: 2026-05-03
+- **Issue**: Procedural grid details and organic hazard paths would "jitter" or "smear" because they relied on `Math.random()`, which changes every frame.
+- **Fix**: Implemented `getStableRandom(seed)` helper to provide deterministic noise based on object IDs or coordinates.
+- **Usage**: Used in `drawGrid`, `drawOrganicPath`, and `drawAtmosphere` to ensure visual consistency across frames.
+
+#### **Global Cursor Hide V2**
+- **Date**: 2026-05-03
+- **Issue**: The system cursor remained visible when hovering over the new Dota-style HUD panels (Health/Weapons), breaking immersion.
+- **Fix**: Updated CSS to apply `cursor: none !important` to the entire `body` and `#ui-layer` when `game-active-cursor` is active. Explicitly re-enabled for menus and shop using state-driven class toggling.
+
+#### **Minimap Sync Fix**
+- **Date**: 2026-05-03
+- **Issue**: Buildings and Scrap were not showing up on the minimap despite being visible in the world.
+- **Root Cause**: The minimap logic was checking for `e.type === 'building'`, but the server-authoritative state uses shortened keys (`e.t` and `MATERIALS.BUILDING`).
+- **Fix**: Synchronized `drawMinimap` to use the same property keys as the main rendering loop (`e.t`).
+
+#### **Jittery Rendering Stabilization**
+- **Date**: 2026-05-03
+- **Issue**: Environmental decorations (industrial vents, lights, wetland lilies) would "vibrate" or jitter every frame.
+- **Root Cause**: Use of `Math.random()` inside the rendering loop for properties like radius or position.
+- **Fix**: Replaced with `getStableRandom(seed)` using the object's unique ID as a seed to ensure deterministic, flicker-free rendering.
+
 
 #### **Shop Menu (B-key) Non-Responsive**
 - **Date**: 2026-05-02

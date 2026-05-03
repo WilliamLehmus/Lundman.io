@@ -1841,10 +1841,10 @@ function drawMinimap() {
         const ex = e.x * scale;
         const ey = e.y * scale;
         
-        if (e.type === 'building') {
+        if (e.t === MATERIALS.BUILDING) {
             ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
             ctx.fillRect(ex - (e.w/2)*scale, ey - (e.h/2)*scale, e.w * scale, e.h * scale);
-        } else if (e.type === 'scrap') {
+        } else if (e.t === MATERIALS.SCRAP) {
             ctx.fillStyle = '#ffd700';
             ctx.beginPath();
             ctx.arc(ex, ey, 1.5, 0, Math.PI * 2);
@@ -2473,7 +2473,7 @@ function drawElements() {
                 for (let i = 0; i < 5; i++) {
                     const mx = e.x + (Math.sin(e.id + i) * 0.4) * e.w;
                     const my = e.y + (Math.cos(e.id * 2 + i) * 0.4) * e.h;
-                    ctx.beginPath(); ctx.arc(mx, my, 15 + Math.random() * 15, 0, Math.PI * 2); ctx.fill();
+                    ctx.beginPath(); ctx.arc(mx, my, 15 + getStableRandom(e.id + i) * 15, 0, Math.PI * 2); ctx.fill();
                 }
                 // Hanging Vines
                 ctx.strokeStyle = 'rgba(20, 40, 20, 0.6)'; ctx.lineWidth = 2;
@@ -2514,9 +2514,10 @@ function drawElements() {
                 ctx.fill();
                 // Random snow patches
                 for (let i = 0; i < 3; i++) {
-                    const sx = e.x + (Math.sin(e.id + i) * 0.3) * e.w;
-                    const sy = e.y + (Math.cos(e.id * 2 + i) * 0.3) * e.h;
-                    ctx.beginPath(); ctx.arc(sx, sy, 10 + Math.random() * 10, 0, Math.PI * 2); ctx.fill();
+                    const sx = e.x + Math.sin(e.id + i) * (e.w * 0.3);
+                    const sy = e.y + Math.cos(e.id + i) * (e.h * 0.3);
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+                    ctx.beginPath(); ctx.arc(sx, sy, 10 + getStableRandom(e.id + i * 2) * 10, 0, Math.PI * 2); ctx.fill();
                 }
                 ctx.restore();
             }
@@ -2644,9 +2645,9 @@ function drawElements() {
                 ctx.fillStyle = 'rgba(0,0,0,0.2)';
                 for (let i = 0; i < 3; i++) {
                     const dx = (Math.sin(e.id + i) * 0.4) * e.w;
-                    const dy = (Math.cos(e.id * 2 + i) * 0.4) * e.h;
+                    const dy = (getStableRandom(e.id + i + 2.5) - 0.5) * e.h * 0.8;
                     ctx.beginPath();
-                    ctx.arc(e.x + dx, e.y + dy, 10 + Math.random() * 10, 0, Math.PI * 2);
+                    ctx.arc(e.x + dx, e.y + dy, 10 + getStableRandom(e.id + i + 5.1) * 10, 0, Math.PI * 2);
                     ctx.fill();
                 }
             }

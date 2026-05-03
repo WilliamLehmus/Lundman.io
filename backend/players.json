@@ -3,7 +3,7 @@
     "kills": 13,
     "deaths": 68,
     "scrap": 2222,
-    "lastSeen": 1777815293619,
+    "lastSeen": 1777815723406,
     "pin": "$2b$10$9Dt4G53jvbS3uVzljVFIWur86akT0reUHFTQ/1edw5fHSuTvrlzEu"
   },
   "TestTank": {
@@ -28,9 +28,9 @@
   },
   "Stroggo1": {
     "kills": 0,
-    "deaths": 33,
-    "scrap": 94,
-    "lastSeen": 1777814308752,
+    "deaths": 9,
+    "scrap": 90,
+    "lastSeen": 1777812950749,
     "pin": "$2b$10$oP609sRXZZMUk8lq2J4VCuAC.ALHRpg1tw2uZx6uM4cBU16lifMdO"
   }
 }

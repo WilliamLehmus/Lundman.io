@@ -24,9 +24,18 @@ body {
     align-items: center;
 }
 
-/* Hide cursor ONLY over the game canvas when active, never over UI */
+/* Global cursor hide when game is active (prevents double cursor over UI panels) */
+body.game-active-cursor,
+body.game-active-cursor #ui-layer,
 body.game-active-cursor #gameCanvas {
     cursor: none !important;
+}
+
+/* Re-enable cursor for interactive elements even when game is active (e.g. shop buttons if they were to exist) */
+body.game-active-cursor button,
+body.game-active-cursor select,
+body.game-active-cursor input {
+    cursor: auto;
 }
 
 #gameCanvas {
