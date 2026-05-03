@@ -240,6 +240,12 @@ To transition from a learning project to a **marketable product**, the following
 - **Root Cause**: When adding the custom crosshair, I used the `WEAPON_MODULES` constant but forgot to add it to the `import` statement at the top of `game.js`.
 - **Fix**: Added `WEAPON_MODULES` to the curly-brace import list from `../backend/gameConfig.js`.
 - **Lesson**: Always verify that all constants used in a new function are properly imported, especially when working with shared config files.
+
+#### **Missing Particle Function (ReferenceError)**
+- **Date**: 2026-05-03
+- **Issue**: `Uncaught (in promise) ReferenceError: createParticle is not defined` when an explosion occurred.
+- **Root Cause**: The `createParticle` function was called in the `explosion` socket event, but the function did not exist (likely removed during a previous refactor of the particle system).
+- **Fix**: Replaced the non-existent `createParticle` calls with direct object pushes to the `particles` array (`particles.push({ ... })`).
 #### **Lobby UI Overlap on Small Screens**
 - **Date**: 2026-05-03
 - **Issue**: On smaller desktop screens or narrow browser windows, the lobby status and host selectors (chassis/map) were vertically overlapping the player lists.

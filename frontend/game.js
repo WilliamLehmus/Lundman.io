@@ -11,12 +11,26 @@ socket.on('explosion', (data) => {
     shake.intensity = 20;
     // Massive particle burst
     for (let i = 0; i < 30; i++) {
-        const p = createParticle(data.x, data.y, Math.random() > 0.5 ? '#ff4400' : '#ffcc00', 10 + Math.random() * 10);
-        p.vx *= 1.5;
-        p.vy *= 1.5;
+        particles.push({
+            x: data.x,
+            y: data.y,
+            vx: (Math.random() - 0.5) * 12,
+            vy: (Math.random() - 0.5) * 12,
+            life: 1.0,
+            color: Math.random() > 0.5 ? '#ff4400' : '#ffcc00',
+            size: 10 + Math.random() * 10
+        });
     }
     for (let i = 0; i < 15; i++) {
-        createParticle(data.x, data.y, '#333', 15 + Math.random() * 20);
+        particles.push({
+            x: data.x,
+            y: data.y,
+            vx: (Math.random() - 0.5) * 8,
+            vy: (Math.random() - 0.5) * 8,
+            life: 1.0,
+            color: '#333',
+            size: 15 + Math.random() * 20
+        });
     }
 });
 
