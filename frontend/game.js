@@ -2904,8 +2904,8 @@ function drawElements() {
                             ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
                         }
                     }
-
-                    ctx.restore();
+                    ctx.restore(); // Restore Pattern Layer
+                    ctx.restore(); // Restore Oil Depth Layer
                 } else if (e.t === MATERIALS.ACID && ENABLE_PREMIUM_VISUALS && acidPatterns.length > 0) {
                     ctx.save();
                     const drawRadius = baseRadius * pulse;
