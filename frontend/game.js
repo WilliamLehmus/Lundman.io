@@ -99,24 +99,97 @@ let playerEvents = []; // { text, color, time }
 let mousePos = { x: 0, y: 0 };
 let renderTime = 0;
 
-// Water Tile System (9 Variations for high-fidelity diversity)
+// Liquid Patterns (9 Variations each for variety)
 let waterPatterns = []; 
+let oilPatterns = [];
 let lastWaterPatternUpdate = 0;
+let lastOilPatternUpdate = 0;
 const WATER_TILE_SIZE = 128;
+const OIL_TILE_SIZE = 128;
+
 const waterCanvases = [];
 const waterContexts = [];
+const oilCanvases = [];
+const oilContexts = [];
 
-// Initialize 9 canvases for variety
+// Initialize canvases
 for (let i = 0; i < 9; i++) {
-    const canv = document.createElement('canvas');
-    canv.width = WATER_TILE_SIZE;
-    canv.height = WATER_TILE_SIZE;
-    waterCanvases.push(canv);
-    waterContexts.push(canv.getContext('2d'));
+    const wCanv = document.createElement('canvas');
+    wCanv.width = WATER_TILE_SIZE;
+    wCanv.height = WATER_TILE_SIZE;
+    waterCanvases.push(wCanv);
+    waterContexts.push(wCanv.getContext('2d'));
+
+    const oCanv = document.createElement('canvas');
+    oCanv.width = OIL_TILE_SIZE;
+    oCanv.height = OIL_TILE_SIZE;
+    oilCanvases.push(oCanv);
+    oilContexts.push(oCanv.getContext('2d'));
 }
 
 // Global pattern variable for backward compatibility
 let waterPattern = null;
+let oilPattern = null;
+
+function updateOilPattern(time) {
+    if (time - lastOilPatternUpdate < 60) return; 
+    lastOilPatternUpdate = time;
+
+    for (let p = 0; p < 9; p++) {
+        const ctx = oilContexts[p];
+        ctx.clearRect(0, 0, OIL_TILE_SIZE, OIL_TILE_SIZE);
+        
+        // Base color - Thicker, more opaque black/grey
+        ctx.fillStyle = `rgba(15, 15, 20, 0.95)`;
+        ctx.fillRect(0, 0, OIL_TILE_SIZE, OIL_TILE_SIZE);
+
+        // Enhanced Iridescence (Oil Sheen)
+        const sheenPhase = time * 0.0005 + p;
+        for (let i = 0; i < 2; i++) {
+            const h = (sheenPhase * 50 + i * 60 + p * 30) % 360;
+            const grad = ctx.createLinearGradient(0, 0, OIL_TILE_SIZE, OIL_TILE_SIZE);
+            grad.addColorStop(0, `hsla(${h}, 40%, 40%, 0)`);
+            grad.addColorStop(0.5, `hsla(${h}, 50%, 50%, 0.15)`);
+            grad.addColorStop(1, `hsla(${h}, 40%, 40%, 0)`);
+            
+            ctx.strokeStyle = grad;
+            ctx.lineWidth = 15;
+            ctx.beginPath();
+            const y = (OIL_TILE_SIZE * 0.3) + (i * 40) + Math.sin(time * 0.001 + p) * 15;
+            ctx.moveTo(-20, y);
+            ctx.bezierCurveTo(OIL_TILE_SIZE/2, y + 30, OIL_TILE_SIZE/2, y - 30, OIL_TILE_SIZE + 20, y);
+            ctx.stroke();
+        }
+
+        // Spherical Bubbles with highlights
+        for (let i = 0; i < 4; i++) {
+            const phase = time * 0.0008 + i + p;
+            const bx = ((i * 65 + p * 12) % OIL_TILE_SIZE);
+            const by = ((i * 45 + p * 22) % OIL_TILE_SIZE);
+            const r = 3 + Math.sin(phase) * 2;
+            
+            if (r > 1) {
+                // Bubble body
+                const bGrad = ctx.createRadialGradient(bx, by, 0, bx, by, r);
+                bGrad.addColorStop(0, 'rgba(60, 60, 70, 0.4)');
+                bGrad.addColorStop(1, 'rgba(20, 20, 25, 0.1)');
+                ctx.fillStyle = bGrad;
+                ctx.beginPath();
+                ctx.arc(bx, by, r, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Bubble Specular (Reflection)
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+                ctx.beginPath();
+                ctx.arc(bx - r/3, by - r/3, r/4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        oilPatterns[p] = ctx.createPattern(oilCanvases[p], 'repeat');
+    }
+    oilPattern = oilPatterns[0];
+}
 
 function updateWaterPattern(time) {
     if (time - lastWaterPatternUpdate < 50) return; // 20fps update
@@ -970,6 +1043,7 @@ function renderLoop(now) {
 
         if (ENABLE_PREMIUM_VISUALS) {
             updateWaterPattern(renderTime);
+            updateOilPattern(renderTime);
             updateAtmosphere(dt);
             updateEnvironmentalObjects(dt);
             drawAtmosphere();
@@ -2339,6 +2413,63 @@ function drawElements() {
                     ctx.lineWidth = 1.5;
                     ctx.beginPath();
                     ctx.arc(e.x, e.y, drawRadius, 0, Math.PI * 2);
+                    ctx.stroke();
+                } else if (e.t === MATERIALS.OIL && ENABLE_PREMIUM_VISUALS && oilPatterns.length > 0) {
+                    ctx.save();
+                    const pulse = 1.0 + Math.sin(renderTime * 0.0012 + e.id) * 0.02;
+                    const drawRadius = radius * pulse;
+
+                    // Oil Depth (Viscous & Dark)
+                    const grad = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, drawRadius);
+                    grad.addColorStop(0, 'rgba(30, 30, 35, 0.95)');
+                    grad.addColorStop(0.6, 'rgba(15, 15, 20, 0.98)');
+                    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                    ctx.fillStyle = grad;
+                    
+                    ctx.beginPath();
+                    ctx.arc(e.x, e.y, drawRadius, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Thick Pattern Overlay
+                    ctx.globalAlpha = 0.9;
+                    ctx.fillStyle = oilPatterns[e.id % 9];
+                    ctx.fill();
+
+                    // Dynamic Oily Bubbles (Increased for effect)
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
+                    for (let i = 0; i < 6; i++) {
+                        const phase = renderTime * (0.0008 + i * 0.0002) + e.id + i * 5;
+                        const dist = (0.2 + (i % 3) * 0.15) * drawRadius;
+                        const bx = e.x + Math.cos(phase * 0.7) * dist;
+                        const by = e.y + Math.sin(phase * 1.1) * dist;
+                        const bSize = (Math.sin(phase * 2) + 1) * (2 + (i % 3));
+                        
+                        if (bSize > 1) {
+                            ctx.beginPath();
+                            ctx.arc(bx, by, bSize, 0, Math.PI * 2);
+                            ctx.fill();
+                            // Specular on bubble
+                            ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+                            ctx.beginPath();
+                            ctx.arc(bx - bSize/3, by - bSize/3, bSize/4, 0, Math.PI * 2);
+                            ctx.fill();
+                            ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
+                        }
+                    }
+
+                    ctx.restore();
+                    // Thick Oily Rim (Glossy black)
+                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(e.x, e.y, drawRadius, 0, Math.PI * 2);
+                    ctx.stroke();
+                    
+                    // Subtle Surface Shine
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.arc(e.x, e.y, drawRadius - 2, 0, Math.PI * 2);
                     ctx.stroke();
                 } else {
                     ctx.fillStyle = config.color;

@@ -209,3 +209,16 @@ To transition from a learning project to a **marketable product**, the following
     1.  Updated `backend/server.js` to include `active: this.active` in the global state broadcast.
     2.  Updated `frontend/game.js` to use the more reliable local `gameActive` flag for menu toggling.
     3.  Moved menu toggle listeners (`B` and `ESC`) to the top of the input handler to bypass `gameActive` checks for UI interactions.
+
+### 3. High-Fidelity Liquid Rendering (V2)
+- **Date**: 2026-05-03
+- **Concept**: Organic, living environmental hazards that balance high-fidelity visuals with 2D Canvas performance.
+- **Principles**:
+    1.  **Organic Tiling (Metaball Logic)**: Liquids use overlapping circular tiles (Radius = Width * 0.65) to create a seamless, blob-like surface instead of a rigid grid.
+    2.  **Pattern Diversity (Rule of 9)**: Pre-rendering 9 unique variations of procedural textures per liquid type to eliminate visual repetition.
+    3.  **Layered Visuals**: Combining Depth Gradients (radial), Texture Overlays (waves/sheen), and Independent Dynamic Particles (bubbles/sparkles) for a high-end feel.
+    4.  **Material-Specific "Personalities"**:
+        - **Water**: Calming waves, neon-cyan highlights, and light glimmer.
+        - **Oil**: Viscous black base, iridescent (rainbow) sheen, and thick spherical bubbles with specular highlights.
+        - **Acid/Gas**: Pulsing radioactive glow and corrosive bubbling.
+
