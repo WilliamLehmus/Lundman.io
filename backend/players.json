@@ -3,7 +3,7 @@
     "kills": 13,
     "deaths": 61,
     "scrap": 2222,
-    "lastSeen": 1777812266230,
+    "lastSeen": 1777812461317,
     "pin": "$2b$10$9Dt4G53jvbS3uVzljVFIWur86akT0reUHFTQ/1edw5fHSuTvrlzEu"
   },
   "TestTank": {
@@ -28,23 +28,9 @@
   },
   "Stroggo1": {
     "kills": 0,
-    "deaths": 9,
-    "scrap": 90,
-    "lastSeen": 1777810550798,
+    "deaths": 4,
+    "scrap": 0,
+    "lastSeen": 1777744253838,
     "pin": "$2b$10$oP609sRXZZMUk8lq2J4VCuAC.ALHRpg1tw2uZx6uM4cBU16lifMdO"
-  },
-  "Tester": {
-    "kills": 0,
-    "deaths": 0,
-    "scrap": 0,
-    "lastSeen": 1777810550813,
-    "pin": "$2b$10$Z7FtOxIEiIdHICCGJhm.be9q1b448bIJpdzv5g0vKALVTMvrER3n6"
-  },
-  "TesTesterter": {
-    "kills": 0,
-    "deaths": 0,
-    "scrap": 0,
-    "lastSeen": 1777811126722,
-    "pin": "$2b$10$l5Uh3u8xcqMG7gZfcNcaUOBfXtc/JfW.KL34Bp04UepDhlfHAMwoG"
   }
 }
