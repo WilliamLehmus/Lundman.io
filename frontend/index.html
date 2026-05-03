@@ -125,38 +125,78 @@
         </div>
 
         <div id="game-hud" class="hidden">
-            <div class="p1-stats stats-panel glass-panel">
-                <span class="label">PLAYER 1</span>
-                <div class="hp-bar-container"><div id="p1-hp" class="hp-bar"></div></div>
-                <div class="label">SCRAP: <span id="p1-scrap">0</span> <span id="p1-buff" style="margin-left: 10px; font-weight: bold; font-style: italic;"></span></div>
-                <div class="weapon-selector">
-                    <div class="weapon-icon active" data-player="1" data-type="1">GUN</div>
-                    <div class="weapon-icon" data-player="1" data-type="2">2</div>
-                    <div class="weapon-icon" data-player="1" data-type="3">3</div>
+            <!-- Dota-style Top Center Timer/Score -->
+            <div id="dota-top-bar">
+                <div class="score-alpha-box" id="score-alpha">0</div>
+                <div id="match-timer-box">
+                    <div id="match-timer">08:00</div>
+                    <div id="score-cap-hint">FIRST TO 20</div>
                 </div>
-                <div id="weapon-name" class="weapon-name-label">MAIN GUN</div>
-                <div class="cooldown-container"><div id="p1-cooldown" class="cooldown-bar"></div></div>
+                <div class="score-omega-box" id="score-omega">0</div>
             </div>
 
-            <div id="match-info" class="glass-panel">
-                <div id="team-scores">
-                    <span class="score score-alpha" id="score-alpha">0</span>
-                    <span class="score-divider">:</span>
-                    <span class="score score-omega" id="score-omega">0</span>
+            <!-- Dashboard Center: Hero Panel (Health & Weapons) -->
+            <div id="hud-bottom-center" class="dashboard-panel dota-hero-panel">
+                <div class="hero-stats-row">
+                    <div class="hero-portrait">
+                        <div class="tank-avatar"></div>
+                    </div>
+                    <div class="health-system">
+                        <div class="hp-numeric"><span id="hp-current">100</span> / <span id="hp-max">100</span></div>
+                        <div class="hp-bar-main-container">
+                            <div id="p1-hp" class="hp-bar-main"></div>
+                        </div>
+                        <div class="cooldown-main-container">
+                            <div id="p1-cooldown" class="cooldown-bar-main"></div>
+                        </div>
+                    </div>
                 </div>
-                <div id="match-timer">08:00</div>
-                <div id="score-cap-hint">FIRST TO 20 WINS</div>
+                <div class="weapon-system">
+                    <div class="weapon-slots">
+                        <div class="weapon-slot active" data-slot="0">
+                            <span class="slot-key">1</span>
+                            <div class="weapon-icon-new">
+                                <img id="icon-slot-0" src="" class="weapon-img hidden">
+                                <span class="slot-fallback">GUN</span>
+                            </div>
+                        </div>
+                        <div class="weapon-slot" data-slot="1">
+                            <span class="slot-key">2</span>
+                            <div class="weapon-icon-new">
+                                <img id="icon-slot-1" src="" class="weapon-img hidden">
+                                <span class="slot-fallback">-</span>
+                            </div>
+                        </div>
+                        <div class="weapon-slot" data-slot="2">
+                            <span class="slot-key">3</span>
+                            <div class="weapon-icon-new">
+                                <img id="icon-slot-2" src="" class="weapon-img hidden">
+                                <span class="slot-fallback">-</span>
+                            </div>
+                        </div>
+                        <div class="weapon-slot" data-slot="3">
+                            <span class="slot-key">4</span>
+                            <div class="weapon-icon-new">
+                                <img id="icon-slot-3" src="" class="weapon-img hidden">
+                                <span class="slot-fallback">-</span>
+                            </div>
+                        </div>
+                </div>
             </div>
 
-            <div class="p2-stats stats-panel glass-panel hidden">
-                <span class="label">PLAYER 2</span>
-                <div class="hp-bar-container"><div id="p2-hp" class="hp-bar"></div></div>
-                <div class="weapon-selector">
-                    <div class="weapon-icon active" data-player="2" data-type="1">7</div>
-                    <div class="weapon-icon" data-player="2" data-type="2">8</div>
-                    <div class="weapon-icon" data-player="2" data-type="3">9</div>
+            <!-- Dashboard Right: Economy (Shop & Scrap) -->
+            <div id="hud-bottom-right" class="dashboard-panel dota-economy-panel">
+                <div class="scrap-economy">
+                    <div class="gold-icon"></div>
+                    <span id="p1-scrap" class="scrap-value">0</span>
                 </div>
-                <div class="cooldown-container"><div id="p2-cooldown" class="cooldown-bar"></div></div>
+                <button id="open-shop-btn" class="quick-shop-btn">SHOP (B)</button>
+            </div>
+
+            <!-- Legacy P2 stats for compatibility if needed, but hidden -->
+            <div id="p2-stats-hidden" class="hidden">
+                <div id="p2-hp"></div>
+                <div id="p2-cooldown"></div>
             </div>
         </div>
 
@@ -240,9 +280,8 @@
         </div>
     </div>
 
-    <div id="ui-hint" style="position: absolute; bottom: 20px; left: 20px; color: rgba(255,255,255,0.5); font-family: 'Outfit'; font-size: 12px; pointer-events: none; display: flex; flex-direction: column; gap: 4px;">
-        <span>ESC FOR OPTIONS</span>
-        <span>B FOR SCRAP SHOP</span>
+    <div id="ui-hint" style="position: absolute; top: 20px; right: 25px; color: rgba(255,255,255,0.4); font-family: 'Outfit'; font-size: 11px; pointer-events: none; display: flex; flex-direction: column; gap: 4px; text-align: right; letter-spacing: 1px;">
+        <span>ESC FOR OPTIONS / MENU</span>
     </div>
 
     <div id="debug-menu" class="hidden">

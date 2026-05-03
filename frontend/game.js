@@ -65,6 +65,8 @@ const lobbyStatus = document.getElementById('lobby-status');
 
 const p1HpBar = document.getElementById('p1-hp');
 const p1Scrap = document.getElementById('p1-scrap');
+const hpCurrentEl = document.getElementById('hp-current');
+const hpMaxEl = document.getElementById('hp-max');
 const p2HpBar = document.getElementById('p2-hp');
 const p1CooldownBar = document.getElementById('p1-cooldown');
 const p2CooldownBar = document.getElementById('p2-cooldown');
@@ -331,6 +333,19 @@ const musicSlider = document.getElementById('music-volume');
 const sfxSlider = document.getElementById('sfx-volume');
 const closeOptionsBtn = document.getElementById('close-options');
 const closeShopBtn = document.getElementById('close-shop');
+const openShopBtn = document.getElementById('open-shop-btn');
+
+if (openShopBtn) {
+    openShopBtn.addEventListener('click', () => {
+        if (shopMenu) {
+            const isHidden = shopMenu.style.display === 'none' || shopMenu.style.display === '';
+            shopMenu.style.display = isHidden ? 'flex' : 'none';
+            if (isHidden) {
+                updateShopUI();
+            }
+        }
+    });
+}
 
 const musicTracks = [
     new Audio('/music_track1.mp3'),
@@ -903,56 +918,84 @@ socket.on('state', (state) => {
 function updateHUD() {
     const me = serverState.players.find(p => p.id === myId);
     if (me) {
-        if (p1HpBar.dataset.val !== me.h.toString()) {
-            const oldHp = parseFloat(p1HpBar.dataset.val || me.mh);
-            if (me.h < oldHp) {
-                shake.intensity = 15;
-                spawnParticles(me.x, me.y, '#fff', 10);
+        if (p1HpBar) {
+            if (p1HpBar.dataset.val !== me.h.toString()) {
+                const oldHp = parseFloat(p1HpBar.dataset.val || me.mh);
+                if (me.h < oldHp) {
+                    shake.intensity = 15;
+                    spawnParticles(me.x, me.y, '#fff', 10);
+                }
+                p1HpBar.style.width = `${(me.h / me.mh) * 100}%`;
+                p1HpBar.dataset.val = me.h;
+                
+                if (hpCurrentEl) hpCurrentEl.innerText = Math.ceil(me.h);
+                if (hpMaxEl) hpMaxEl.innerText = me.mh;
             }
-            p1HpBar.style.width = `${(me.h / me.mh) * 100}%`;
-            p1HpBar.dataset.val = me.h;
         }
         if (p1Scrap && p1Scrap.innerText !== me.s.toString()) {
             p1Scrap.innerText = me.s;
         }
 
-        // Display Scrap Damage Buff (Gap Fix)
-        const buffEl = document.getElementById('p1-buff');
-        if (buffEl) {
-            const scrapBuff = 1 + (me.s / 100);
-            if (scrapBuff > 1) {
-                buffEl.innerText = `x${scrapBuff.toFixed(1)} DMG`;
-                buffEl.style.color = '#ffff00';
+        const weaponNameEl = document.getElementById('weapon-name');
+        if (weaponNameEl) {
+            const currentWeapon = me.sl[me.cs];
+            weaponNameEl.innerText = MATERIAL_PROPERTIES[currentWeapon]?.name || currentWeapon;
+        }
+
+        const weaponContainer = document.querySelector('.weapon-slots');
+        if (weaponContainer) {
+            if (weaponContainer.children.length !== me.sl.length) {
+                weaponContainer.innerHTML = '';
+                me.sl.forEach((slot, index) => {
+                    const slotDiv = document.createElement('div');
+                    slotDiv.className = `weapon-slot ${index === me.cs ? 'active' : ''}`;
+                    slotDiv.dataset.slot = index;
+                    
+                    const keySpan = document.createElement('span');
+                    keySpan.className = 'slot-key';
+                    keySpan.innerText = index + 1;
+                    
+                    const iconDiv = document.createElement('div');
+                    iconDiv.className = 'weapon-icon-new';
+                    
+                    // Weapon Icon Mapping
+                    const weaponName = (MATERIAL_PROPERTIES[slot]?.name || slot.toString()).toUpperCase();
+                    let iconSrc = null;
+                    if (weaponName.includes('STANDARD')) iconSrc = 'assets/icon_standard.png';
+                    else if (weaponName.includes('SHOTGUN')) iconSrc = 'assets/icon_shotgun.png';
+                    else if (weaponName.includes('FLAME')) iconSrc = 'assets/icon_flame.png';
+                    else if (weaponName.includes('LAUNCH')) iconSrc = 'assets/icon_launcher.png';
+
+                    if (iconSrc) {
+                        const img = document.createElement('img');
+                        img.src = iconSrc;
+                        img.className = 'weapon-img';
+                        iconDiv.appendChild(img);
+                    } else {
+                        const fallback = document.createElement('span');
+                        fallback.className = 'slot-fallback';
+                        fallback.innerText = weaponName.substring(0, 3);
+                        iconDiv.appendChild(fallback);
+                    }
+                    
+                    slotDiv.appendChild(keySpan);
+                    slotDiv.appendChild(iconDiv);
+                    weaponContainer.appendChild(slotDiv);
+                });
+                weaponContainer.dataset.currentSlot = me.cs;
             } else {
-                buffEl.innerText = '';
+                if (weaponContainer.dataset.currentSlot !== me.cs.toString()) {
+                    const slots = weaponContainer.querySelectorAll('.weapon-slot');
+                    slots.forEach((slot, index) => {
+                        slot.classList.toggle('active', index === me.cs);
+                    });
+                    weaponContainer.dataset.currentSlot = me.cs;
+                }
             }
         }
 
-        const weaponNameEl = document.getElementById('weapon-name');
-        if (weaponNameEl) weaponNameEl.innerText = WEAPON_NAMES[me.w] || me.w;
-
-        const selector = document.querySelector('.p1-stats .weapon-selector');
-        if (selector) {
-            if (selector.children.length !== me.sl.length) {
-                selector.innerHTML = '';
-                me.sl.forEach((slot, index) => {
-                    const icon = document.createElement('div');
-                    icon.className = `weapon-icon ${index === me.cs ? 'active' : ''}`;
-                    icon.dataset.player = "1";
-                    icon.dataset.slot = slot;
-                    icon.innerText = WEAPON_ABBR[slot] || (index + 1);
-                    selector.appendChild(icon);
-                });
-                selector.dataset.currentSlot = me.cs;
-            } else {
-                if (selector.dataset.currentSlot !== me.cs.toString()) {
-                    const icons = selector.querySelectorAll('.weapon-icon');
-                    icons.forEach((icon, index) => {
-                        icon.classList.toggle('active', index === me.cs);
-                    });
-                    selector.dataset.currentSlot = me.cs;
-                }
-            }
+        if (p1CooldownBar) {
+            p1CooldownBar.style.width = `${(me.c / 100) * 100}%`;
         }
     }
 
@@ -1386,8 +1429,8 @@ function drawTank(p) {
 
 function drawMinimap() {
     const size = 180;
-    const padding = 25;
-    const x = canvas.width - size - padding;
+    const padding = 20;
+    const x = padding;
     const y = canvas.height - size - padding;
     const worldSize = serverState.worldSize || 4000;
     const scale = size / worldSize;
