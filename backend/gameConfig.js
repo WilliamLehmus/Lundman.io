@@ -53,7 +53,7 @@ export const CHASSIS = {
         turnSpeed: 0.065,
         mass: 3,
         slots: 2,
-        allowedWeapons: ['STANDARD', 'FLAMETHROWER', 'WATER_CANNON', 'FROST_GUN', 'ACID_SPRAY'],
+        allowedWeapons: ['STANDARD', 'FLAMETHROWER', 'WATER_CANNON', 'FROST_GUN'],
         weapons: ['STANDARD', 'FLAMETHROWER'] // Default loadout
     },
     BRAWLER: {
@@ -63,7 +63,7 @@ export const CHASSIS = {
         turnSpeed: 0.04,
         mass: 10,
         slots: 1,
-        allowedWeapons: ['HEAVY_GUN', 'STANDARD', 'DIRT_GUN', 'ACID_SPRAY', 'ALCHEMIST_CHOICE'],
+        allowedWeapons: ['HEAVY_GUN', 'STANDARD', 'DIRT_GUN'],
         weapons: ['HEAVY_GUN']
     },
     ARTILLERY: {
@@ -73,7 +73,7 @@ export const CHASSIS = {
         turnSpeed: 0.04,
         mass: 15,
         slots: 4,
-        allowedWeapons: ['STANDARD', 'TESLA', 'WATER_CANNON', 'FROST_GUN', 'DIRT_GUN', 'GAS_LAUNCHER', 'ALCHEMIST_CHOICE'],
+        allowedWeapons: ['STANDARD', 'TESLA', 'WATER_CANNON', 'FROST_GUN', 'DIRT_GUN'],
         weapons: ['STANDARD', 'TESLA', 'WATER_CANNON', 'FROST_GUN']
     }
 };
@@ -156,41 +156,8 @@ export const WEAPON_MODULES = {
         impact: 0.005,
         recoil: 0.002,
         ttl: 1200
-    },
-    ACID_SPRAY: {
-        name: 'Acid Spray',
-        type: MATERIALS.ACID,
-        reload: 150,
-        damage: 3,
-        speed: 9,
-        radius: 10,
-        impact: 0.002,
-        recoil: 0.002,
-        ttl: 600
-    },
-    GAS_LAUNCHER: {
-        name: 'Gas Launcher',
-        type: MATERIALS.GAS,
-        reload: 2000,
-        damage: 10,
-        speed: 7,
-        radius: 25,
-        impact: 0.05,
-        recoil: 0.05,
-        ttl: 2000
-    },
-    ALCHEMIST_CHOICE: {
-        name: "Alchemist's Choice",
-        type: 'random',
-        reload: 750,
-        damage: 20,
-        speed: 12,
-        radius: 8,
-        impact: 0.02,
-        recoil: 0.02,
-        ttl: 1500
     }
 };
 
-export const ALL_WEAPONS = ['HEAVY_GUN', 'STANDARD', 'FLAMETHROWER', 'WATER_CANNON', 'TESLA', 'FROST_GUN', 'DIRT_GUN', 'ACID_SPRAY', 'GAS_LAUNCHER', 'ALCHEMIST_CHOICE'];
+export const ALL_WEAPONS = ['HEAVY_GUN', 'STANDARD', 'FLAMETHROWER', 'WATER_CANNON', 'TESLA', 'FROST_GUN', 'DIRT_GUN'];
 

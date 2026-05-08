@@ -1267,7 +1267,7 @@ class Lobby {
             }
 
             this.processBots(now);
-            this.processGuardians(now); // Enabled drones
+            // this.processGuardians(now); // Disabled drones
             Object.values(this.players).forEach(p => {
                 // Scrap Buff Feedback
                 const buffLevel = Math.floor(p.scrap / 100);
@@ -1640,18 +1640,11 @@ class Lobby {
         });
         bullet.id = id;
         
-        // ALCHEMIST_CHOICE: Randomize type
-        let bulletType = weapon.type;
-        if (moduleName === 'ALCHEMIST_CHOICE') {
-            const types = [MATERIALS.FIRE, MATERIALS.WATER, MATERIALS.ELECTRIC, MATERIALS.ACID, MATERIALS.GAS, MATERIALS.ICE, MATERIALS.DIRT];
-            bulletType = types[Math.floor(Math.random() * types.length)];
-        }
-
         bullet.customData = { 
             ownerId: p.id, 
             damage: weapon.damage * scrapBuff, 
             impact: weapon.impact * scrapBuff,
-            type: bulletType,
+            type: weapon.type,
             weapon: moduleName, 
             expiresAt: Date.now() + (weapon.ttl || 2000)
         };
@@ -1669,33 +1662,21 @@ class Lobby {
         this.bullets[id] = bullet;
         Composite.add(this.engine.world, bullet);
         
-        if (bulletType === MATERIALS.DIRT) {
+        if (weapon.type === MATERIALS.DIRT) {
             this.spawnElement(pos, MATERIALS.DIRT, 10000, weapon.hp);
         }
-        if (bulletType === MATERIALS.FIRE) {
+        if (weapon.type === MATERIALS.FIRE) {
             // Spawn fire elements slightly ahead to avoid immediate collision
             this.spawnElement({
                 x: pos.x + Math.cos(aimAngle) * 20,
                 y: pos.y + Math.sin(aimAngle) * 20
             }, MATERIALS.FIRE, 1500, undefined, p.id);
         }
-        if (bulletType === MATERIALS.ICE) {
+        if (weapon.type === MATERIALS.ICE) {
             this.spawnElement({
                 x: pos.x + Math.cos(aimAngle) * 20,
                 y: pos.y + Math.sin(aimAngle) * 20
             }, MATERIALS.ICE, 2000, undefined, p.id);
-        }
-        if (bulletType === MATERIALS.ACID) {
-            this.spawnElement({
-                x: pos.x + Math.cos(aimAngle) * 20,
-                y: pos.y + Math.sin(aimAngle) * 20
-            }, MATERIALS.ACID, 5000, undefined, p.id);
-        }
-        if (bulletType === MATERIALS.GAS) {
-            this.spawnElement({
-                x: pos.x + Math.cos(aimAngle) * 20,
-                y: pos.y + Math.sin(aimAngle) * 20
-            }, MATERIALS.GAS, 8000, undefined, p.id, 120, 120);
         }
     }
 
@@ -2261,11 +2242,7 @@ io.on('connection', (socket) => {
     });
 });
 
-process.on('uncaughtException', e => {
-    const log = `\n[${new Date().toISOString()}] UNCAUGHT EXCEPTION:\n${e.stack}\n`;
-    fs.appendFileSync('crash.log', log);
-    console.error(log);
-});
+process.on('uncaughtException', e => fs.writeFileSync('crash.log', e.stack));
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`Server on ${PORT}`);
     console.log(`Environment: ${ENVIRONMENT}`);

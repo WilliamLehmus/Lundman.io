@@ -81,8 +81,10 @@ The environment is reactive:
     - DB is cleared on server startup to ensure only "live" lobbies are listed.
 - **Quick Match**: Logic that prioritizes joining the most populated non-full lobby before creating a new one.
 
-### 4. AI Guardians (Drones)
-Defensive drones that protect key areas of the map.
+### 4. AI Guardians (Drones) [DISABLED]
+> [!NOTE]
+> AI Guardians are currently disabled but the logic remains in the codebase for potential future reactivation.
+
 - **Deployment**: Defensive drones spawn periodically near the map center.
 - **Engagement**: They orbit a fixed point and fire ELECTRIC pulses at any player that enters their range.
 - **Visuals**: Features a rotating red scanning laser and a pulsing thruster glow for high readability.
@@ -157,8 +159,6 @@ The following security measures have been successfully implemented:
 ### 1. Current Limitations
 - **Network Sync**: Uses advanced linear interpolation for other players and **Client-Side Prediction** for the local player.
 - **Rendering Performance**: Using **Canvas 2D API** limits us to simple shapes and a few thousand particles. Transitioning to **WebGL** would enable complex shaders and better frame rates.
-- **Minimap awareness**: Minimap now shows environmental hazards (Acid, Gas, Oil, Fire) in addition to buildings and players.
-- **Alchemical Arsenal**: Added new specialized weapons like `Acid Spray`, `Gas Launcher`, and the unpredictable `Alchemist's Choice`.
 - **Monolithic Backend**: `server.js` handles all responsibilities. Future growth will require splitting logic into microservices or modular components (Lobby, Match, Persistence).
 - **Static Environments**: Buildings and terrain are currently indestructible and visually static.
 
