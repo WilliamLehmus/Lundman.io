@@ -55,9 +55,14 @@ The environment is reactive:
     - **Engine**: Increases Movement & Turn Speed (+15% per level).
     - **Caliber**: Increases Damage (+25% per level) and reduces Reload Time (-10% per level).
     - *Note: Upgrades go up to Level 5. Costs: 100, 250, 500, 1000, 2000. Upgrades reset after each match.*
-- **Chassis Visuals**: Each tank type has a unique aesthetic and high-fidelity image:
+- **Premium Tank Rendering**: Tanks use a high-fidelity vector rendering system in-game:
+    - **Volumetric Shading**: Gradients and highlights provide a 3D, metallic appearance.
+    - **Team Glow**: Soft, pulsed neon glows replace harsh outlines for team identification.
+    - **Mechanical Detailing**: Procedural panel lines, rivets, and segmented tracks add industrial complexity.
+    - **Dynamic Weapons**: Weapon barrels feature unique shading and glowing effects (e.g., Tesla coils).
+- **Chassis Variations**:
     - **SCOUT**: Rounded, aerodynamic body with narrow tracks. (2 Weapon Slots)
-    - **BRAWLER**: Blocky, reinforced body with heavy-duty tracks and extra plating lines. (1 Weapon Slot)
+    - **BRAWLER**: Blocky, reinforced body with heavy-duty tracks and extra armor plating. (1 Weapon Slot)
     - **ARTILLERY**: Long, narrow chassis with extended tracks for stability. (4 Weapon Slots)
 - **Visual Tank Selector**: The lobby features a visual interface where players can select their chassis by clicking on high-fidelity tank cards.
 - **Weapon Loadout Customization**: Each chassis has a specific number of weapon slots. In the lobby, players can click on these slots to cycle through allowed weapons for that chassis, allowing for custom loadouts (e.g., a Scout with a Flamethrower and a Frost Gun).

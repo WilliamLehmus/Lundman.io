@@ -1591,7 +1591,8 @@ function renderLoop(now) {
 function drawTank(p) {
     if (p.hid && p.id !== myId) return;
 
-    const color = p.t === 'blue' ? '#00f2ff' : '#ff00ff';
+    const teamColor = p.t === 'blue' ? '#00f2ff' : '#ff00ff';
+    
     ctx.save();
     if (p.hid && p.id === myId) ctx.globalAlpha = 0.5;
     
@@ -1605,9 +1606,9 @@ function drawTank(p) {
     ctx.save();
     ctx.rotate(p.a);
 
-    // Tracks (Larvfotter) - Chassis specific
-    ctx.fillStyle = '#111';
-    ctx.strokeStyle = '#222';
+    // --- TRACKS (Industrial Metallic Look) ---
+    ctx.fillStyle = '#0a0a0a';
+    ctx.strokeStyle = '#151515';
     ctx.lineWidth = 1;
     
     let trackW = TANK_WIDTH + 4;
@@ -1625,106 +1626,143 @@ function drawTank(p) {
         trackH = 8;
     }
 
-    // Left Track
-    ctx.beginPath();
-    ctx.roundRect(-trackW/2, -trackOffset - trackH/2, trackW, trackH, 3);
-    ctx.fill();
-    ctx.stroke();
-    // Right Track
-    ctx.beginPath();
-    ctx.roundRect(-trackW/2, trackOffset - trackH/2, trackW, trackH, 3);
-    ctx.fill();
-    ctx.stroke();
-
-    // Body - Chassis specific
-    ctx.fillStyle = '#1a1a2e';
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-
-    if (p.ch === 'SCOUT') {
-        // Sleeker, more aerodynamic scout
-        ctx.roundRect(-TANK_WIDTH/2 + 4, -TANK_HEIGHT/2 + 2, TANK_WIDTH - 4, TANK_HEIGHT - 4, 15);
-    } else if (p.ch === 'BRAWLER') {
-        // Heavy, blocky brawler with extra plating lines
-        ctx.roundRect(-TANK_WIDTH/2, -TANK_HEIGHT/2, TANK_WIDTH, TANK_HEIGHT, 4);
+    const drawTrack = (y) => {
+        ctx.beginPath();
+        ctx.roundRect(-trackW/2, y - trackH/2, trackW, trackH, 3);
         ctx.fill();
         ctx.stroke();
-        // Extra armor plates visual
+        
+        // Track Segments (Subtle Texture)
+        ctx.strokeStyle = 'rgba(255,255,255,0.03)';
         ctx.lineWidth = 1;
-        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-        ctx.strokeRect(-TANK_WIDTH/2 + 5, -TANK_HEIGHT/2 + 5, TANK_WIDTH - 10, TANK_HEIGHT - 10);
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 3;
+        for (let x = -trackW/2 + 4; x < trackW/2; x += 6) {
+            ctx.beginPath();
+            ctx.moveTo(x, y - trackH/2 + 1);
+            ctx.lineTo(x, y + trackH/2 - 1);
+            ctx.stroke();
+        }
+    };
+
+    drawTrack(-trackOffset); // Left
+    drawTrack(trackOffset);  // Right
+
+    // --- BODY (True Premium Volumetric Design) ---
+    // 1. Shaded Base Gradient (Top-down lighting)
+    const bodyGrad = ctx.createLinearGradient(0, -TANK_HEIGHT/2, 0, TANK_HEIGHT/2);
+    bodyGrad.addColorStop(0, '#333355'); // Highlighted top plate
+    bodyGrad.addColorStop(0.5, '#1a1a2e'); // Mid base
+    bodyGrad.addColorStop(1, '#050510'); // Deep under-shadow
+    
+    ctx.fillStyle = bodyGrad;
+    
+    // NO HARD TEAM OUTLINE - Use a very dark definition stroke instead
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1;
+    
+    // Soft Ambient Team Glow (Identification)
+    ctx.shadowBlur = ENABLE_PREMIUM_VISUALS ? 15 : 8;
+    ctx.shadowColor = teamColor;
+
+    ctx.beginPath();
+    if (p.ch === 'SCOUT') {
+        ctx.roundRect(-TANK_WIDTH/2 + 4, -TANK_HEIGHT/2 + 2, TANK_WIDTH - 4, TANK_HEIGHT - 4, 15);
+    } else if (p.ch === 'BRAWLER') {
+        ctx.roundRect(-TANK_WIDTH/2, -TANK_HEIGHT/2, TANK_WIDTH, TANK_HEIGHT, 4);
     } else if (p.ch === 'ARTILLERY') {
-        // Long, narrow artillery chassis
         ctx.roundRect(-TANK_WIDTH/2 - 5, -TANK_HEIGHT/2 + 6, TANK_WIDTH + 10, TANK_HEIGHT - 12, 6);
     } else {
-        // Default/DEV
         ctx.roundRect(-TANK_WIDTH/2, -TANK_HEIGHT/2, TANK_WIDTH, TANK_HEIGHT, 8);
     }
     ctx.fill();
+    ctx.shadowBlur = 0; // Disable shadow for internal details
     ctx.stroke();
 
-    // Special DEV tank glow
-    if (p.ch === 'DEV') {
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(-TANK_WIDTH/2 + 2, -TANK_HEIGHT/2 + 2, TANK_WIDTH - 4, TANK_HEIGHT - 4);
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 3;
-    }
+    // 2. Interior Rim Highlight (Simulates 3D edges)
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    // Highlight the top-forward edge
+    ctx.moveTo(-TANK_WIDTH/2 + 8, -TANK_HEIGHT/2 + 3);
+    ctx.lineTo(TANK_WIDTH/2 - 8, -TANK_HEIGHT/2 + 3);
+    ctx.stroke();
 
-    // Front Indicators (Headlights)
-    ctx.fillStyle = 'rgba(255, 255, 100, 0.8)';
+    // 3. Mechanical Details (Subtle Armor Paneling)
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.lineWidth = 1;
+    // Cross-body panel split
+    ctx.beginPath();
+    ctx.moveTo(0, -TANK_HEIGHT/2 + 2);
+    ctx.lineTo(0, TANK_HEIGHT/2 - 2);
+    ctx.stroke();
+
+    // Rivets (Very subtle armor bolts)
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
+    const rivets = [
+        [-TANK_WIDTH/2 + 6, -TANK_HEIGHT/2 + 6], [TANK_WIDTH/2 - 6, -TANK_HEIGHT/2 + 6],
+        [-TANK_WIDTH/2 + 6, TANK_HEIGHT/2 - 6], [TANK_WIDTH/2 - 6, TANK_HEIGHT/2 - 6]
+    ];
+    rivets.forEach(([rx, ry]) => {
+        ctx.beginPath(); ctx.arc(rx, ry, 0.8, 0, Math.PI * 2); ctx.fill();
+    });
+
+    // Front Indicators (Headlights with Bloom)
+    ctx.fillStyle = '#fffabb';
+    if (ENABLE_PREMIUM_VISUALS) {
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = '#ffffaa';
+    }
     let headLightX = TANK_WIDTH/2 - 6;
     if (p.ch === 'ARTILLERY') headLightX += 4;
     
-    ctx.beginPath();
-    ctx.arc(headLightX, -TANK_HEIGHT/4, 3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(headLightX, TANK_HEIGHT/4, 3, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(headLightX, -TANK_HEIGHT/4, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(headLightX, TANK_HEIGHT/4, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
 
     // Back Indicators (Engine Vents)
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
     ctx.lineWidth = 2;
     let ventX = -TANK_WIDTH/2 + 8;
     if (p.ch === 'ARTILLERY') ventX -= 4;
     
     ctx.beginPath();
-    ctx.moveTo(ventX, -10);
-    ctx.lineTo(ventX, 10);
-    ctx.moveTo(ventX + 4, -10);
-    ctx.lineTo(ventX + 4, 10);
+    ctx.moveTo(ventX, -8); ctx.lineTo(ventX, 8);
+    ctx.moveTo(ventX + 4, -8); ctx.lineTo(ventX + 4, 8);
     ctx.stroke();
     
     ctx.restore();
 
-    // Turret (Separate Rotation)
+    // --- TURRET (Separate Rotation) ---
     ctx.save();
     ctx.rotate(p.aa || p.a);
     
-    // Turret Base Dome
+    // Turret Base Dome (Deep Radial Shading)
     const turretRadius = 14;
-    const gradient = ctx.createRadialGradient(-2, -2, 2, 0, 0, turretRadius);
-    gradient.addColorStop(0, '#3a3a5e');
-    gradient.addColorStop(1, '#1a1a2e');
-    ctx.fillStyle = gradient;
+    const turretGrad = ctx.createRadialGradient(-5, -5, 2, 0, 0, turretRadius);
+    turretGrad.addColorStop(0, '#4a4a7e');
+    turretGrad.addColorStop(0.6, '#1a1a2e');
+    turretGrad.addColorStop(1, '#050510');
+    
+    ctx.fillStyle = turretGrad;
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1;
+    if (ENABLE_PREMIUM_VISUALS) {
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = teamColor;
+    }
+    
     ctx.beginPath();
     ctx.arc(0, 0, turretRadius, 0, Math.PI * 2);
     ctx.fill();
+    ctx.shadowBlur = 0;
     ctx.stroke();
 
-    // Turret Hatch (Lucka)
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-    ctx.lineWidth = 1;
+    // Turret Rim Highlight
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
     ctx.beginPath();
-    ctx.arc(-4, -4, 4, 0, Math.PI * 2);
+    ctx.arc(0, 0, turretRadius - 2, Math.PI * 1.1, Math.PI * 1.6);
     ctx.stroke();
 
-    // Barrel
+    // --- BARREL ---
     const weaponType = p.sl && p.sl[p.cs];
     let barrelLen = 30;
     let barrelWidth = 10;
@@ -1742,11 +1780,16 @@ function drawTank(p) {
         barrelWidth = 6;
     }
 
-    ctx.fillStyle = '#1a1a2e';
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
+    // Volumetric Barrel Shading
+    const barrelGrad = ctx.createLinearGradient(turretRadius, -barrelWidth/2, turretRadius, barrelWidth/2);
+    barrelGrad.addColorStop(0, '#3a3a5e');
+    barrelGrad.addColorStop(0.3, '#1a1a2e');
+    barrelGrad.addColorStop(1, '#050510');
     
-    // Draw Barrel
+    ctx.fillStyle = barrelGrad;
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1;
+    
     ctx.beginPath();
     ctx.roundRect(turretRadius - 2, -barrelWidth/2, barrelLen, barrelWidth, 2);
     ctx.fill();
@@ -1760,16 +1803,19 @@ function drawTank(p) {
         ctx.stroke();
     }
 
-    // Tesla Coil effect
+    // Tesla Coil effect (Glowing)
     if (weaponType === 'TESLA') {
-        ctx.strokeStyle = '#ffff00';
+        ctx.strokeStyle = teamColor;
         ctx.lineWidth = 1;
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = teamColor;
         for (let i = 0; i < 4; i++) {
             ctx.beginPath();
             ctx.moveTo(turretRadius + 5 + i*7, -barrelWidth/2 - 2);
             ctx.lineTo(turretRadius + 5 + i*7, barrelWidth/2 + 2);
             ctx.stroke();
         }
+        ctx.shadowBlur = 0;
     }
 
     ctx.restore();
