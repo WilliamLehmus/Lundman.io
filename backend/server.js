@@ -73,7 +73,7 @@ const PORT = process.env.PORT || 3000;
 app.get('/health', (req, res) => res.send('Server is live!'));
 
 // Physics Aliases
-const { Engine, Bodies, Body, Composite, Vector, Events, Query } = Matter;
+const { Engine, Bodies, Body, Composite, Vector, Events, Query, Bounds } = Matter;
 
 // Game Constants
 const TICK_RATE = 60;
@@ -718,12 +718,18 @@ class Lobby {
         if (target.label === 'element') {
             const element = this.elements[target.elementId];
             if (element) {
-                // Kinetic Shatter: Metal vs Ice puddles
-                if (bulletData.type === MATERIALS.METAL && element.type === MATERIALS.ICE) {
-                    this.destroyElement(element.id);
+                // Fire vs Ice -> Melt to Water (Alchemy)
+                const isFireVSIce = (bulletData.type === MATERIALS.FIRE && element.type === MATERIALS.ICE);
+                if (isFireVSIce) {
+                    element.type = MATERIALS.WATER;
+                    if (this.mapType === 'TUNDRA') {
+                        element.expiresAt = Date.now() + 30000;
+                        element.originalType = MATERIALS.ICE;
+                    } else {
+                        element.expiresAt = null;
+                        element.originalType = null;
+                    }
                     this.destroyBullet(bullet.id);
-                    // Spawn ice shards (particles)
-                    io.to(this.id).emit('collision-effect', { x: bullet.position.x, y: bullet.position.y, type: 'ICE_SHATTER' });
                     return;
                 }
                 // Bidirectional Alchemy
@@ -756,13 +762,10 @@ class Lobby {
                 }
 
                 if (isFireVSWater) {
-                    // Only small water puddles (w < 150) can become steam
+                    // Fire vs Water -> Immediate Steam & Destroy
+                    this.spawnElement(bullet.position, MATERIALS.STEAM, 15000);
                     if (element.w < 150) {
-                        this.spawnElement(bullet.position, MATERIALS.STEAM, 4000);
                         this.destroyElement(element.id);
-                    } else {
-                        // Large puddles just create a puff of steam but stay water
-                        this.spawnElement(bullet.position, MATERIALS.STEAM, 1500);
                     }
                     this.destroyBullet(bullet.id);
                     return;
@@ -852,14 +855,21 @@ class Lobby {
 
         // Bullet vs Puddle Alchemy is now handled in processBulletCollision for consistency
         if (elementA && elementB) {
-            // Fire vs Ice -> Destroy both
+            // Fire vs Ice -> Melt to Water
             if ((elementA.type === MATERIALS.FIRE && elementB.type === MATERIALS.ICE) ||
                 (elementB.type === MATERIALS.FIRE && elementA.type === MATERIALS.ICE)) {
-                this.destroyElement(elementA.id);
-                this.destroyElement(elementB.id);
+                const ice = elementA.type === MATERIALS.ICE ? elementA : elementB;
+                ice.type = MATERIALS.WATER;
+                if (this.mapType === 'TUNDRA') {
+                    ice.expiresAt = Date.now() + 30000;
+                    ice.originalType = MATERIALS.ICE;
+                } else {
+                    ice.expiresAt = null;
+                    ice.originalType = null;
+                }
             }
 
-            // NEW: Fire vs Oil Chain Reaction (Spread the fire!)
+            // Fire vs Oil Chain Reaction (Spread the fire!)
             if ((elementA.type === MATERIALS.FIRE && elementB.type === MATERIALS.OIL) ||
                 (elementB.type === MATERIALS.FIRE && elementA.type === MATERIALS.OIL)) {
                 const oil = elementA.type === MATERIALS.OIL ? elementA : elementB;
@@ -867,6 +877,22 @@ class Lobby {
                 oil.expiresAt = Date.now() + 6000;
                 oil.hp = 100;
             }
+
+                // Fire vs Water -> IMMEDIATE EXTINCTION
+                if ((elementA.type === MATERIALS.FIRE && elementB.type === MATERIALS.WATER) ||
+                    (elementB.type === MATERIALS.FIRE && elementA.type === MATERIALS.WATER)) {
+                    const fire = elementA.type === MATERIALS.FIRE ? elementA : elementB;
+                    
+                    // Create steam
+                    if (!fire.lastSteamSpawn || Date.now() - fire.lastSteamSpawn > 400) {
+                        this.spawnElement(fire.body.position, MATERIALS.STEAM, 15000);
+                        fire.lastSteamSpawn = Date.now();
+                    }
+                    
+                    // Instant destroy
+                    this.destroyElement(fire.id);
+                    return;
+                }
 
             // Fire vs Acid -> GAS
             if ((elementA.type === MATERIALS.FIRE && elementB.type === MATERIALS.ACID) ||
@@ -1062,6 +1088,13 @@ class Lobby {
         // Auto-assign HP to Dirt if not provided
         if (type === MATERIALS.DIRT && hp === null) hp = 150;
 
+        let oType = null;
+        // Tundra Alchemy: Water freezes back to ice after 30 seconds
+        if (type === MATERIALS.WATER && this.mapType === 'TUNDRA' && !duration) {
+            duration = 30000;
+            oType = MATERIALS.ICE;
+        }
+
         const body = Bodies.rectangle(pos.x, pos.y, w, h, {
             label: 'element',
             isStatic: true,
@@ -1076,9 +1109,23 @@ class Lobby {
             hp,
             ownerId,
             expiresAt: duration ? Date.now() + duration : null,
+            originalType: oType,
             w, h, x: pos.x, y: pos.y
         };
         Composite.add(this.engine.world, body);
+
+        // MANUAL ALCHEMY CHECK (Since Matter.js doesn't collide two static bodies)
+        const nearbyBodies = Query.region(
+            Object.values(this.elements).map(e => e.body),
+            body.bounds
+        );
+
+        nearbyBodies.forEach(otherBody => {
+            if (otherBody === body) return;
+            this.processElementInteraction(body, otherBody);
+        });
+
+        return this.elements[id];
     }
 
     destroyBullet(id) {
@@ -1264,6 +1311,18 @@ class Lobby {
                     this.spawnGuardian();
                 }
                 */
+
+                // Periodic manual alchemy cleanup for static bodies (Matter.js limitation)
+                const elements = Object.values(this.elements);
+                for (let i = 0; i < elements.length; i++) {
+                    for (let j = i + 1; j < elements.length; j++) {
+                        const eA = elements[i];
+                        const eB = elements[j];
+                        if (Bounds.overlaps(eA.body.bounds, eB.body.bounds)) {
+                            this.processElementInteraction(eA.body, eB.body);
+                        }
+                    }
+                }
             }
 
             this.processBots(now);

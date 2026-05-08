@@ -3128,13 +3128,12 @@ function drawElements() {
                 drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
                 ctx.fill();
                 
-                // Core White-Hot Path (Actually bright center)
+                // Soft Heat Glow (Orange-yellow center instead of white)
                 ctx.save();
-                ctx.shadowBlur = 15;
-                ctx.shadowColor = '#fff';
-                ctx.fillStyle = '#fff'; // Solid white fill for the heat core
-                ctx.globalAlpha = 0.8;
-                drawOrganicPath(ctx, e.x, e.y, drawRadius * 0.35, e.id + 1);
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#ffcc00';
+                ctx.fillStyle = 'rgba(255, 200, 0, 0.4)';
+                drawOrganicPath(ctx, e.x, e.y, drawRadius * 0.45, e.id + 1);
                 ctx.fill();
                 ctx.restore();
 
@@ -3226,20 +3225,35 @@ function drawElements() {
             ctx.restore();
         }
 
-        // Steam clouds (Soft white wisps)
-        if (e.t === MATERIALS.STEAM && ENABLE_PREMIUM_VISUALS && steamPatterns.length > 0) {
+        // Steam clouds (Soft volumetric puffs)
+        if (e.t === MATERIALS.STEAM) {
             ctx.save();
-            const drawRadius = e.w * 0.7;
-            const p = steamPatterns[e.id % 9];
-            if (p) {
-                ctx.globalAlpha = 0.5;
-                const flowX = (renderTime * 0.01) % STEAM_TILE_SIZE;
-                const matrix = new DOMMatrix().translate(flowX, -flowX * 0.3);
-                p.setTransform(matrix);
-                ctx.fillStyle = p;
-                ctx.shadowBlur = 25;
-                ctx.shadowColor = 'rgba(255, 255, 255, 0.1)';
-                drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
+            const baseRadius = e.w * 0.4;
+            const p = (steamPatterns && steamPatterns.length > 0) ? steamPatterns[e.id % 9] : null;
+            
+            ctx.globalAlpha = ENABLE_PREMIUM_VISUALS ? 0.4 : 0.6;
+            
+            // Draw 4-5 overlapping puffs to create a "cloud" look
+            for (let i = 0; i < 5; i++) {
+                const seed = e.id + i * 100;
+                const offsetDist = baseRadius * 0.5;
+                const angle = (getStableRandom(seed) * Math.PI * 2) + (renderTime * 0.0005);
+                const px = e.x + Math.cos(angle) * offsetDist;
+                const py = e.y + Math.sin(angle) * offsetDist;
+                const pRadius = baseRadius * (0.8 + getStableRandom(seed + 1) * 0.5);
+                
+                if (p && ENABLE_PREMIUM_VISUALS) {
+                    const flowX = (renderTime * 0.005 + i * 10) % STEAM_TILE_SIZE;
+                    const matrix = new DOMMatrix().translate(flowX, -flowX * 0.2);
+                    p.setTransform(matrix);
+                    ctx.fillStyle = p;
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = 'rgba(255, 255, 255, 0.3)';
+                } else {
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                }
+                
+                drawOrganicPath(ctx, px, py, pRadius, seed);
                 ctx.fill();
             }
             ctx.restore();
