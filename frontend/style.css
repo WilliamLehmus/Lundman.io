@@ -74,7 +74,7 @@ body.game-active-cursor input {
     position: absolute;
     top: 45px; /* Moved down to avoid ESC hint */
     right: 25px;
-    color: rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.6);
     font-size: 0.7rem;
     font-weight: 300;
     letter-spacing: 0.1rem;

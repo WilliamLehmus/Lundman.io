@@ -1947,6 +1947,26 @@ function drawMinimap() {
             ctx.beginPath();
             ctx.arc(ex, ey, 1.5, 0, Math.PI * 2);
             ctx.fill();
+        } else if (e.t === MATERIALS.ACID) {
+            ctx.fillStyle = 'rgba(0, 255, 0, 0.4)';
+            ctx.beginPath();
+            ctx.arc(ex, ey, (e.r || 50) * scale, 0, Math.PI * 2);
+            ctx.fill();
+        } else if (e.t === MATERIALS.GAS) {
+            ctx.fillStyle = 'rgba(255, 255, 0, 0.2)';
+            ctx.beginPath();
+            ctx.arc(ex, ey, (e.r || 80) * scale, 0, Math.PI * 2);
+            ctx.fill();
+        } else if (e.t === MATERIALS.FIRE) {
+            ctx.fillStyle = 'rgba(255, 100, 0, 0.4)';
+            ctx.beginPath();
+            ctx.arc(ex, ey, (e.r || 40) * scale, 0, Math.PI * 2);
+            ctx.fill();
+        } else if (e.t === MATERIALS.OIL) {
+            ctx.fillStyle = 'rgba(40, 40, 40, 0.6)';
+            ctx.beginPath();
+            ctx.arc(ex, ey, (e.r || 60) * scale, 0, Math.PI * 2);
+            ctx.fill();
         }
     });
 

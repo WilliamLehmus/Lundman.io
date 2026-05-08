@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <title>Tanks.io | Tactical Multiplayer</title>
+    <meta name="description" content="A premium 2-player local tank combat game with smooth animations and neon aesthetics.">
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="ui-layer">
+        <div id="fps-counter">-- FPS</div>
+        <div id="version-number"></div>
+        
+
+
+        <div id="splash-screen">
+            <div class="splash-content">
+                <div class="logo-container">
+                    <h1 class="glitch" data-text="TANKS.IO">TANKS.IO</h1>
+                </div>
+                <p class="tagline">ULTIMATE ONLINE COMBAT</p>
+                <div class="user-setup">
+                    <input type="text" id="username" placeholder="ENTER CALLSIGN..." maxlength="12">
+                    <input type="password" id="user-pin" placeholder="PIN (4-10 DIGITS)" maxlength="10" style="margin-top: 10px;">
+                    <select id="chassis-select" class="premium-select">
+                        <option value="SCOUT">SCOUT (2 SLOTS, FAST)</option>
+                        <option value="BRAWLER">BRAWLER (1 SLOT, TANKY)</option>
+                        <option value="ARTILLERY">ARTILLERY (4 SLOTS, SLOW)</option>
+                    </select>
+                </div>
+                <div class="loading-bar-container">
+                    <div id="loading-progress"></div>
+                </div>
+                <div class="multiplayer-actions">
+                    <button id="quick-match-btn" class="primary-btn">QUICK MATCH</button>
+                    <div style="display: flex; gap: 10px; width: 100%;">
+                        <button id="host-btn" class="secondary-btn" style="flex: 1;">HOST LOBBY</button>
+                        <button id="join-btn" class="secondary-btn" style="flex: 1;">JOIN LOBBY</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="lobby-screen" class="glass-panel hidden">
+            <h2>LOBBY: <span id="lobby-id">---</span></h2>
+            <div class="lobby-columns">
+                <div class="team-column team-blue">
+                    <h3>TEAM ALPHA</h3>
+                    <div id="blue-team-list" class="player-list"></div>
+                </div>
+                <div class="team-column team-pink">
+                    <h3>TEAM OMEGA</h3>
+                    <div id="pink-team-list" class="player-list"></div>
+                </div>
+            </div>
+            <div id="lobby-status">WAITING FOR PLAYERS (2/10)...</div>
+            
+            <div id="tank-selection-area">
+                <!-- Populated via JS with tank cards -->
+            </div>
+
+            <div class="lobby-map-select">
+                <label>SELECT MAP / BIOME:</label>
+                <select id="map-select" class="premium-select">
+                    <option value="RANDOM">RANDOM BIOME</option>
+                    <option value="URBAN">URBAN (CITY)</option>
+                    <option value="WASTELAND">WASTELAND (DESERT)</option>
+                    <option value="INDUSTRIAL">INDUSTRIAL (FACTORIES)</option>
+                    <option value="WETLAND">WETLAND (SWAMP)</option>
+                    <option value="TUNDRA">ICE (TUNDRA)</option>
+                </select>
+            </div>
+
+            <div class="lobby-actions">
+                <button id="leave-lobby-btn" class="secondary-btn btn-danger">LEAVE LOBBY</button>
+                <button id="start-game-btn" class="hidden">START GAME</button>
+            </div>
+        </div>
+
+        <!-- Server Browser -->
+        <div id="server-browser" class="overlay" style="display: none;">
+            <div class="menu-content server-browser-content">
+                <h1 style="margin-bottom: 2rem; letter-spacing: 4px;">ACTIVE LOBBIES</h1>
+                <div id="server-list" class="server-list" style="max-height: 400px; overflow-y: auto; width: 100%; margin-bottom: 2rem;">
+                    <!-- Populated via JS -->
+                    <div class="server-item empty" style="padding: 2rem; opacity: 0.5; font-style: italic;">NO ACTIVE LOBBIES FOUND</div>
+                </div>
+                <div class="server-browser-actions" style="display: flex; gap: 1rem; width: 100%;">
+                    <button id="refresh-servers-btn" class="secondary-btn" style="flex: 1;">REFRESH</button>
+                    <button id="close-browser-btn" class="btn" style="flex: 1;">BACK</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="start-screen" class="glass-panel hidden">
+            <h1>TANKS.IO</h1>
+            <p>Local 2-Player Combat</p>
+            <div class="controls-guide">
+                <div class="player-guide">
+                    <h3>Player 1 (Blue)</h3>
+                    <p>WASD to Move</p>
+                    <p>SPACE to Shoot</p>
+                    <p>1, 2, 3 to Switch Weapons</p>
+                </div>
+                <div class="player-guide">
+                    <h3>Player 2 (Pink)</h3>
+                    <p>ARROWS to Move</p>
+                    <p>ENTER to Shoot</p>
+                    <p>7, 8, 9 to Switch Weapons</p>
+                </div>
+            </div>
+            <button id="start-btn">START BATTLE</button>
+        </div>
+
+        <div id="game-hud" class="hidden">
+            <!-- Dota-style Top Center Timer/Score -->
+            <div id="dota-top-bar">
+                <div class="score-alpha-box" id="score-alpha">0</div>
+                <div id="match-timer-box">
+                    <div id="match-timer">08:00</div>
+                    <div id="score-cap-hint">FIRST TO 20</div>
+                </div>
+                <div class="score-omega-box" id="score-omega">0</div>
+            </div>
+
+            <!-- Dashboard Center: Hero Panel (Health & Weapons) -->
+            <div id="hud-bottom-center" class="dashboard-panel dota-hero-panel">
+                <div class="hero-stats-row">
+                    <div class="hero-portrait">
+                        <div class="tank-avatar"></div>
+                    </div>
+                    <div class="health-system">
+                        <div class="hp-numeric"><span id="hp-current">100</span> / <span id="hp-max">100</span></div>
+                        <div class="hp-bar-main-container">
+                            <div id="p1-hp" class="hp-bar-main"></div>
+                        </div>
+                        <div class="cooldown-main-container">
+                            <div id="p1-cooldown" class="cooldown-bar-main"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="weapon-system">
+                    <div class="weapon-slots">
+                        <div class="weapon-slot active" data-slot="0">
+                            <span class="slot-key">1</span>
+                            <div class="weapon-icon-new">
+                                <img id="icon-slot-0" src="" class="weapon-img hidden">
+                                <span class="slot-fallback">GUN</span>
+                            </div>
+                        </div>
+                        <div class="weapon-slot" data-slot="1">
+                            <span class="slot-key">2</span>
+                            <div class="weapon-icon-new">
+                                <img id="icon-slot-1" src="" class="weapon-img hidden">
+                                <span class="slot-fallback">-</span>
+                            </div>
+                        </div>
+                        <div class="weapon-slot" data-slot="2">
+                            <span class="slot-key">3</span>
+                            <div class="weapon-icon-new">
+                                <img id="icon-slot-2" src="" class="weapon-img hidden">
+                                <span class="slot-fallback">-</span>
+                            </div>
+                        </div>
+                        <div class="weapon-slot" data-slot="3">
+                            <span class="slot-key">4</span>
+                            <div class="weapon-icon-new">
+                                <img id="icon-slot-3" src="" class="weapon-img hidden">
+                                <span class="slot-fallback">-</span>
+                            </div>
+                        </div>
+                </div>
+            </div>
+
+            <!-- Dashboard Right: Economy (Shop & Scrap) -->
+            <div id="hud-bottom-right" class="dashboard-panel dota-economy-panel">
+                <div class="scrap-economy">
+                    <div class="gold-icon"></div>
+                    <span id="p1-scrap" class="scrap-value">0</span>
+                </div>
+                <button id="open-shop-btn" class="quick-shop-btn">SHOP (B)</button>
+            </div>
+
+            <!-- Legacy P2 stats for compatibility if needed, but hidden -->
+            <div id="p2-stats-hidden" class="hidden">
+                <div id="p2-hp"></div>
+                <div id="p2-cooldown"></div>
+            </div>
+        </div>
+
+        <div id="game-over" class="glass-panel hidden">
+            <h2 id="winner-text">GAME OVER</h2>
+            <div id="match-results" class="results-container">
+                <!-- Populated via JS -->
+            </div>
+            <div class="game-over-actions">
+                <button id="restart-btn">REMATCH</button>
+                <button id="leave-btn" class="secondary-btn">LEAVE BATTLE</button>
+            </div>
+        </div>
+        <div id="mobile-controls" class="hidden">
+            <div id="joystick-container">
+                <div id="joystick-handle"></div>
+            </div>
+            <div class="mobile-btns">
+                <div id="mobile-fire-btn">FIRE</div>
+                <div id="mobile-weapon-btn">SWAP</div>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <link rel="icon" href="data:,">
+    <!-- Options Menu -->
+    <div id="options-menu" class="overlay" style="display: none;">
+        <div class="menu-content">
+            <h1>OPTIONS</h1>
+            <div class="option-group">
+                <label>MUSIC VOLUME</label>
+                <input type="range" id="music-volume" min="0" max="1" step="0.1" value="0.5">
+            </div>
+            <div class="option-group">
+                <label>SFX VOLUME</label>
+                <input type="range" id="sfx-volume" min="0" max="1" step="0.1" value="0.7">
+            </div>
+            <div class="option-group" style="flex-direction: row; justify-content: space-between; padding: 0 40px; margin-top: 10px;">
+                <label style="margin-bottom: 0;">PREMIUM VISUALS</label>
+                <input type="checkbox" id="premium-visuals-toggle" style="width: 22px; height: 22px; cursor: pointer; accent-color: #00f2ff;">
+            </div>
+            <button id="close-options" class="btn">BACK TO GAME</button>
+            <button id="quit-to-menu-btn" class="secondary-btn" style="margin-top: 15px; width: 100%; border-color: #ff4444 !important; color: #ff4444 !important;">QUIT TO MAIN MENU</button>
+        </div>
+    </div>
+
+    <!-- Scrap Shop Menu -->
+    <div id="shop-menu" class="overlay" style="display: none;">
+        <div class="menu-content shop-content">
+            <div class="shop-header">
+                <h1>SCRAP SHOP</h1>
+                <div class="scrap-total">TOTAL SCRAP: <span id="shop-scrap-count">0</span></div>
+            </div>
+            <div class="shop-grid">
+                <div class="shop-item">
+                <div class="shop-item-info">
+                    <h3>Armor Plating</h3>
+                    <p>+20 Max HP <span class="lvl-badge" id="lvl-health">LVL 0</span></p>
+                </div>
+                <button class="buy-upgrade-btn" data-type="health" id="btn-health">BUY (100)</button>
+            </div>
+            <div class="shop-item">
+                <div class="shop-item-info">
+                    <h3>Engine Tune</h3>
+                    <p>+15% Speed <span class="lvl-badge" id="lvl-speed">LVL 0</span></p>
+                </div>
+                <button class="buy-upgrade-btn" data-type="speed" id="btn-speed">BUY (100)</button>
+            </div>
+            <div class="shop-item">
+                <div class="shop-item-info">
+                    <h3>Heavy Caliber</h3>
+                    <p>+25% DMG / -10% Reload <span class="lvl-badge" id="lvl-power">LVL 0</span></p>
+                </div>
+                <button class="buy-upgrade-btn" data-type="power" id="btn-power">BUY (100)</button>
+            </div>
+            </div>
+            <div id="shop-hint">LVL 5 MAX | COSTS INCREASE PER LEVEL</div>
+            <button id="close-shop" class="btn">CLOSE SHOP (B)</button>
+        </div>
+    </div>
+
+    <div id="ui-hint" style="position: absolute; top: 20px; right: 25px; color: rgba(255,255,255,0.4); font-family: 'Outfit'; font-size: 11px; pointer-events: none; display: flex; flex-direction: column; gap: 4px; text-align: right; letter-spacing: 1px;">
+        <span>ESC FOR OPTIONS / MENU</span>
+    </div>
+
+    <div id="debug-menu" class="hidden">
+        <h3>DEBUG TOOLS</h3>
+        <div class="debug-group">
+            <button id="debug-spawn-bot-btn" class="debug-btn">SPAWN BOT (CLICK MAP)</button>
+            <button id="debug-toggle-bot-btn" class="debug-btn active">BOTS: ON</button>
+        </div>
+        <div class="debug-group">
+            <button id="debug-spawn-wall-btn" class="debug-btn">SPAWN WALL (CLICK MAP)</button>
+        </div>
+        <div id="debug-hint">CLICK MAP TO SPAWN SELECTED ITEM</div>
+    </div>
+
+    <script type="module" src="game.js"></script>
+</body>
+</html>
