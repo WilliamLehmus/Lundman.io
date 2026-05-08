@@ -130,6 +130,9 @@ npm run dev
 > [!IMPORTANT]
 > **Syntax Integrity**: When editing `server.js`, ensure the class structure remains intact. A misplaced `}` can crash the server.
 
+> [!CAUTION]
+> **AI Testing Restriction**: The AI agent is STRICTLY FORBIDDEN from starting browser sessions or testing the game directly. Browser-based verification must be performed by the USER or William.
+
 ### 2. Debugging Tools
 - **Manual Map Selection**: Force biomes in the lobby dropdown.
 - **Server Logs**: Watch the `npm run dev` output for logic debugging.

@@ -7,6 +7,7 @@
     - Use `npm run dev` to start both backend and frontend.
     - Root `package.json` manages backend deps and frontend build orchestration.
     - Frontend lives in `/frontend/`, Backend logic in `/backend/`.
+    - **MANDATORY**: The AI is NOT allowed to start browser sessions or test the game directly. Testing and verification in the browser are reserved for the USER or William.
 
 ## 🛠️ Preferred Frameworks & Tools
 - **Core**: Express, Axios, Socket.io.
