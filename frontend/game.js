@@ -813,11 +813,13 @@ socket.on('scrap-update', (newScrap) => {
 
 const WEAPON_NAMES = {
     STANDARD: 'Main Gun', FLAMETHROWER: 'Flamethrower', WATER_CANNON: 'Water Cannon',
-    DIRT_GUN: 'Dirt Gun', TESLA: 'Tesla Coil', FROST_GUN: 'Frost Gun', HEAVY_GUN: 'Heavy Cannon'
+    DIRT_GUN: 'Dirt Gun', TESLA: 'Tesla Coil', FROST_GUN: 'Frost Gun', HEAVY_GUN: 'Heavy Cannon',
+    ACID_SPRAY: 'Acid Spray', GAS_LAUNCHER: 'Gas Launcher', ALCHEMIST_CHOICE: "Alchemist's Choice"
 };
 const WEAPON_ABBR = {
     STANDARD: 'GUN', FLAMETHROWER: 'FIRE', WATER_CANNON: 'H\u2082O',
-    DIRT_GUN: 'DIRT', TESLA: 'ARC', FROST_GUN: 'ICE', HEAVY_GUN: 'HVY'
+    DIRT_GUN: 'DIRT', TESLA: 'ARC', FROST_GUN: 'ICE', HEAVY_GUN: 'HVY',
+    ACID_SPRAY: 'ACID', GAS_LAUNCHER: 'GAS', ALCHEMIST_CHOICE: 'ALCH'
 };
 
 function getWeaponIcon(weaponType) {
@@ -830,6 +832,9 @@ function getWeaponIcon(weaponType) {
     if (name.includes('FROST')) return 'assets/icon_frost.png';
     if (name.includes('DIRT')) return 'assets/icon_dirt.png';
     if (name.includes('SHOTGUN')) return 'assets/icon_shotgun.png';
+    if (name.includes('ACID')) return 'assets/icon_acid.png';
+    if (name.includes('GAS')) return 'assets/icon_gas.png';
+    if (name.includes('ALCHEMIST')) return 'assets/icon_alchemist.png';
     return null;
 }
 const TRAIL_LENGTHS  = { metal: 6, fire: 4, water: 3, dirt: 3, electric: 8, ice: 7 };
@@ -1022,45 +1027,48 @@ function updateLobbyUI(id, players) {
             // Loadout Slots
             const loadout = document.createElement('div');
             loadout.className = 'tank-loadout-slots';
-            
-            // For the selected tank, show interactive slots
-            if (me.ch === type) {
-                for (let i = 0; i < config.slots; i++) {
-                    const slot = document.createElement('div');
-                    slot.className = 'loadout-slot';
-                    const weaponType = (me.sl && me.sl[i]) ? me.sl[i] : 'EMPTY';
-                    const icon = getWeaponIcon(weaponType);
-                    if (icon) {
-                        const iconImg = document.createElement('img');
-                        iconImg.src = icon;
-                        iconImg.className = 'weapon-img';
-                        slot.appendChild(iconImg);
-                    }
-                    
-                    const label = document.createElement('div');
-                    label.className = 'weapon-slot-label';
-                    label.innerText = WEAPON_ABBR[weaponType] || weaponType.substring(0, 3);
-                    slot.appendChild(label);
-                    
-                    slot.title = `Click to cycle: ${WEAPON_NAMES[weaponType] || weaponType}`;
 
+            for (let i = 0; i < config.slots; i++) {
+                const slot = document.createElement('div');
+                slot.className = 'loadout-slot';
+                
+                // If it's me and it's my selected tank, use my current loadout. 
+                // Otherwise use the default loadout for that chassis.
+                let weaponType = 'EMPTY';
+                if (me.ch === type && me.sl && me.sl[i]) {
+                    weaponType = me.sl[i];
+                } else if (config.weapons && config.weapons[i]) {
+                    weaponType = config.weapons[i];
+                    slot.classList.add('preview'); // Optional: add a class for preview state
+                }
+
+                const icon = getWeaponIcon(weaponType);
+                if (icon) {
+                    const iconImg = document.createElement('img');
+                    iconImg.src = icon;
+                    iconImg.className = 'weapon-img';
+                    slot.appendChild(iconImg);
+                }
+                
+                const label = document.createElement('div');
+                label.className = 'weapon-slot-label';
+                label.innerText = WEAPON_ABBR[weaponType] || weaponType.substring(0, 3);
+                slot.appendChild(label);
+                
+                if (me.ch === type) {
+                    slot.title = `Click to cycle: ${WEAPON_NAMES[weaponType] || weaponType}`;
+                    slot.style.cursor = 'pointer';
                     slot.onclick = (e) => {
                         e.stopPropagation();
-                        // Cycle through allowed weapons
                         const currentIdx = config.allowedWeapons.indexOf(weaponType);
                         const nextIdx = (currentIdx + 1) % config.allowedWeapons.length;
                         const nextWeapon = config.allowedWeapons[nextIdx];
                         socket.emit('change-loadout', { slotIndex: i, weaponType: nextWeapon });
                     };
-                    loadout.appendChild(slot);
+                } else {
+                    slot.style.cursor = 'default';
                 }
-            } else {
-                // For non-selected tanks, show empty/preview slots
-                for (let i = 0; i < config.slots; i++) {
-                    const slot = document.createElement('div');
-                    slot.className = 'loadout-slot empty';
-                    loadout.appendChild(slot);
-                }
+                loadout.appendChild(slot);
             }
             card.appendChild(loadout);
 
@@ -1089,12 +1097,40 @@ function updateLobbyUI(id, players) {
                 slot.classList.add('occupied');
                 if (player.id === myId) slot.classList.add('self');
                 
+                const tankImg = document.createElement('img');
+                tankImg.src = `assets/tanks/${player.ch.toLowerCase()}.png`;
+                tankImg.style.width = '40px';
+                tankImg.style.height = '40px';
+                tankImg.style.objectFit = 'contain';
+                tankImg.style.marginRight = '15px';
+                slot.prepend(tankImg);
+
                 const info = document.createElement('div');
                 info.className = 'slot-info';
                 info.innerHTML = `
                     <div class="slot-name">${player.u.toUpperCase()} ${player.isBot ? '(BOT)' : ''}</div>
                     <div class="slot-chassis">${player.ch}</div>
                 `;
+                
+                // Add weapon icons to the slot info
+                const miniLoadout = document.createElement('div');
+                miniLoadout.style.display = 'flex';
+                miniLoadout.style.gap = '5px';
+                miniLoadout.style.marginTop = '4px';
+                
+                if (player.sl) {
+                    player.sl.forEach(wType => {
+                        const icon = getWeaponIcon(wType);
+                        if (icon) {
+                            const iconImg = document.createElement('img');
+                            iconImg.src = icon;
+                            iconImg.style.width = '18px';
+                            iconImg.style.height = '18px';
+                            miniLoadout.appendChild(iconImg);
+                        }
+                    });
+                }
+                info.appendChild(miniLoadout);
                 slot.appendChild(info);
 
                 const actions = document.createElement('div');
@@ -1966,6 +2002,26 @@ function drawMinimap() {
             ctx.fillStyle = 'rgba(40, 40, 40, 0.6)';
             ctx.beginPath();
             ctx.arc(ex, ey, (e.r || 60) * scale, 0, Math.PI * 2);
+            ctx.fill();
+        } else if (e.t === MATERIALS.WATER) {
+            ctx.fillStyle = 'rgba(0, 150, 255, 0.4)';
+            ctx.beginPath();
+            ctx.arc(ex, ey, (e.r || 100) * scale, 0, Math.PI * 2);
+            ctx.fill();
+        } else if (e.t === MATERIALS.ICE) {
+            ctx.fillStyle = 'rgba(200, 240, 255, 0.5)';
+            ctx.beginPath();
+            ctx.arc(ex, ey, (e.r || 60) * scale, 0, Math.PI * 2);
+            ctx.fill();
+        } else if (e.t === MATERIALS.ELECTRIC) {
+            ctx.fillStyle = 'rgba(0, 242, 255, 0.3)';
+            ctx.beginPath();
+            ctx.arc(ex, ey, (e.r || 120) * scale, 0, Math.PI * 2);
+            ctx.fill();
+        } else if (e.t === MATERIALS.STEAM) {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.beginPath();
+            ctx.arc(ex, ey, (e.r || 120) * scale, 0, Math.PI * 2);
             ctx.fill();
         }
     });
@@ -3148,16 +3204,6 @@ function drawElements() {
                 drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
                 ctx.fill();
                 
-                // Core White-Hot Path (Actually bright center)
-                ctx.save();
-                ctx.shadowBlur = 15;
-                ctx.shadowColor = '#fff';
-                ctx.fillStyle = '#fff'; // Solid white fill for the heat core
-                ctx.globalAlpha = 0.8;
-                drawOrganicPath(ctx, e.x, e.y, drawRadius * 0.35, e.id + 1);
-                ctx.fill();
-                ctx.restore();
-
                 // 3. Rising Embers
                 if (renderTime % 12 < 1) {
                     particles.push({
@@ -3177,7 +3223,7 @@ function drawElements() {
                 // This ensures they NEVER appear as squares, even if premium visuals are off
                 if (e.t === MATERIALS.FIRE) {
                     const g = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, baseRadius * 1.4);
-                    g.addColorStop(0, '#fff');
+                    g.addColorStop(0, '#ffff00');
                     g.addColorStop(0.2, '#ffcc00');
                     g.addColorStop(0.5, '#ff6600');
                     g.addColorStop(0.8, 'rgba(255, 30, 0, 0.8)');
