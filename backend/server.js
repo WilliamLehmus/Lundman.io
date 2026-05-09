@@ -411,7 +411,7 @@ class Lobby {
     }
 
     generateMap(forcedType = 'RANDOM') {
-        const biomes = ['URBAN', 'WASTELAND', 'INDUSTRIAL', 'WETLAND', 'TUNDRA'];
+        const biomes = ['URBAN', 'WASTELAND', 'INDUSTRIAL', 'WETLAND', 'TUNDRA', 'DESERT'];
         let mapType = forcedType === 'RANDOM' || !biomes.includes(forcedType) 
             ? biomes[Math.floor(Math.random() * biomes.length)] 
             : forcedType;
@@ -421,6 +421,7 @@ class Lobby {
         const blockSize = 350;
         const streetWidth = 150;
         const padding = 150;
+        const sizeMult = this.worldSize <= 2000 ? 0.65 : 1.0;
 
         for (let x = padding; x < this.worldSize - padding; x += blockSize + streetWidth) {
             for (let y = padding; y < this.worldSize - padding; y += blockSize + streetWidth) {
@@ -428,13 +429,30 @@ class Lobby {
                 
                 if (mapType === 'URBAN') {
                     if (rand < 0.85) this.generateCityBlock(x, y, blockSize);
-                    else if (rand > 0.95) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.WATER, null, null, null, 160, 160);
+                    else if (rand > 0.95) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.WATER, null, null, null, 160 * sizeMult, 160 * sizeMult);
                 } 
                 else if (mapType === 'WASTELAND') {
                     if (rand < 0.35) this.generateCityBlock(x, y, blockSize); // Sparse buildings
-                    else if (rand < 0.55) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.OIL, 300000, null, null, 150, 150);
-                    else if (rand < 0.75) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.ACID, null, null, null, 180, 180);
-                    else if (rand < 0.85) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.DIRT, null, null, null, 200, 200);
+                    else if (rand < 0.55) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.OIL, 300000, null, null, 150 * sizeMult, 150 * sizeMult);
+                    else if (rand < 0.75) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.ACID, null, null, null, 180 * sizeMult, 180 * sizeMult);
+                    else if (rand < 0.85) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.DIRT, null, null, null, 200 * sizeMult, 200 * sizeMult);
+                }
+                else if (mapType === 'DESERT') {
+                    if (rand < 0.2) this.generateCityBlock(x, y, blockSize); // Very sparse
+                    else if (rand < 0.4) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.OIL, 300000, null, null, 140 * sizeMult, 140 * sizeMult);
+                    else if (rand < 0.6) this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.DIRT, null, null, null, 180 * sizeMult, 180 * sizeMult);
+                    else if (rand < 0.75) {
+                        // Spawning Props: Palms or Cacti
+                        const pType = Math.random() > 0.4 ? MATERIALS.CACTUS : MATERIALS.PALM;
+                        this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, pType);
+                        // Add some clusters
+                        for(let i=0; i<2; i++) {
+                            this.spawnElement({ 
+                                x: x + blockSize/2 + (Math.random()-0.5)*100, 
+                                y: y + blockSize/2 + (Math.random()-0.5)*100 
+                            }, pType);
+                        }
+                    }
                 }
                 else if (mapType === 'INDUSTRIAL') {
                     if (rand < 0.6) this.generateIndustrialComplex(x, y, blockSize);
@@ -446,7 +464,7 @@ class Lobby {
                         let pType = MATERIALS.WATER;
                         if (r2 > 0.5 && r2 <= 0.8) pType = MATERIALS.ACID;
                         else if (r2 > 0.8) pType = MATERIALS.GAS;
-                        this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, pType, null, null, null, 220, 220);
+                        this.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, pType, null, null, null, 220 * sizeMult, 220 * sizeMult);
                     }
                     if (Math.random() > 0.7) this.spawnElement({ x: x + blockSize, y: y + blockSize }, MATERIALS.DIRT, null, null, null, 150, 150);
                 }

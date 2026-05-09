@@ -15,7 +15,9 @@ export const MATERIALS = {
     BARREL_OIL: 'barrel_oil',
     CRATE: 'crate',
     DRONE: 'drone',
-    QUICKSAND: 'quicksand'
+    QUICKSAND: 'quicksand',
+    CACTUS: 'cactus',
+    PALM: 'palm'
 };
 
 export const MATERIAL_PROPERTIES = {
@@ -34,7 +36,9 @@ export const MATERIAL_PROPERTIES = {
     [MATERIALS.BARREL_OIL]: { w: 35, h: 45, color: '#ffcc00', hp: 20 },
     [MATERIALS.CRATE]: { w: 45, h: 45, color: '#8b4513', hp: 30 },
     [MATERIALS.DRONE]: { w: 40, h: 40, color: '#00f2ff', hp: 150 },
-    [MATERIALS.QUICKSAND]: { w: 140, h: 140, color: '#4d3a24', name: 'Quicksand' }
+    [MATERIALS.QUICKSAND]: { w: 140, h: 140, color: '#4d3a24', name: 'Quicksand' },
+    [MATERIALS.CACTUS]: { w: 35, h: 35, color: '#2d4d2d', hp: 40, name: 'Cactus' },
+    [MATERIALS.PALM]: { w: 50, h: 50, color: '#8b4513', hp: 60, name: 'Palm Tree' }
 };
 
 export const BIOMES = {

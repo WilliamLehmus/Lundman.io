@@ -1763,12 +1763,6 @@ function drawTank(p) {
     ctx.strokeStyle = '#000';
     ctx.lineWidth = 1.5;
 
-    // Soft Ambient Identification Glow
-    if (isPremium) {
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = teamColor;
-    }
-
     ctx.beginPath();
     if (p.ch === 'SCOUT') {
         ctx.roundRect(-TANK_WIDTH/2 + 2, -TANK_HEIGHT/2 + 4, TANK_WIDTH - 2, TANK_HEIGHT - 8, 18);
@@ -1810,27 +1804,12 @@ function drawTank(p) {
         ctx.beginPath(); ctx.arc(rx, ry, 0.8, 0, Math.PI * 2); ctx.fill();
     });
 
-    // Integrated Neon Trim (Identification V2)
-    if (isPremium) {
-        ctx.strokeStyle = teamColor;
-        ctx.lineWidth = 1.5;
-        ctx.globalAlpha = 0.4 + Math.sin(Date.now() * 0.003) * 0.2;
-        ctx.beginPath();
-        if (p.ch === 'SCOUT') {
-            ctx.moveTo(-10, -TANK_HEIGHT/2 + 6); ctx.lineTo(10, -TANK_HEIGHT/2 + 6);
-            ctx.moveTo(-10, TANK_HEIGHT/2 - 6); ctx.lineTo(10, TANK_HEIGHT/2 - 6);
-        } else {
-            ctx.moveTo(-TANK_WIDTH/2 + 10, -TANK_HEIGHT/2 + 4); ctx.lineTo(-TANK_WIDTH/2 + 10, TANK_HEIGHT/2 - 4);
-        }
-        ctx.stroke();
-        ctx.globalAlpha = 1.0;
-    }
 
-    // Headlights (With Bloom)
+    // Headlights (Warm industrial glow)
     ctx.fillStyle = '#fffabb';
-    if (isPremium) { ctx.shadowBlur = 10; ctx.shadowColor = '#ffffaa'; }
-    ctx.beginPath(); ctx.arc(TANK_WIDTH/2 - 6, -10, 2.5, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(TANK_WIDTH/2 - 6, 10, 2.5, 0, Math.PI * 2); ctx.fill();
+    if (isPremium) { ctx.shadowBlur = 6; ctx.shadowColor = '#ffffaa'; }
+    ctx.beginPath(); ctx.arc(TANK_WIDTH/2 - 6, -10, 2.8, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(TANK_WIDTH/2 - 6, 10, 2.8, 0, Math.PI * 2); ctx.fill();
     ctx.shadowBlur = 0;
 
     // 6. DYNAMIC ACCESSORIES (Antennas)
@@ -1862,12 +1841,10 @@ function drawTank(p) {
     ctx.strokeStyle = '#000';
     ctx.lineWidth = 1.5;
     
-    if (isPremium) { ctx.shadowBlur = 12; ctx.shadowColor = teamColor; }
     ctx.beginPath();
     if (p.ch === 'BRAWLER') ctx.roundRect(-tRad, -tRad, tRad*2, tRad*2, 4);
     else ctx.arc(0, 0, tRad, 0, Math.PI * 2);
     ctx.fill();
-    ctx.shadowBlur = 0;
     ctx.stroke();
 
     // Turret Rim Highlight (Sharp edge)
@@ -2352,6 +2329,75 @@ function drawGrid() {
                 l.x += l.vx; l.y += l.vy; l.vx *= 0.95; l.vy *= 0.95;
                 if (l.x > camera.x && l.x < camera.x + canvas.width && l.y > camera.y && l.y < camera.y + canvas.height) { ctx.fillStyle = '#4a3a1a'; ctx.fillRect(l.x, l.y, 3, 2); }
             });
+        }
+    } else if (currentBiome === 'DESERT') {
+        // Warm Golden Sand Base
+        ctx.fillStyle = '#1e1a0f'; // Darker base for neon contrast
+        ctx.fillRect(0, 0, worldSize, worldSize);
+
+        if (ENABLE_PREMIUM_VISUALS) {
+            if (groundDetails.length === 0) {
+                for (let i = 0; i < 900; i++) {
+                    const r = Math.random();
+                    groundDetails.push({
+                        x: Math.random() * worldSize,
+                        y: Math.random() * worldSize,
+                        size: r < 0.1 ? 40 + Math.random() * 80 : (r < 0.3 ? 10 + Math.random() * 20 : 1 + Math.random() * 3),
+                        opacity: 0.03 + Math.random() * 0.08,
+                        type: r < 0.1 ? 'dune' : (r < 0.3 ? 'ripple' : 'glint'),
+                        phase: Math.random() * Math.PI * 2
+                    });
+                }
+            }
+
+            ctx.save();
+            groundDetails.forEach(d => {
+                if (d.x < camera.x - 150 || d.x > camera.x + canvas.width + 150 || d.y < camera.y - 150 || d.y > camera.y + canvas.height + 150) return;
+                
+                if (d.type === 'dune') {
+                    // Soft Sand Dune (Radial Gradient)
+                    const g = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, d.size);
+                    g.addColorStop(0, 'rgba(237, 201, 175, 0.08)');
+                    g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                    ctx.fillStyle = g;
+                    ctx.beginPath(); ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2); ctx.fill();
+                } else if (d.type === 'ripple') {
+                    // Wind Ripples (Sine waves)
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    for(let j=-d.size; j<d.size; j+=4) {
+                        const off = Math.sin(j * 0.2 + d.phase) * 2;
+                        ctx.moveTo(d.x + j, d.y + off);
+                        ctx.lineTo(d.x + j + 2, d.y + off);
+                    }
+                    ctx.stroke();
+                } else {
+                    // Silica Glint
+                    const shine = Math.sin(renderTime * 0.005 + d.phase) * 0.5 + 0.5;
+                    if (shine > 0.95) {
+                        ctx.fillStyle = '#fff';
+                        ctx.globalAlpha = (shine - 0.95) * 10;
+                        ctx.beginPath(); ctx.arc(d.x, d.y, 1, 0, Math.PI * 2); ctx.fill();
+                    }
+                }
+            });
+            ctx.restore();
+
+            // Heat Haze (Atmospheric shimmer - Softer & Horizontal)
+            ctx.save();
+            const shimmer = (renderTime * 0.05) % canvas.width;
+            const hazeGrad = ctx.createLinearGradient(camera.x, 0, camera.x + canvas.width, 0);
+            hazeGrad.addColorStop(0, 'rgba(237, 201, 175, 0)');
+            hazeGrad.addColorStop(0.5, 'rgba(237, 201, 175, 0.03)');
+            hazeGrad.addColorStop(1, 'rgba(237, 201, 175, 0)');
+            
+            ctx.fillStyle = hazeGrad;
+            for(let i=0; i<2; i++) {
+                const xOff = (shimmer + i * (canvas.width/2)) % canvas.width;
+                ctx.fillRect(camera.x + xOff, camera.y, 150, canvas.height);
+            }
+            ctx.restore();
         }
     } else if (currentBiome === 'TUNDRA') {
         // Deep Frozen Ice Base
@@ -3092,7 +3138,9 @@ function drawElements() {
         } else {
             ctx.fillStyle = config.color;
             const isLiquid = [MATERIALS.WATER, MATERIALS.OIL, MATERIALS.DIRT, MATERIALS.ELECTRIC, MATERIALS.ICE, MATERIALS.ACID, MATERIALS.FIRE, MATERIALS.QUICKSAND].includes(e.t);
-            const hasSpecialRendering = [MATERIALS.GAS, MATERIALS.STEAM, MATERIALS.FIRE].includes(e.t);
+            const isCloud = [MATERIALS.GAS, MATERIALS.STEAM].includes(e.t);
+            const isProp = [MATERIALS.CACTUS, MATERIALS.PALM].includes(e.t);
+            const hasSpecialRendering = isCloud || isProp || e.t === MATERIALS.FIRE;
 
             if (isLiquid) {
                 // Organic Metaball Tiling (Overlapping circles for a natural blob feel)
@@ -3370,6 +3418,62 @@ function drawElements() {
                 }
                 
                 ctx.restore();
+            } else if (e.t === MATERIALS.CACTUS && ENABLE_PREMIUM_VISUALS) {
+                ctx.save();
+                const drawRadius = baseRadius;
+                
+                // 1. Shadow
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                ctx.beginPath(); ctx.ellipse(e.x + 4, e.y + 4, drawRadius, drawRadius * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+
+                // 2. Main Body (Prickly look)
+                ctx.fillStyle = '#2d4d2d';
+                ctx.beginPath();
+                ctx.roundRect(e.x - 8, e.y - drawRadius, 16, drawRadius * 2, 8);
+                ctx.fill();
+                
+                // Arms
+                ctx.beginPath();
+                ctx.roundRect(e.x - 18, e.y - 10, 10, 15, 5); // Left arm
+                ctx.roundRect(e.x + 8, e.y - 18, 10, 15, 5); // Right arm
+                ctx.fill();
+
+                // 3. Spines (Tiny glints)
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                for(let i=0; i<6; i++) {
+                    const seed = e.id + i;
+                    ctx.fillRect(e.x + (getStableRandom(seed)-0.5)*20, e.y + (getStableRandom(seed+1)-0.5)*40, 1, 1);
+                }
+                ctx.restore();
+            } else if (e.t === MATERIALS.PALM && ENABLE_PREMIUM_VISUALS) {
+                ctx.save();
+                const drawRadius = baseRadius;
+                
+                // 1. Shadow
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                ctx.beginPath(); ctx.ellipse(e.x + 8, e.y + 8, drawRadius * 1.2, drawRadius * 0.6, 0, 0, Math.PI * 2); ctx.fill();
+
+                // 2. Trunk (Segmented)
+                ctx.fillStyle = '#5d4037';
+                for(let i=0; i<3; i++) {
+                    ctx.beginPath();
+                    ctx.roundRect(e.x - 5, e.y + (i*8) - 10, 10, 8, 2);
+                    ctx.fill();
+                }
+
+                // 3. Leaves (Fronds)
+                const sway = Math.sin(renderTime * 0.002 + e.id) * 0.1;
+                ctx.fillStyle = '#2e7d32';
+                ctx.translate(e.x, e.y - 10);
+                for(let i=0; i<5; i++) {
+                    ctx.save();
+                    ctx.rotate((i * Math.PI * 2 / 5) + sway);
+                    ctx.beginPath();
+                    ctx.ellipse(20, 0, 25, 8, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                }
+                ctx.restore();
             } else if (e.t === MATERIALS.FIRE && ENABLE_PREMIUM_VISUALS && firePatterns.length > 0) {
                 ctx.save();
                 const drawRadius = baseRadius * pulse;
@@ -3439,20 +3543,24 @@ function drawElements() {
                     ctx.fillStyle = '#4d3a24';
                 } else if (e.t === MATERIALS.QUICKSAND) {
                     ctx.fillStyle = '#2d1a04';
+                } else if (e.t === MATERIALS.CACTUS) {
+                    ctx.fillStyle = '#2d4d2d';
+                } else if (e.t === MATERIALS.PALM) {
+                    ctx.fillStyle = '#5d4037';
                 } else {
                     ctx.fillStyle = config.color;
                 }
                 
-                drawOrganicPath(ctx, e.x, e.y, baseRadius, e.id);
-                ctx.fill();
+                if (!isCloud) {
+                    drawOrganicPath(ctx, e.x, e.y, baseRadius, e.id);
+                    ctx.fill();
+                }
                 ctx.shadowBlur = 0;
             }
         } else if (!hasSpecialRendering) {
             // Buildings and other solid objects (fallback for non-liquid, non-special)
-            if (e.t !== MATERIALS.GAS && e.t !== MATERIALS.STEAM) {
-                ctx.fillStyle = config.color;
-                ctx.fillRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h);
-            }
+            ctx.fillStyle = config.color;
+            ctx.fillRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h);
         }
     }
 
@@ -3501,33 +3609,35 @@ function drawElements() {
         // Steam clouds (Soft volumetric puffs)
         if (e.t === MATERIALS.STEAM) {
             ctx.save();
-            const baseRadius = e.w * 0.4;
+            const baseRadius = e.w * 0.45;
             const p = (steamPatterns && steamPatterns.length > 0) ? steamPatterns[e.id % 9] : null;
             
-            ctx.globalAlpha = ENABLE_PREMIUM_VISUALS ? 0.4 : 0.6;
+            ctx.globalAlpha = ENABLE_PREMIUM_VISUALS ? 0.35 : 0.5;
             
-            // Draw 4-5 overlapping puffs to create a "cloud" look
-            for (let i = 0; i < 5; i++) {
-                const seed = e.id + i * 100;
-                const offsetDist = baseRadius * 0.5;
-                const angle = (getStableRandom(seed) * Math.PI * 2) + (renderTime * 0.0005);
+            // Draw 5-6 overlapping puffs to create a "cloud" look
+            for (let i = 0; i < 6; i++) {
+                const seed = e.id + i * 137;
+                const offsetDist = baseRadius * 0.6;
+                const angle = (getStableRandom(seed) * Math.PI * 2) + (renderTime * 0.0004);
                 const px = e.x + Math.cos(angle) * offsetDist;
                 const py = e.y + Math.sin(angle) * offsetDist;
-                const pRadius = baseRadius * (0.8 + getStableRandom(seed + 1) * 0.5);
+                const pRadius = baseRadius * (0.9 + getStableRandom(seed + 1) * 0.6);
                 
+                ctx.save();
                 if (p && ENABLE_PREMIUM_VISUALS) {
-                    const flowX = (renderTime * 0.005 + i * 10) % STEAM_TILE_SIZE;
-                    const matrix = new DOMMatrix().translate(flowX, -flowX * 0.2);
+                    const flowX = (renderTime * 0.004 + i * 20) % STEAM_TILE_SIZE;
+                    const matrix = new DOMMatrix().translate(flowX, -flowX * 0.15);
                     p.setTransform(matrix);
                     ctx.fillStyle = p;
-                    ctx.shadowBlur = 15;
-                    ctx.shadowColor = 'rgba(255, 255, 255, 0.3)';
+                    ctx.shadowBlur = 25;
+                    ctx.shadowColor = 'rgba(255, 255, 255, 0.4)';
                 } else {
-                    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                    ctx.fillStyle = 'rgba(240, 240, 255, 0.6)';
                 }
                 
                 drawOrganicPath(ctx, px, py, pRadius, seed);
                 ctx.fill();
+                ctx.restore();
             }
             ctx.restore();
         }
