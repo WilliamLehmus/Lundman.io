@@ -1584,6 +1584,10 @@ function renderLoop(now) {
         if (me) {
             camera.x = me.x - canvas.width / 2;
             camera.y = me.y - canvas.height / 2;
+            // CRITICAL: Recalculate aim angle AFTER interpolation to avoid jitter
+            updateAimAngle();
+            // Apply it immediately to the rendered state
+            me.aimAngle = keys.aimAngle;
         }
 
         if (shake.intensity > 0) {
@@ -1932,54 +1936,49 @@ function drawTank(p) {
 function drawCrosshair() {
     if (!gameActive || isMenuOpen || isShopOpen || (gameState && gameState.gameOver)) return;
 
-    const me = serverState?.players?.find(p => p.id === myId);
+    // Use gameState for interpolated/responsive state
+    const me = gameState?.players?.find(p => p.id === myId);
     if (!me) return;
+
+    const weaponMod = WEAPON_MODULES[me.w];
+    const weaponType = weaponMod ? weaponMod.type : 'metal';
+    const color = TRAIL_COLORS[weaponType] || '#00f2ff';
+    const pulse = Math.sin(renderTime * 0.01) * 0.2 + 0.8;
 
     ctx.save();
     ctx.translate(mousePos.x, mousePos.y);
 
-    const currentWeapon = me.w; // w is the current weapon name from server
-    const weaponMod = WEAPON_MODULES[currentWeapon];
-    const weaponType = weaponMod ? weaponMod.type : 'metal';
-    const color = TRAIL_COLORS[weaponType] || '#fff';
-    
-    // Outer reload circle
-    const reloadProgress = (me.c / 100); // me.c is 0-100
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-    ctx.lineWidth = 2;
+    // 1. Outer Rotating Ring (Premium feel)
+    ctx.save();
+    ctx.rotate(renderTime * 0.002);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.4;
+    ctx.setLineDash([5, 15]);
     ctx.beginPath();
     ctx.arc(0, 0, 18, 0, Math.PI * 2);
     ctx.stroke();
+    ctx.restore();
 
-    if (reloadProgress < 1.0) {
-        ctx.strokeStyle = color;
-        ctx.beginPath();
-        ctx.arc(0, 0, 18, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * reloadProgress));
-        ctx.stroke();
-    } else {
-        // Ready glow
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = color;
-        ctx.strokeStyle = color;
-        ctx.beginPath();
-        ctx.arc(0, 0, 18, 0, Math.PI * 2);
-        ctx.stroke();
-    }
+    // 2. Main Crosshair
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.5;
+    ctx.shadowBlur = 15 * pulse;
+    ctx.shadowColor = color;
+    const size = 12;
 
-    // Inner crosshair
-    const pulse = keys.shoot ? 1.4 : 1.0;
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = color;
-    
-    // 4 dots
-    for (let i = 0; i < 4; i++) {
-        ctx.rotate(Math.PI / 2);
-        ctx.beginPath();
-        ctx.arc(10 * pulse, 0, 2, 0, Math.PI * 2);
-        ctx.fill();
-    }
+    ctx.beginPath();
+    // Horizontal
+    ctx.moveTo(-size, 0); ctx.lineTo(-4, 0);
+    ctx.moveTo(size, 0); ctx.lineTo(4, 0);
+    // Vertical
+    ctx.moveTo(0, -size); ctx.lineTo(0, -4);
+    ctx.moveTo(0, size); ctx.lineTo(0, 4);
+    ctx.stroke();
 
-    // Center dot
+    // 3. Inner Point
+    ctx.fillStyle = '#fff';
+    ctx.shadowBlur = 5;
     ctx.beginPath();
     ctx.arc(0, 0, 2, 0, Math.PI * 2);
     ctx.fill();
@@ -2103,6 +2102,7 @@ function drawKillFeed() {
 
 function drawZones() {
     if (!gameState.zones) return;
+    const currentBiome = gameState.zones[0] ? gameState.zones[0].type : 'RANDOM';
     gameState.zones.forEach(z => {
         // Draw Zone Color
         ctx.fillStyle = z.color;
@@ -2117,6 +2117,30 @@ function drawZones() {
         ctx.fillText(z.type, z.x + z.w / 2, z.y + z.h / 2);
         ctx.restore();
     });
+
+    // Urban Road Markings (Subtle neon grid)
+    if (currentBiome === 'URBAN' || currentBiome === 'INDUSTRIAL') {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(0, 242, 255, 0.05)';
+        ctx.lineWidth = 1;
+        // Draw crosswalks near building clusters (simulated)
+        for (let i = 0; i < worldSize; i += 400) {
+            ctx.beginPath();
+            ctx.moveTo(i, 0); ctx.lineTo(i, worldSize);
+            ctx.moveTo(0, i); ctx.lineTo(worldSize, i);
+            ctx.stroke();
+            
+            // Crosswalk segments
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+            for (let j = 0; j < worldSize; j += 800) {
+                for (let k = 0; k < 5; k++) {
+                    ctx.fillRect(i + 150 + k*15, j + 380, 8, 40);
+                    ctx.fillRect(j + 380, i + 150 + k*15, 40, 8);
+                }
+            }
+        }
+        ctx.restore();
+    }
 }
 
 function drawGrid() {
@@ -2632,7 +2656,7 @@ function interpolateState(dt) {
                 x: lerp(gp.x, predictedX, P_POS),
                 y: lerp(gp.y, predictedY, P_POS),
                 angle: lerpAngle(gp.angle, predictedAngle, P_POS),
-                aimAngle: lerpAngle(gp.aa || gp.a, sp.aa || sp.a, P_POS)
+                aimAngle: keys.aimAngle // Instant local turret (Zero smoothing)
             };
         } else {
             // Standard Interpolation for other players
@@ -2642,7 +2666,7 @@ function interpolateState(dt) {
                 x: lerp(gp.x, sp.x, P_OTHER),
                 y: lerp(gp.y, sp.y, P_OTHER),
                 angle: lerpAngle(gp.angle, sp.a, P_OTHER),
-                aimAngle: lerpAngle(gp.aa || gp.a, sp.aa || sp.a, P_OTHER)
+                aimAngle: lerpAngle(gp.aimAngle || sp.aa || sp.a, sp.aa || sp.a, P_OTHER)
             };
         }
     });
@@ -2697,313 +2721,152 @@ function drawElements() {
         const config = MATERIAL_PROPERTIES[e.t] || { color: '#fff' };
         
         if (e.t === MATERIALS.BUILDING) {
+            const isIndustrial = currentBiome === 'INDUSTRIAL';
+            const isWasteland = currentBiome === 'WASTELAND';
+            const isTundra = currentBiome === 'TUNDRA';
+            const isWetland = currentBiome === 'WETLAND';
+            const isUrban = currentBiome === 'URBAN';
+
             // 1. Building Shadow (Deep Depth)
             ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
             ctx.beginPath();
-            if (isIndustrial && e.sh === 'circle') {
-                ctx.ellipse(e.x + 10, e.y + 10, e.w/2, e.h/2, 0, 0, Math.PI * 2);
-            } else {
-                ctx.roundRect(e.x - e.w/2 + 8, e.y - e.h/2 + 8, e.w, e.h, 6);
-            }
+            if (isIndustrial && e.sh === 'circle') ctx.ellipse(e.x + 10, e.y + 10, e.w/2, e.h/2, 0, 0, Math.PI * 2);
+            else ctx.roundRect(e.x - e.w/2 + 8, e.y - e.h/2 + 8, e.w, e.h, 6);
             ctx.fill();
 
-            // 2. Main Building Body
+            // 2. Main Building Body with Gradient
             const bGradient = isIndustrial && e.sh === 'circle' ? 
                 ctx.createRadialGradient(e.x - e.w/4, e.y - e.h/4, 0, e.x, e.y, e.w/2) :
                 ctx.createLinearGradient(e.x, e.y - e.h/2, e.x, e.y + e.h/2);
 
-            if (isWasteland) {
-                bGradient.addColorStop(0, '#3a2a1a'); 
-                bGradient.addColorStop(1, '#1a100a'); 
-            } else if (isIndustrial) {
-                if (e.sh === 'circle') {
-                    bGradient.addColorStop(0, '#3a3a4a'); // Highlight
-                    bGradient.addColorStop(0.6, '#1a1a25');
-                    bGradient.addColorStop(1, '#020205');   // Shadow edge
-                } else {
-                    bGradient.addColorStop(0, '#1a1a25'); 
-                    bGradient.addColorStop(1, '#05050a'); 
-                }
-            } else if (isWetland) {
-                bGradient.addColorStop(0, '#152515'); 
-                bGradient.addColorStop(1, '#050a05'); 
-            } else if (isTundra) {
-                bGradient.addColorStop(0, '#3a4a5a'); 
-                bGradient.addColorStop(1, '#050c12'); 
-            } else {
-                bGradient.addColorStop(0, '#252535'); 
-                bGradient.addColorStop(1, '#151520'); 
-            }
+            if (isWasteland) { bGradient.addColorStop(0, '#3a2a1a'); bGradient.addColorStop(1, '#1a100a'); }
+            else if (isIndustrial) {
+                if (e.sh === 'circle') { bGradient.addColorStop(0, '#3a3a4a'); bGradient.addColorStop(0.6, '#1a1a25'); bGradient.addColorStop(1, '#020205'); }
+                else { bGradient.addColorStop(0, '#1a1a25'); bGradient.addColorStop(1, '#05050a'); }
+            } else if (isUrban) { bGradient.addColorStop(0, '#10101a'); bGradient.addColorStop(1, '#020205'); }
+            else if (isTundra) { bGradient.addColorStop(0, '#3a4a5a'); bGradient.addColorStop(1, '#050c12'); }
+            else { bGradient.addColorStop(0, '#252535'); bGradient.addColorStop(1, '#151520'); }
+            
             ctx.fillStyle = bGradient;
-            ctx.strokeStyle = isWasteland ? 'rgba(150, 80, 50, 0.5)' : (isWetland ? 'rgba(50, 100, 50, 0.4)' : (isTundra ? 'rgba(200, 240, 255, 0.6)' : 'rgba(0, 242, 255, 0.6)'));
+            ctx.strokeStyle = isWasteland ? 'rgba(150, 80, 50, 0.5)' : (isIndustrial ? '#333' : (isTundra ? 'rgba(200, 240, 255, 0.6)' : 'rgba(0, 242, 255, 0.6)'));
             ctx.lineWidth = 2;
             
             ctx.beginPath();
-            if (isIndustrial && e.sh === 'circle') {
-                ctx.ellipse(e.x, e.y, e.w/2, e.h/2, 0, 0, Math.PI * 2);
-            } else {
-                ctx.roundRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h, 4);
-            }
+            if (isIndustrial && e.sh === 'circle') ctx.ellipse(e.x, e.y, e.w/2, e.h/2, 0, 0, Math.PI * 2);
+            else ctx.roundRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h, 4);
             ctx.fill();
             ctx.stroke();
 
-            // CLIPPING BLOCK FOR INTERIOR DETAILS
+            // 3. Interior Details (Clipped)
             ctx.save();
             ctx.beginPath();
-            if (isIndustrial && e.sh === 'circle') {
-                ctx.ellipse(e.x, e.y, e.w/2, e.h/2, 0, 0, Math.PI * 2);
-            } else {
-                ctx.roundRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h, 4);
-            }
+            if (isIndustrial && e.sh === 'circle') ctx.ellipse(e.x, e.y, e.w/2, e.h/2, 0, 0, Math.PI * 2);
+            else ctx.roundRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h, 4);
             ctx.clip();
 
-            // Industrial Pipes / Connectors
+            // A. Industrial Interior (Pipes, Rivets, Cooling Fins)
             if (isIndustrial && ENABLE_PREMIUM_VISUALS) {
-                ctx.save();
-                ctx.strokeStyle = '#222';
-                ctx.lineWidth = 6;
-                if (e.id % 2 === 0) {
-                    ctx.beginPath();
-                    ctx.moveTo(e.x + e.w/2, e.y);
-                    ctx.lineTo(e.x + e.w/2 - 30, e.y); // Pipe inside building
-                    ctx.stroke();
+                ctx.strokeStyle = '#222'; ctx.lineWidth = 6;
+                const pipeX = e.sh === 'circle' ? e.x - e.w/3 : e.x - e.w/2 + 8;
+                ctx.beginPath(); ctx.moveTo(pipeX, e.y - e.h/2); ctx.lineTo(pipeX, e.y + e.h/2); ctx.stroke();
+                // Rivets
+                ctx.fillStyle = 'rgba(255,255,255,0.15)';
+                for (let ry = -e.h/2 + 20; ry < e.h/2; ry += 35) { ctx.beginPath(); ctx.arc(pipeX, e.y + ry, 2.5, 0, Math.PI*2); ctx.fill(); }
+                // Cooling Fins
+                ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 1;
+                for (let fy = -e.h/2 + 20; fy < e.h/2 - 20; fy += 12) {
+                    ctx.beginPath(); ctx.moveTo(e.x - e.w/3, e.y + fy); ctx.lineTo(e.x + e.w/3, e.y + fy); ctx.stroke();
                 }
-                ctx.restore();
-            }
-
-            // 3. Roof Details (The "Shell" fix)
-            ctx.fillStyle = isWasteland ? 'rgba(100, 50, 0, 0.05)' : 'rgba(255, 255, 255, 0.03)';
-            if (!(isIndustrial && e.sh === 'circle')) {
-                ctx.fillRect(e.x - e.w/2 + 10, e.y - e.h/2 + 10, e.w - 20, e.h - 20);
-            }
-            
-            // Add a "Roof Unit" (HVAC / Helipad)
-            if (e.w > 120 && e.h > 120) {
-                ctx.fillStyle = isWasteland ? '#2a1a0f' : '#111';
-                ctx.strokeStyle = isWasteland ? 'rgba(150,80,50,0.1)' : 'rgba(255,255,255,0.1)';
-                ctx.beginPath();
-                ctx.roundRect(e.x - 20, e.y - 20, 40, 40, 5);
-                ctx.fill();
-                ctx.stroke();
-                // Fan details
-                ctx.beginPath();
-                ctx.arc(e.x, e.y, 15, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.stroke();
-                
-                // Rotating Fan for Industrial
-                if (isIndustrial) {
-                    ctx.save();
-                    ctx.translate(e.x, e.y);
-                    ctx.rotate(Date.now() * 0.005);
-                    ctx.strokeStyle = '#444'; ctx.lineWidth = 4;
-                    for (let i=0; i<3; i++) {
-                        ctx.rotate(Math.PI*2/3);
-                        ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(12, 0); ctx.stroke();
-                    }
+                // Interior Rotating Fan
+                if (e.w > 60) {
+                    ctx.save(); ctx.translate(e.x + e.w/4, e.y - e.h/4); ctx.rotate(renderTime * 0.005);
+                    ctx.strokeStyle = '#444'; ctx.lineWidth = 3;
+                    for (let i=0; i<3; i++) { ctx.rotate(Math.PI*2/3); ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(10, 0); ctx.stroke(); }
                     ctx.restore();
                 }
             }
 
-            // Tundra Roof Details (Snow Cap)
-            if (isTundra && ENABLE_PREMIUM_VISUALS) {
-                ctx.save();
-                ctx.fillStyle = '#fff';
-                ctx.globalAlpha = 0.2;
-                ctx.beginPath();
-                ctx.roundRect(e.x - e.w/2 + 5, e.y - e.h/2 + 5, e.w - 10, 15, 5);
-                ctx.fill();
-                for (let i = 0; i < 3; i++) {
-                    const sx = e.x + Math.sin(e.id + i) * (e.w * 0.3);
-                    const sy = e.y + Math.cos(e.id + i) * (e.h * 0.3);
-                    ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
-                    ctx.beginPath(); ctx.arc(sx, sy, 10 + getStableRandom(e.id + i * 2) * 10, 0, Math.PI * 2); ctx.fill();
-                }
-                ctx.restore();
-            }
-
-            // 3. Industrial / Factory Details
-            if (isIndustrial && ENABLE_PREMIUM_VISUALS) {
-                // Vertical Metal Pipes
-                ctx.strokeStyle = '#333';
-                ctx.lineWidth = 5;
-                ctx.beginPath();
-                const pipeX = e.sh === 'circle' ? e.x - e.w/3 : e.x - e.w/2 + 8;
-                ctx.moveTo(pipeX, e.y - e.h/2);
-                ctx.lineTo(pipeX, e.y + e.h/2 - 12);
-                ctx.stroke();
-                
-                // Rivets/Bolts along the pipe
-                ctx.fillStyle = 'rgba(255,255,255,0.15)';
-                for (let ry = -e.h/2 + 20; ry < e.h/2 - 20; ry += 35) {
-                    ctx.beginPath();
-                    ctx.arc(pipeX, e.y + ry, 2.5, 0, Math.PI*2);
-                    ctx.fill();
-                }
-
-                // Panel lines for metallic feel
-                ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                if (e.sh === 'circle') {
-                    ctx.arc(e.x, e.y, e.w/4, 0, Math.PI * 2);
-                } else {
-                    ctx.moveTo(e.x, e.y - e.h/2); ctx.lineTo(e.x, e.y + e.h/2 - 12);
-                    ctx.moveTo(e.x - e.w/2, e.y); ctx.lineTo(e.x + e.w/2, e.y);
-                }
-                ctx.stroke();
-
-                // Cooling Fins (Instead of windows)
-                ctx.strokeStyle = 'rgba(255,255,255,0.1)';
-                ctx.lineWidth = 1;
-                for (let fy = -e.h/2 + 20; fy < e.h/2 - 20; fy += 10) {
-                    ctx.beginPath();
-                    ctx.moveTo(e.x - e.w/4, e.y + fy);
-                    ctx.lineTo(e.x + e.w/4, e.y + fy);
-                    ctx.stroke();
-                }
-            }
-
-            // 4. Windows ( facade feel)
-            if (!isIndustrial) {
-                const flicker = Math.sin(Date.now() * 0.01 + e.id) * 0.3 + 0.7;
-                const winSize = 6;
-                const winSpacingX = 15;
-                const winSpacingY = 18;
-                for (let wx = e.x - e.w/2 + 15; wx < e.x + e.w/2 - 10; wx += winSpacingX) {
-                    for (let wy = e.y - e.h/2 + 15; wy < e.y + e.h/2 - 10; wy += winSpacingY) {
-                        const isLit = !isWetland && (Math.floor(wx * 0.7 + wy * 1.3 + e.id)) % 6 > (isWasteland ? 5 : 3);
-                        if (isLit) {
-                            if (isTundra) {
-                                ctx.fillStyle = `rgba(150, 220, 255, ${0.3 * flicker})`;
-                                ctx.shadowBlur = 5;
-                                ctx.shadowColor = '#aaddff';
-                            } else {
-                                ctx.fillStyle = isWasteland ? `rgba(255, 150, 50, ${0.2 * flicker})` : `rgba(255, 240, 150, ${0.3 * flicker})`;
-                                ctx.shadowBlur = isWasteland ? 2 : 5;
-                                ctx.shadowColor = isWasteland ? '#ff6600' : 'rgba(255, 240, 150, 0.5)';
-                            }
-                            ctx.fillRect(wx, wy, winSize, winSize);
-                            ctx.shadowBlur = 0;
-                        } else {
-                            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+            // B. Urban Neon Windows
+            if (isUrban && ENABLE_PREMIUM_VISUALS) {
+                const winSize = 6; const spacing = 12;
+                const cols = Math.floor((e.w - 10) / spacing); const rows = Math.floor((e.h - 10) / spacing);
+                for (let r = 0; r < rows; r++) {
+                    for (let c = 0; c < cols; c++) {
+                        const seed = e.id + r * 13 + c * 7;
+                        if (getStableRandom(seed) > 0.65) {
+                            const wx = e.x - e.w/2 + 10 + c * spacing; const wy = e.y - e.h/2 + 10 + r * spacing;
+                            const colors = ['#00f2ff', '#ff00ff', '#ffff00', '#ffffff'];
+                            const winColor = colors[Math.floor(getStableRandom(seed + 1) * colors.length)];
+                            ctx.fillStyle = winColor; ctx.shadowBlur = 8; ctx.shadowColor = winColor;
+                            ctx.globalAlpha = 0.4 + Math.sin(renderTime * 0.001 + seed) * 0.3;
                             ctx.fillRect(wx, wy, winSize, winSize);
                         }
                     }
                 }
+                ctx.globalAlpha = 1.0; ctx.shadowBlur = 0;
             }
 
+            // C. Fallback Windows (Tundra, Wasteland, Default)
+            if (!isIndustrial && !isUrban) {
+                const winSpacingX = 15; const winSpacingY = 18;
+                for (let wx = e.x - e.w/2 + 15; wx < e.x + e.w/2 - 10; wx += winSpacingX) {
+                    for (let wy = e.y - e.h/2 + 15; wy < e.y + e.h/2 - 10; wy += winSpacingY) {
+                        if ((Math.floor(wx * 0.7 + wy * 1.3 + e.id)) % 6 > (isWasteland ? 5 : 4)) {
+                            ctx.fillStyle = isTundra ? 'rgba(150, 220, 255, 0.3)' : (isWasteland ? 'rgba(255, 150, 50, 0.2)' : 'rgba(255, 240, 150, 0.3)');
+                            ctx.fillRect(wx, wy, 6, 6);
+                        }
+                    }
+                }
+            }
             ctx.restore(); // END CLIPPING
 
-            // Neon Signs (Outside clipping)
+            // 4. Exterior Details (Drawn outside clipping)
+            // Neon Signs
             if (e.id % 5 === 0 && !isWetland) {
                 let neonColors = ['#ff00ff', '#00f2ff', '#ffff00', '#ff0000'];
                 let texts = ['HOTEL', 'BAR', 'CLUB', 'REPAIR', 'TANK', 'NEON'];
-                
-                if (isWasteland) {
-                    neonColors = ['#ff5500', '#ff0000', '#aa6600', '#666'];
-                    texts = ['DEAD', 'LOST', 'VOID', 'RUST', 'STOP', 'WAR'];
-                } else if (isIndustrial) {
-                    neonColors = ['#00f2ff', '#00ffff', '#ffff00', '#55ff00'];
-                    texts = ['REACTOR', 'CORE', 'REFINERY', 'ASSEMBLY', 'STORAGE', 'POWER'];
-                }
-                
-                const nColor = neonColors[e.id % neonColors.length];
-                const text = texts[e.id % texts.length];
-                
-                ctx.save();
-                ctx.translate(e.x, e.y - e.h/2 - 10);
-                const atmoFlicker = isWasteland ? (Math.random() > 0.2 ? (Math.sin(Date.now() * 0.05 + e.id) > 0 ? 1 : 0) : 0) : (Math.sin(Date.now() * 0.02 + e.id) > -0.9 ? 1 : 0);
-                if (atmoFlicker) {
-                    ctx.shadowBlur = isWasteland ? 5 : 10;
-                    ctx.shadowColor = nColor;
-                    ctx.fillStyle = nColor;
-                    ctx.font = 'bold 14px Outfit';
-                    ctx.textAlign = 'center';
-                    ctx.fillText(text, 0, 0);
-                }
+                if (isWasteland) { neonColors = ['#ff5500', '#ff0000', '#aa6600']; texts = ['DEAD', 'LOST', 'VOID', 'RUST']; }
+                else if (isIndustrial) { neonColors = ['#00f2ff', '#ffff00', '#55ff00']; texts = ['REACTOR', 'CORE', 'POWER']; }
+                const nColor = neonColors[e.id % neonColors.length]; const text = texts[e.id % texts.length];
+                ctx.save(); ctx.translate(e.x, e.y - e.h/2 - 10);
+                const flicker = isWasteland ? (Math.random() > 0.2 ? (Math.sin(renderTime * 0.05 + e.id) > 0 ? 1 : 0) : 0) : 1;
+                if (flicker) { ctx.shadowBlur = 10; ctx.shadowColor = nColor; ctx.fillStyle = nColor; ctx.font = 'bold 14px Outfit'; ctx.textAlign = 'center'; ctx.fillText(text, 0, 0); }
                 ctx.restore();
             }
 
-            // Hazard Stripes at the base (Drawn outside clipping to allow bleed)
+            // Hazard Stripes (Industrial)
             if (isIndustrial && ENABLE_PREMIUM_VISUALS) {
-                ctx.save();
-                ctx.beginPath();
-                if (e.sh === 'circle') {
-                    // Curved base plate for silos
-                    ctx.ellipse(e.x, e.y + e.h/2 - 6, e.w/2 + 4, 12, 0, 0, Math.PI * 2);
-                } else {
-                    ctx.rect(e.x - e.w/2 - 4, e.y + e.h/2 - 12, e.w + 8, 12);
-                }
+                ctx.save(); ctx.beginPath();
+                if (e.sh === 'circle') ctx.ellipse(e.x, e.y + e.h/2 - 6, e.w/2 + 4, 12, 0, 0, Math.PI * 2);
+                else ctx.rect(e.x - e.w/2 - 4, e.y + e.h/2 - 12, e.w + 8, 12);
                 ctx.clip();
-                const stripeW = 15;
-                for (let sx = e.x - e.w/2 - 40; sx < e.x + e.w/2 + 40; sx += stripeW * 2) {
-                    ctx.fillStyle = '#ffcc00';
-                    ctx.beginPath();
-                    ctx.moveTo(sx, e.y + e.h/2 - 20);
-                    ctx.lineTo(sx + stripeW, e.y + e.h/2 - 20);
-                    ctx.lineTo(sx + stripeW - 10, e.y + e.h/2 + 10);
-                    ctx.lineTo(sx - 10, e.y + e.h/2 + 10);
-                    ctx.fill();
-                    ctx.fillStyle = '#111';
-                    ctx.beginPath();
-                    ctx.moveTo(sx + stripeW, e.y + e.h/2 - 20);
-                    ctx.lineTo(sx + stripeW * 2, e.y + e.h/2 - 20);
-                    ctx.lineTo(sx + stripeW * 2 - 10, e.y + e.h/2 + 10);
-                    ctx.lineTo(sx + stripeW - 10, e.y + e.h/2 + 10);
-                    ctx.fill();
+                for (let sx = e.x - e.w/2 - 40; sx < e.x + e.w/2 + 40; sx += 30) {
+                    ctx.fillStyle = '#ffcc00'; ctx.beginPath(); ctx.moveTo(sx, e.y + e.h/2 - 20); ctx.lineTo(sx + 15, e.y + e.h/2 - 20); ctx.lineTo(sx + 5, e.y + e.h/2 + 10); ctx.lineTo(sx - 10, e.y + e.h/2 + 10); ctx.fill();
+                    ctx.fillStyle = '#111'; ctx.beginPath(); ctx.moveTo(sx + 15, e.y + e.h/2 - 20); ctx.lineTo(sx + 30, e.y + e.h/2 - 20); ctx.lineTo(sx + 20, e.y + e.h/2 + 10); ctx.lineTo(sx + 5, e.y + e.h/2 + 10); ctx.fill();
                 }
                 ctx.restore();
             }
 
-            // Wasteland specific ruin effects (More prominent)
-            if (isWasteland && ENABLE_PREMIUM_VISUALS) {
-                // Rusted patches / Damage marks
-                ctx.fillStyle = 'rgba(0,0,0,0.2)';
+            // Tundra Snow
+            if (isTundra && ENABLE_PREMIUM_VISUALS) {
+                ctx.save(); ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.2;
+                ctx.beginPath(); ctx.roundRect(e.x - e.w/2 + 5, e.y - e.h/2 + 5, e.w - 10, 15, 5); ctx.fill();
                 for (let i = 0; i < 3; i++) {
-                    const dx = (Math.sin(e.id + i) * 0.4) * e.w;
-                    const dy = (getStableRandom(e.id + i + 2.5) - 0.5) * e.h * 0.8;
-                    ctx.beginPath();
-                    ctx.arc(e.x + dx, e.y + dy, 10 + getStableRandom(e.id + i + 5.1) * 10, 0, Math.PI * 2);
-                    ctx.fill();
+                    const sx = e.x + Math.sin(e.id + i) * (e.w * 0.3); const sy = e.y + Math.cos(e.id + i) * (e.h * 0.3);
+                    ctx.beginPath(); ctx.arc(sx, sy, 8, 0, Math.PI * 2); ctx.fill();
                 }
+                ctx.restore();
             }
 
-            // Industrial specific effects (Power arcs)
-            if (isIndustrial && ENABLE_PREMIUM_VISUALS) {
-                if (Math.random() > 0.98) {
-                    ctx.save();
-                    ctx.strokeStyle = '#fff';
-                    ctx.shadowBlur = 15;
-                    ctx.shadowColor = '#00f2ff';
-                    ctx.lineWidth = 1.5;
-                    ctx.beginPath();
-                    let sx = e.x + (Math.random()-0.5)*e.w*0.8;
-                    let sy = e.y - e.h/2;
-                    ctx.moveTo(sx, sy);
-                    for (let i=0; i<4; i++) {
-                        sx += (Math.random()-0.5)*30;
-                        sy -= Math.random()*20;
-                        ctx.lineTo(sx, sy);
-                    }
-                    ctx.stroke();
-                    ctx.restore();
+            // Smoke & Sparks
+            if ((isWasteland || isIndustrial) && ENABLE_PREMIUM_VISUALS) {
+                if (e.id % 2 === 0 && Math.random() > 0.94) {
+                    particles.push({ x: e.x + (Math.random()-0.5)*20, y: e.y - e.h/2 + 20, vx: (Math.random()-0.5)*0.5 + (windIntensity||0), vy: -1.5 - Math.random()*2, life: 1.2, color: 'rgba(70,70,70,0.4)', size: 8 + Math.random()*12 });
                 }
-            }
-
-                // Smoke from roof unit (More frequent)
-                if (e.id % 2 === 0 && Math.random() > 0.92) {
-                    particles.push({
-                        x: e.x + (Math.random()-0.5)*20, y: e.y - e.h/2 + 20,
-                        vx: (Math.random() - 0.5) * 0.5 + windIntensity,
-                        vy: -1.5 - Math.random() * 2,
-                        life: 1.2, color: 'rgba(70,70,70,0.4)', size: 8 + Math.random() * 12
-                    });
-                }
-                // Sparks from broken signs (More frequent + larger)
-                if (e.id % 3 === 0 && Math.random() > 0.96) {
+                if (e.id % 3 === 0 && Math.random() > 0.97) {
                     spawnParticles(e.x + (Math.random()-0.5)*e.w, e.y - e.h/2, '#ffffaa', 3, 0.8);
                 }
+            }
         } else if (e.t === MATERIALS.SCRAP) {
             // Draw Scrap as a rotating gold gear/nut
             ctx.translate(e.x, e.y);
@@ -3115,521 +2978,123 @@ function drawElements() {
             ctx.stroke();
             ctx.strokeRect(-e.w/2 + 8, -e.h/2 + 8, e.w - 16, e.h - 16);
         } else {
-            ctx.fillStyle = config.color;
             const isLiquid = [MATERIALS.WATER, MATERIALS.OIL, MATERIALS.DIRT, MATERIALS.ELECTRIC, MATERIALS.ICE, MATERIALS.ACID, MATERIALS.FIRE, MATERIALS.QUICKSAND].includes(e.t);
             const isCloud = [MATERIALS.GAS, MATERIALS.STEAM].includes(e.t);
             const isProp = [MATERIALS.CACTUS, MATERIALS.PALM].includes(e.t);
-            const hasSpecialRendering = isCloud || isProp || e.t === MATERIALS.FIRE;
+            const baseRadius = e.w * 0.5;
+            const pulse = (1.0 + Math.sin(renderTime * 0.002 + e.id) * 0.03);
 
             if (isLiquid) {
-                // Organic Metaball Tiling (Overlapping circles for a natural blob feel)
-                const baseRadius = e.w * 0.5;
-                const pulse = (e.t === MATERIALS.WATER || e.t === MATERIALS.OIL) ? (1.0 + Math.sin(renderTime * (e.t === MATERIALS.WATER ? 0.002 : 0.0012) + e.id) * 0.03) : 1.0;
-                
-
+                const drawRadius = baseRadius * pulse;
                 if (e.t === MATERIALS.WATER && ENABLE_PREMIUM_VISUALS && waterPatterns.length > 0) {
-                    const drawRadius = baseRadius * pulse;
-                    
-                    // 1. Depth Gradient
-                    const grad = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, drawRadius * 1.5);
-                    grad.addColorStop(0, 'rgba(0, 80, 220, 0.45)');
-                    grad.addColorStop(0.7, 'rgba(0, 40, 150, 0.5)');
-                    grad.addColorStop(1, 'rgba(0, 20, 80, 0)'); 
-                    ctx.fillStyle = grad;
-                    drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
-                    ctx.fill();
-
-                    // 2. Pattern Layer (Seamless flow)
+                    ctx.fillStyle = 'rgba(0, 40, 150, 0.4)'; drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id); ctx.fill();
                     ctx.save();
-                    ctx.globalAlpha = 0.85;
                     const p = waterPatterns[e.id % 9];
                     const flowX = (renderTime * 0.02) % WATER_TILE_SIZE;
-                    const flowY = (renderTime * 0.01) % WATER_TILE_SIZE;
-                    
-                    const matrix = new DOMMatrix().translate(flowX, flowY);
-                    p.setTransform(matrix);
-                    
-                    ctx.fillStyle = p;
-                    drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
-                    
-                    // 3. Polished Rim Glow & Shoreline Foam
-                    ctx.shadowBlur = 15;
-                    ctx.shadowColor = 'rgba(0, 242, 255, 0.6)';
-                    ctx.fill();
-                    
+                    p.setTransform(new DOMMatrix().translate(flowX, flowX * 0.5));
+                    ctx.fillStyle = p; ctx.globalAlpha = 0.8; ctx.shadowBlur = 15; ctx.shadowColor = 'rgba(0, 242, 255, 0.6)';
+                    drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id); ctx.fill();
                     ctx.restore();
                 } else if (e.t === MATERIALS.OIL && ENABLE_PREMIUM_VISUALS && oilPatterns.length > 0) {
+                    ctx.fillStyle = 'rgba(15, 15, 20, 0.95)'; drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id); ctx.fill();
                     ctx.save();
-                    const drawRadius = baseRadius * pulse;
-
-                    // Oil Depth (Viscous & Dark)
-                    const grad = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, drawRadius * 1.5);
-                    grad.addColorStop(0, 'rgba(30, 30, 35, 0.95)');
-                    grad.addColorStop(0.6, 'rgba(15, 15, 20, 0.98)');
-                    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-                    ctx.fillStyle = grad;
-                    
-                    drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
-                    ctx.fill();
-
-                    // Thick Pattern Overlay (Seamless flow)
-                    ctx.save();
-                    ctx.globalAlpha = 0.95;
                     const p = oilPatterns[e.id % 9];
                     const flowX = -(renderTime * 0.01) % OIL_TILE_SIZE;
-                    const flowY = (renderTime * 0.005) % OIL_TILE_SIZE;
-                    
-                    const matrix = new DOMMatrix().translate(flowX, flowY);
-                    p.setTransform(matrix);
-                    
-                    ctx.fillStyle = p;
-                    drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
-                    ctx.fill();
-
-                    // Dynamic Oily Bubbles
+                    p.setTransform(new DOMMatrix().translate(flowX, flowX * 0.5));
+                    ctx.fillStyle = p; ctx.globalAlpha = 0.9;
+                    drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id); ctx.fill();
+                    // Oil Bubbles
                     ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-                    for (let i = 0; i < 5; i++) {
+                    for (let i = 0; i < 3; i++) {
                         const seed = e.id + i * 10;
-                        const phase = renderTime * (0.0006 + i * 0.0001) + seed;
-                        const dist = (0.1 + (i % 3) * 0.2) * drawRadius;
-                        const angle = getStableRandom(seed) * Math.PI * 2 + phase;
-                        const bx = e.x + Math.cos(angle) * dist;
-                        const by = e.y + Math.sin(angle) * dist;
-                        const bSize = (Math.sin(phase * 1.5) + 1) * (2 + (i % 2));
-                        
-                        if (bSize > 1) {
-                            ctx.beginPath();
-                            ctx.arc(bx, by, bSize, 0, Math.PI * 2);
-                            ctx.fill();
-                            ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-                            ctx.beginPath(); ctx.arc(bx - bSize/3, by - bSize/3, bSize/4, 0, Math.PI * 2); ctx.fill();
-                            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-                        }
+                        const phase = renderTime * 0.001 + seed;
+                        const bx = e.x + Math.cos(phase) * drawRadius * 0.4;
+                        const by = e.y + Math.sin(phase) * drawRadius * 0.4;
+                        ctx.beginPath(); ctx.arc(bx, by, 2 + (i%2), 0, Math.PI * 2); ctx.fill();
                     }
-                    ctx.restore(); // Restore Pattern Layer
-                    ctx.restore(); // Restore Oil Depth Layer
+                    ctx.restore();
                 } else if (e.t === MATERIALS.ACID && ENABLE_PREMIUM_VISUALS && acidPatterns.length > 0) {
+                    ctx.fillStyle = 'rgba(0, 80, 0, 0.5)'; drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id); ctx.fill();
                     ctx.save();
-                    const drawRadius = baseRadius * pulse;
-
-                    // 1. Radioactive Base (More vibrant)
-                    const grad = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, drawRadius * 1.5);
-                    grad.addColorStop(0, 'rgba(0, 255, 0, 0.4)'); // Saturated Neon
-                    grad.addColorStop(0.7, 'rgba(0, 100, 0, 0.6)');
-                    grad.addColorStop(1, 'rgba(0, 20, 0, 0)');
-                    ctx.fillStyle = grad;
-                    drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
-                    ctx.fill();
-
-                    // 2. Toxic Pattern
-                    ctx.globalAlpha = 1.0; // Full intensity
                     const p = acidPatterns[e.id % 9];
                     const flowX = (renderTime * 0.015) % ACID_TILE_SIZE;
-                    const matrix = new DOMMatrix().translate(flowX, flowX * 0.5);
-                    p.setTransform(matrix);
-                    ctx.fillStyle = p;
-                    drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
-                    ctx.fill();
-
-                    // 3. Radioactive Glow (Tight & Intense neon)
-                    ctx.shadowBlur = 12;
-                    ctx.shadowColor = 'rgba(0, 255, 100, 0.8)';
-                    ctx.fill(); 
-                    
-                    // NEW: Rising Toxic Wisps
-                    ctx.globalAlpha = 0.2;
-                    ctx.strokeStyle = '#8f8';
-                    ctx.lineWidth = 1;
-                    for (let i = 0; i < 2; i++) {
-                        const drift = (renderTime * 0.05 + e.id * 100) % 100;
-                        ctx.beginPath();
-                        ctx.arc(e.x + Math.sin(renderTime * 0.002 + i) * 30, e.y - drift, 5 + drift/10, 0, Math.PI * 2);
-                        ctx.stroke();
-                    }
-                    
+                    p.setTransform(new DOMMatrix().translate(flowX, flowX * 0.5));
+                    ctx.fillStyle = p; ctx.shadowBlur = 12; ctx.shadowColor = 'rgba(0, 255, 100, 0.8)';
+                    drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id); ctx.fill();
                     ctx.restore();
                 } else if (e.t === MATERIALS.ELECTRIC && ENABLE_PREMIUM_VISUALS && electricPatterns.length > 0) {
-                    const drawRadius = baseRadius;
-                    
-                    // 1. Electric Depth (Deep Blue Glow)
-                    const grad = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, drawRadius * 1.5);
-                    grad.addColorStop(0, 'rgba(0, 100, 255, 0.4)');
-                    grad.addColorStop(0.7, 'rgba(0, 50, 150, 0.5)');
-                    grad.addColorStop(1, 'rgba(0, 0, 50, 0)');
-                    ctx.fillStyle = grad;
-                    drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
-                    ctx.fill();
-
-                    // 2. High-Voltage Jitter Pattern
+                    ctx.fillStyle = 'rgba(0, 50, 150, 0.4)'; drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id); ctx.fill();
+                    ctx.save();
                     const p = electricPatterns[e.id % 9];
-                    if (p) {
-                        ctx.save();
-                        ctx.globalAlpha = 0.8;
-                        // Rapid jittery movement
-                        const flowX = (renderTime * 0.1) % ELECTRIC_TILE_SIZE;
-                        const matrix = new DOMMatrix().translate(flowX, -flowX * 0.5);
-                        p.setTransform(matrix);
-                        ctx.fillStyle = p;
-                        
-                        // Intense Cyan Glow (Optimized: only if quality allows)
-                        ctx.shadowBlur = 10 + Math.sin(renderTime * 0.01) * 5;
-                        ctx.shadowColor = '#00f2ff';
-                        drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
-                        ctx.fill();
-                        ctx.restore();
-                    }
-
-                    // 3. Dynamic Lightning Bolts
-                    if (Math.random() > 0.4) { // Throttled lightning for performance
-                        ctx.save();
-                        ctx.strokeStyle = '#fff';
-                        ctx.lineWidth = 1.5;
-                        ctx.shadowBlur = 8;
-                        ctx.shadowColor = '#00f2ff';
-                    for (let i = 0; i < 2; i++) {
-                        if (Math.random() > 0.3) {
-                            ctx.beginPath();
-                            const seed = renderTime + i + e.id;
-                            const angle = getStableRandom(seed) * Math.PI * 2;
-                            const startDist = drawRadius * 0.2;
-                            let lx = e.x + Math.cos(angle) * startDist;
-                            let ly = e.y + Math.sin(angle) * startDist;
-                            ctx.moveTo(lx, ly);
-                            for (let j = 0; j < 4; j++) {
-                                lx += (Math.random() - 0.5) * 30;
-                                ly += (Math.random() - 0.5) * 30;
-                                ctx.lineTo(lx, ly);
-                            }
-                            ctx.stroke();
-                        }
-                    }
+                    const flowX = (renderTime * 0.1) % ELECTRIC_TILE_SIZE;
+                    p.setTransform(new DOMMatrix().translate(flowX, -flowX * 0.5));
+                    ctx.fillStyle = p; ctx.shadowBlur = 15; ctx.shadowColor = '#00f2ff';
+                    drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id); ctx.fill();
                     ctx.restore();
-                }
-            } else if (e.t === MATERIALS.DIRT && ENABLE_PREMIUM_VISUALS) {
-                ctx.save();
-                const drawRadius = baseRadius;
-                
-                // 1. Mound Depth (Radial Gradient for 3D feel)
-                const dirtGrad = ctx.createRadialGradient(e.x - drawRadius*0.2, e.y - drawRadius*0.2, 0, e.x, e.y, drawRadius);
-                dirtGrad.addColorStop(0, '#6d5a44'); // Highlight top
-                dirtGrad.addColorStop(0.5, '#4d3a24'); // Mid
-                dirtGrad.addColorStop(1, '#2d1a04');   // Deep Shadow edge
-                ctx.fillStyle = dirtGrad;
-                
-                // 2. Organic Jagged Mound Shape
-                drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
-                ctx.fill();
-
-                // 3. Procedural Rocks & Debris
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-                for (let i = 0; i < 4; i++) {
-                    const seed = e.id + i * 7.7;
-                    const angle = getStableRandom(seed) * Math.PI * 2;
-                    const dist = getStableRandom(seed + 1) * drawRadius * 0.7;
-                    const rx = e.x + Math.cos(angle) * dist;
-                    const ry = e.y + Math.sin(angle) * dist;
-                    const rSize = 2 + getStableRandom(seed + 2) * 4;
-                    
-                    ctx.beginPath();
-                    ctx.arc(rx, ry, rSize, 0, Math.PI * 2);
-                    ctx.fill();
-                    // Rock Highlight
-                    ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
-                    ctx.beginPath(); ctx.arc(rx - rSize/3, ry - rSize/3, rSize/3, 0, Math.PI * 2); ctx.fill();
-                    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-                }
-
-                // 4. Subtle Ambient Shadow on ground
-                ctx.globalCompositeOperation = 'destination-over';
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-                ctx.beginPath();
-                ctx.arc(e.x + 5, e.y + 5, drawRadius + 2, 0, Math.PI * 2);
-                ctx.fill();
-                
-                ctx.restore();
-            } else if (e.t === MATERIALS.QUICKSAND && ENABLE_PREMIUM_VISUALS) {
-                ctx.save();
-                const drawRadius = baseRadius * pulse;
-                
-                // 1. Murky Mud Depth
-                const mudGrad = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, drawRadius * 1.2);
-                mudGrad.addColorStop(0, '#3d2a14');
-                mudGrad.addColorStop(0.8, '#2d1a04');
-                mudGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-                ctx.fillStyle = mudGrad;
-                drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
-                ctx.fill();
-
-                // 2. Swirling Mud Pattern (Viscous flow)
-                if (oilPatterns.length > 0) {
+                } else if (e.t === MATERIALS.ICE && ENABLE_PREMIUM_VISUALS) {
+                    const drawRadiusIce = baseRadius;
+                    const iceGrad = ctx.createRadialGradient(e.x - drawRadiusIce*0.3, e.y - drawRadiusIce*0.3, 0, e.x, e.y, drawRadiusIce);
+                    iceGrad.addColorStop(0, '#ffffff'); iceGrad.addColorStop(1, '#50a0ff');
+                    ctx.fillStyle = iceGrad; drawOrganicPath(ctx, e.x, e.y, drawRadiusIce, e.id); ctx.fill();
+                    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.globalAlpha = 0.6; ctx.beginPath(); ctx.arc(e.x, e.y, drawRadiusIce * 0.9, -2.5, -0.5); ctx.stroke();
+                    // Twinkling Sparkles
+                    const twinkle = Math.sin(renderTime * 0.01 + e.id) * 0.5 + 0.5;
+                    if (twinkle > 0.8) {
+                        ctx.fillStyle = '#fff'; ctx.globalAlpha = (twinkle - 0.8) * 5;
+                        ctx.beginPath(); ctx.arc(e.x + (getStableRandom(e.id)-0.5)*drawRadiusIce, e.y + (getStableRandom(e.id+1)-0.5)*drawRadiusIce, 2, 0, Math.PI*2); ctx.fill();
+                    }
+                } else if (e.t === MATERIALS.FIRE && ENABLE_PREMIUM_VISUALS && firePatterns.length > 0) {
+                    const auraRad = drawRadius * 2.2;
+                    const g = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, auraRad);
+                    g.addColorStop(0, 'rgba(255, 100, 0, 0.4)'); g.addColorStop(1, 'rgba(150, 0, 0, 0)');
+                    ctx.fillStyle = g; drawOrganicPath(ctx, e.x, e.y, auraRad, e.id); ctx.fill();
                     ctx.save();
-                    ctx.globalAlpha = 0.4;
-                    ctx.globalCompositeOperation = 'multiply';
-                    const p = oilPatterns[e.id % 9];
-                    const flowX = (renderTime * 0.005) % OIL_TILE_SIZE;
-                    const matrix = new DOMMatrix().translate(flowX, flowX);
-                    p.setTransform(matrix);
-                    ctx.fillStyle = p;
-                    drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
-                    ctx.fill();
+                    const p = firePatterns[e.id % 9];
+                    const flowY = -(renderTime * 0.08) % FIRE_TILE_SIZE;
+                    p.setTransform(new DOMMatrix().translate(0, flowY));
+                    ctx.fillStyle = p; ctx.shadowBlur = 25; ctx.shadowColor = '#ff6600';
+                    drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id); ctx.fill();
                     ctx.restore();
-                }
-
-                // 3. Mud Bubbles (Popping)
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-                for (let i = 0; i < 3; i++) {
-                    const seed = e.id + i * 13.3;
-                    const phase = (renderTime * 0.002 + seed) % (Math.PI * 2);
-                    const bPulse = Math.sin(phase);
-                    if (bPulse > 0) {
-                        const dist = getStableRandom(seed) * drawRadius * 0.6;
-                        const angle = getStableRandom(seed + 1) * Math.PI * 2;
-                        const bx = e.x + Math.cos(angle) * dist;
-                        const by = e.y + Math.sin(angle) * dist;
-                        const bSize = bPulse * 6;
-                        
-                        ctx.beginPath();
-                        ctx.arc(bx, by, bSize, 0, Math.PI * 2);
-                        ctx.fill();
-                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-                        ctx.stroke();
-                    }
-                }
-                
-                ctx.restore();
-            } else if (e.t === MATERIALS.CACTUS && ENABLE_PREMIUM_VISUALS) {
-                ctx.save();
-                const drawRadius = baseRadius;
-                
-                // 1. Shadow
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-                ctx.beginPath(); ctx.ellipse(e.x + 4, e.y + 4, drawRadius, drawRadius * 0.5, 0, 0, Math.PI * 2); ctx.fill();
-
-                // 2. Main Body (Prickly look)
-                ctx.fillStyle = '#2d4d2d';
-                ctx.beginPath();
-                ctx.roundRect(e.x - 8, e.y - drawRadius, 16, drawRadius * 2, 8);
-                ctx.fill();
-                
-                // Arms
-                ctx.beginPath();
-                ctx.roundRect(e.x - 18, e.y - 10, 10, 15, 5); // Left arm
-                ctx.roundRect(e.x + 8, e.y - 18, 10, 15, 5); // Right arm
-                ctx.fill();
-
-                // 3. Spines (Tiny glints)
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-                for(let i=0; i<6; i++) {
-                    const seed = e.id + i;
-                    ctx.fillRect(e.x + (getStableRandom(seed)-0.5)*20, e.y + (getStableRandom(seed+1)-0.5)*40, 1, 1);
-                }
-                ctx.restore();
-            } else if (e.t === MATERIALS.PALM && ENABLE_PREMIUM_VISUALS) {
-                ctx.save();
-                const drawRadius = baseRadius;
-                
-                // 1. Shadow
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-                ctx.beginPath(); ctx.ellipse(e.x + 8, e.y + 8, drawRadius * 1.2, drawRadius * 0.6, 0, 0, Math.PI * 2); ctx.fill();
-
-                // 2. Trunk (Segmented)
-                ctx.fillStyle = '#5d4037';
-                for(let i=0; i<3; i++) {
-                    ctx.beginPath();
-                    ctx.roundRect(e.x - 5, e.y + (i*8) - 10, 10, 8, 2);
-                    ctx.fill();
-                }
-
-                // 3. Leaves (Fronds)
-                const sway = Math.sin(renderTime * 0.002 + e.id) * 0.1;
-                ctx.fillStyle = '#2e7d32';
-                ctx.translate(e.x, e.y - 10);
-                for(let i=0; i<5; i++) {
-                    ctx.save();
-                    ctx.rotate((i * Math.PI * 2 / 5) + sway);
-                    ctx.beginPath();
-                    ctx.ellipse(20, 0, 25, 8, 0, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.restore();
-                }
-                ctx.restore();
-            } else if (e.t === MATERIALS.FIRE && ENABLE_PREMIUM_VISUALS && firePatterns.length > 0) {
-                ctx.save();
-                const drawRadius = baseRadius * pulse;
-                
-                // 1. Intense Heat Aura (Large radial glow)
-                const auraRad = drawRadius * 2.2;
-                const g = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, auraRad);
-                g.addColorStop(0, 'rgba(255, 100, 0, 0.4)');
-                g.addColorStop(0.4, 'rgba(255, 50, 0, 0.2)');
-                g.addColorStop(1, 'rgba(150, 0, 0, 0)');
-                ctx.fillStyle = g;
-                drawOrganicPath(ctx, e.x, e.y, auraRad, e.id);
-                ctx.fill();
-
-                // 2. Animated Hellfire Pattern
-                const p = firePatterns[e.id % 9];
-                const flowY = -(renderTime * 0.08) % FIRE_TILE_SIZE;
-                const matrix = new DOMMatrix().translate(0, flowY);
-                p.setTransform(matrix);
-                ctx.fillStyle = p;
-                
-                // Intense Pulsing Glow
-                ctx.shadowBlur = 25 + Math.sin(renderTime * 0.015) * 15;
-                ctx.shadowColor = '#ff6600';
-                drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
-                ctx.fill();
-                
-                // Soft Heat Glow (Orange-yellow center instead of white)
-                ctx.save();
-                ctx.shadowBlur = 10;
-                ctx.shadowColor = '#ffcc00';
-                ctx.fillStyle = 'rgba(255, 200, 0, 0.4)';
-                drawOrganicPath(ctx, e.x, e.y, drawRadius * 0.45, e.id + 1);
-                ctx.fill();
-                ctx.restore();
-
-                // 3. Rising Embers
-                if (renderTime % 12 < 1) {
-                    particles.push({
-                        x: e.x + (getStableRandom(renderTime) - 0.5) * e.w,
-                        y: e.y + (getStableRandom(renderTime + 1) - 0.5) * e.h,
-                        vx: (getStableRandom(renderTime + 2) - 0.5) * 1.5,
-                        vy: -1.5 - getStableRandom(renderTime + 3) * 2,
-                        life: 1.0,
-                        color: getStableRandom(renderTime + 4) > 0.5 ? '#ffcc00' : '#ff4400',
-                        size: 2 + getStableRandom(renderTime + 5) * 3,
-                        isEmber: true
-                    });
-                }
-                ctx.restore();
-            } else {
-                // UNIVERSAL FALLBACK FOR LIQUIDS & ORGANIC HAZARDS
-                // This ensures they NEVER appear as squares, even if premium visuals are off
-                if (e.t === MATERIALS.FIRE) {
-                    const g = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, baseRadius * 1.4);
-                    g.addColorStop(0, '#fff');
-                    g.addColorStop(0.2, '#ffcc00');
-                    g.addColorStop(0.5, '#ff6600');
-                    g.addColorStop(0.8, 'rgba(255, 30, 0, 0.8)');
-                    g.addColorStop(1, 'rgba(255, 0, 0, 0)');
-                    ctx.fillStyle = g;
-                    ctx.shadowBlur = 20;
-                    ctx.shadowColor = '#ff4400';
-                } else if (e.t === MATERIALS.OIL) {
-                    ctx.fillStyle = 'rgba(20, 20, 20, 0.95)';
-                } else if (e.t === MATERIALS.DIRT) {
-                    ctx.fillStyle = '#4d3a24';
-                } else if (e.t === MATERIALS.QUICKSAND) {
-                    ctx.fillStyle = '#2d1a04';
-                } else if (e.t === MATERIALS.CACTUS) {
-                    ctx.fillStyle = '#2d4d2d';
-                } else if (e.t === MATERIALS.PALM) {
-                    ctx.fillStyle = '#5d4037';
+                } else if (e.t === MATERIALS.QUICKSAND && ENABLE_PREMIUM_VISUALS) {
+                    const mudGrad = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, drawRadius * 1.2);
+                    mudGrad.addColorStop(0, '#3d2a14'); mudGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                    ctx.fillStyle = mudGrad; drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id); ctx.fill();
                 } else {
                     ctx.fillStyle = config.color;
+                    drawOrganicPath(ctx, e.x, e.y, baseRadius, e.id); ctx.fill();
                 }
-                
-                if (!isCloud) {
-                    drawOrganicPath(ctx, e.x, e.y, baseRadius, e.id);
-                    ctx.fill();
+            } else if (isCloud) {
+                if (e.t === MATERIALS.GAS && ENABLE_PREMIUM_VISUALS && gasPatterns.length > 0) {
+                    ctx.save();
+                    const drawRadius = e.w * 0.65;
+                    const p = gasPatterns[e.id % 9];
+                    const flowX = (renderTime * 0.008) % GAS_TILE_SIZE;
+                    p.setTransform(new DOMMatrix().translate(flowX, flowX * 0.2));
+                    ctx.fillStyle = p; ctx.globalAlpha = 0.5; ctx.shadowBlur = 40; ctx.shadowColor = 'rgba(150, 200, 0, 0.3)';
+                    drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id); ctx.fill();
+                    ctx.restore();
+                } else if (e.t === MATERIALS.STEAM) {
+                    ctx.save();
+                    const baseRadiusSteam = e.w * 0.45;
+                    ctx.globalAlpha = 0.7;
+                    for (let i = 0; i < 5; i++) {
+                        const seed = e.id + i * 137;
+                        const angle = (getStableRandom(seed) * Math.PI * 2) + (renderTime * 0.0004);
+                        const px = e.x + Math.cos(angle) * (baseRadiusSteam * 0.5);
+                        const py = e.y + Math.sin(angle) * (baseRadiusSteam * 0.5);
+                        ctx.fillStyle = 'rgba(240, 245, 255, 0.8)';
+                        drawOrganicPath(ctx, px, py, baseRadiusSteam, seed); ctx.fill();
+                    }
+                    ctx.restore();
                 }
-                ctx.shadowBlur = 0;
+            } else if (isProp) {
+                ctx.fillStyle = config.color;
+                if (e.t === MATERIALS.CACTUS) {
+                    ctx.beginPath(); ctx.roundRect(e.x-8, e.y-baseRadius, 16, baseRadius*2, 8); ctx.fill();
+                } else if (e.t === MATERIALS.PALM) {
+                    ctx.fillStyle = '#5d4037'; ctx.fillRect(e.x-5, e.y-10, 10, 20);
+                }
             }
-        } else if (!hasSpecialRendering) {
-            // Buildings and other solid objects (fallback for non-liquid, non-special)
-            ctx.fillStyle = config.color;
-            ctx.fillRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h);
-        }
-    }
-
-        // Gas clouds (Toxic Organic Clouds V4 - Mustard Gas Theme)
-        if (e.t === MATERIALS.GAS && ENABLE_PREMIUM_VISUALS && gasPatterns.length > 0) {
-            ctx.save();
-            const drawRadius = e.w * 0.65;
-            
-            // 1. Base Atmospheric Glow (More yellowish)
-            const gGrad = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, drawRadius * 1.5);
-            gGrad.addColorStop(0, 'rgba(212, 255, 0, 0.08)');
-            gGrad.addColorStop(0.7, 'rgba(180, 220, 0, 0.04)');
-            gGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-            ctx.fillStyle = gGrad;
-            drawOrganicPath(ctx, e.x, e.y, drawRadius * 1.2, e.id);
-            ctx.fill();
-
-            // 2. Swirling Smoke Pattern (Wispy & Flowing)
-            const p = gasPatterns[e.id % 9];
-            if (p) {
-                ctx.save();
-                ctx.globalAlpha = 0.5;
-                const flowX = (renderTime * 0.008) % GAS_TILE_SIZE;
-                const matrix = new DOMMatrix().translate(flowX, flowX * 0.2);
-                p.setTransform(matrix);
-                ctx.fillStyle = p;
-                
-                // Extremely soft edges
-                ctx.shadowBlur = 60;
-                ctx.shadowColor = 'rgba(212, 255, 0, 0.15)';
-                drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
-                ctx.fill();
-
-                // 3. Secondary Drifting Layer (Volume)
-                ctx.globalAlpha = 0.25;
-                const matrix2 = new DOMMatrix().translate(-flowX * 0.6, flowX * 0.1);
-                p.setTransform(matrix2);
-                drawOrganicPath(ctx, e.x + Math.sin(renderTime * 0.0008) * 30, e.y, drawRadius * 0.95, e.id + 5);
-                ctx.fill();
-
-                ctx.restore();
-            }
-            ctx.restore();
-        }
-
-        // Steam clouds (Graphic volumetric puffs)
-        if (e.t === MATERIALS.STEAM) {
-            ctx.save();
-            const baseRadius = e.w * 0.45;
-            const p = (steamPatterns && steamPatterns.length > 0) ? steamPatterns[e.id % 9] : null;
-            
-            // Higher global opacity for visibility
-            ctx.globalAlpha = ENABLE_PREMIUM_VISUALS ? 0.7 : 0.85;
-            
-            // Draw overlapping puffs to create a "cloud" look
-            for (let i = 0; i < 7; i++) {
-                const seed = e.id + i * 137;
-                const offsetDist = baseRadius * 0.7;
-                const angle = (getStableRandom(seed) * Math.PI * 2) + (renderTime * 0.0004);
-                const px = e.x + Math.cos(angle) * offsetDist;
-                const py = e.y + Math.sin(angle) * offsetDist;
-                const pRadius = baseRadius * (1.0 + getStableRandom(seed + 1) * 0.7);
-                
-                ctx.save();
-                if (p && ENABLE_PREMIUM_VISUALS) {
-                    const flowX = (renderTime * 0.004 + i * 20) % STEAM_TILE_SIZE;
-                    const matrix = new DOMMatrix().translate(flowX, -flowX * 0.15);
-                    p.setTransform(matrix);
-                    ctx.fillStyle = p;
-                    ctx.shadowBlur = 30;
-                    ctx.shadowColor = 'rgba(255, 255, 255, 0.5)';
-                } else {
-                    ctx.fillStyle = 'rgba(240, 245, 255, 0.8)';
-                }
-                
-                // Draw volumetric puff
-                drawOrganicPath(ctx, px, py, pRadius, seed);
-                ctx.fill();
-                
-                // Add a brighter inner "core" for graphic pop
-                if (ENABLE_PREMIUM_VISUALS) {
-                    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-                    ctx.beginPath();
-                    ctx.arc(px, py, pRadius * 0.5, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-                
-                ctx.restore();
-            }
-            ctx.restore();
         }
         ctx.restore(); // Final balance for ctx.save() at top of forEach
     });

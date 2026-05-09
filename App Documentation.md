@@ -336,3 +336,27 @@ To transition from a learning project to a **marketable product**, the following
     2. Reduced environmental stun duration from **2.0s** to **1.2s**.
     3. Added a `stunImmunity` grace period for all hits to prevent instant restun from overlapping hazards.
 - **Verification**: Verified that small puddles disappear on hit and large ones grant enough immunity to exit.
+
+#### **Urban Stabilization & Aesthetic Finalization**
+- **Date**: 2026-05-09 (15:36 - 17:14)
+- **Issue**: A series of regressions occurred during the "Urban" aesthetic upgrade, including a crash (`ReferenceError: currentBiome is not defined`) and lost biome details (pipes, snow, sparks).
+- **Root Cause**:
+    1. `drawZones` attempted to access `currentBiome` without local definition.
+    2. Large-scale refactoring of `drawElements` accidentally truncated biome-specific branches (Industrial pipes, Tundra snow, Wasteland ruins).
+    3. Brace imbalance in the main rendering loop led to a `SyntaxError` on load.
+- **Fix (The "Surgical Recovery" Update)**:
+    1. **ReferenceError Fix**: Defined `currentBiome` at the top of `drawZones` (sourced from `gameState.zones[0]`).
+    2. **BUILDING Block Refactor**: Rebuilt the building rendering from scratch to be "Omni-Biome" aware. It now correctly layers:
+        - **Industrial**: Vertical pipes, rivets, cooling fins, and rotating fans (all clipped).
+        - **Urban**: Flicker-seeded neon windows with variable colors.
+        - **Wasteland**: Smoke from roof units and sign sparks.
+        - **Tundra**: Layered snow caps and spots.
+    3. **Hazard Logic Restoration**: Re-integrated the high-fidelity rendering paths for **Acid**, **Fire**, **Oil**, **Gas**, **Steam**, and **Ice** into the `drawElements` loop, ensuring they are correctly reachable.
+- **New Feature: Crosshair V2**:
+    - Upgraded the crosshair to change color dynamically based on the active weapon (`me.w`).
+    - Added a pulsing neon glow and a rotating dashed outer ring for a premium feel.
+    - Synchronized with `gameState` for zero-latency visual feedback.
+- **Verification**: All syntax validated with `node -c`. Rendering stability confirmed across all biomes.
+
+---
+

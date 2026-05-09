@@ -273,13 +273,12 @@ class Lobby {
             playerData[username] = { kills: 0, deaths: 0, scrap: 0, lastSeen: Date.now() };
         }
 
-        const body = Bodies.rectangle(startPos.x, startPos.y, TANK_WIDTH - 2, TANK_HEIGHT - 2, {
+        const body = Bodies.circle(startPos.x, startPos.y, 20, {
             frictionAir: config.speed > 0.005 ? 0.1 : 0.2,
             mass: config.mass,
             label: `tank-${socket.id}`,
-            chamfer: { radius: 12 }, // Rounded corners prevent sticking and overlapping
-            friction: 0.1,
-            restitution: 0.2
+            friction: 0.02, // Lower friction to slide better on walls
+            restitution: 0.1
         });
         
         if (team === 'pink') Body.setAngle(body, Math.PI);
@@ -334,13 +333,12 @@ class Lobby {
         
         const config = CHASSIS[chassisType];
         
-        const body = Bodies.rectangle(startPos.x, startPos.y, TANK_WIDTH - 2, TANK_HEIGHT - 2, {
-            frictionAir: config.speed > 0.005 ? 0.1 : 0.2,
-            mass: config.mass,
-            label: `tank-${id}`,
-            chamfer: { radius: 12 },
-            friction: 0.1,
-            restitution: 0.2
+        const body = Bodies.circle(startPos.x, startPos.y, 20, {
+            frictionAir: config.frictionAir || 0.15,
+            friction: 0.02, // Lower friction to slide better on walls
+            restitution: 0.1,
+            density: 1,
+            label: `tank-${id}`
         });
         
         if (team === 'pink' && !pos) Body.setAngle(body, Math.PI);
@@ -2115,6 +2113,7 @@ io.on('connection', (socket) => {
             lobbies[id] = bestLobby;
         }
         bestLobby.addPlayer(socket, username, chassisType);
+        bestLobby.players[socket.id].ready = true; // Auto-ready for Quick Match players
         socket.join(bestLobby.id);
         socket.lobbyId = bestLobby.id;
         if (bestLobby.active) socket.emit('game-started');
