@@ -2400,35 +2400,75 @@ function drawGrid() {
         // Nuclear Wasteland Base (Scorched Earth)
         ctx.fillStyle = '#1c120d'; 
         ctx.fillRect(0, 0, worldSize, worldSize);
-
+ 
         if (ENABLE_PREMIUM_VISUALS) {
             if (groundDetails.length === 0) {
-                for (let i = 0; i < 800; i++) {
+                for (let i = 0; i < 1000; i++) {
                     const r = Math.random();
                     groundDetails.push({
                         x: Math.random() * worldSize,
                         y: Math.random() * worldSize,
-                        size: r < 0.1 ? 20 + Math.random() * 40 : (r < 0.3 ? 8 + Math.random() * 15 : 2 + Math.random() * 6),
+                        size: r < 0.05 ? 40 + Math.random() * 60 : (r < 0.1 ? 25 + Math.random() * 40 : (r < 0.2 ? 10 + Math.random() * 20 : (r < 0.4 ? 6 + Math.random() * 12 : 2 + Math.random() * 6))),
                         opacity: 0.05 + Math.random() * 0.15,
-                        type: r < 0.1 ? 'rubble' : (r < 0.25 ? 'heatcrack' : 'ash'),
-                        color: Math.random() > 0.5 ? '#2d1b0f' : '#1a0e08'
+                        type: r < 0.05 ? 'crater' : (r < 0.1 ? 'stain' : (r < 0.2 ? 'slab' : (r < 0.4 ? 'stone' : (r < 0.6 ? 'heatcrack' : 'ash')))),
+                        color: r < 0.1 ? (Math.random() > 0.5 ? '#ffff00' : '#88ff00') : (r < 0.4 ? (Math.random() > 0.5 ? '#333' : '#444') : (Math.random() > 0.5 ? '#2d1b0f' : '#1a0e08')),
+                        phase: Math.random() * Math.PI * 2
                     });
                 }
             }
-
+ 
             ctx.save();
             groundDetails.forEach(d => {
-                if (d.x < camera.x - 100 || d.x > camera.x + canvas.width + 100 || d.y < camera.y - 100 || d.y > camera.y + canvas.height + 100) return;
+                if (d.x < camera.x - 150 || d.x > camera.x + canvas.width + 150 || d.y < camera.y - 150 || d.y > camera.y + canvas.height + 150) return;
                 
                 if (d.type === 'heatcrack') {
-                    // Glowing heat cracks
-                    ctx.strokeStyle = '#ff4400'; ctx.lineWidth = 1;
-                    ctx.globalAlpha = d.opacity * 0.3;
+                    // Glowing heat cracks (Pulsing)
+                    const pulse = 0.5 + Math.sin(renderTime * 0.002 + d.phase) * 0.5;
+                    ctx.strokeStyle = `rgba(255, 68, 0, ${d.opacity * (0.2 + pulse * 0.4)})`; 
+                    ctx.lineWidth = 1 + pulse;
                     ctx.beginPath();
                     ctx.moveTo(d.x - d.size, d.y);
                     ctx.lineTo(d.x, d.y + d.size/2);
                     ctx.lineTo(d.x + d.size, d.y - d.size/4);
                     ctx.stroke();
+                } else if (d.type === 'crater') {
+                    // Scorched impact craters
+                    const g = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, d.size);
+                    g.addColorStop(0, 'rgba(0,0,0,0.4)');
+                    g.addColorStop(0.7, 'rgba(20,10,5,0.2)');
+                    g.addColorStop(1, 'rgba(0,0,0,0)');
+                    ctx.fillStyle = g;
+                    ctx.beginPath(); ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2); ctx.fill();
+                    // Rim
+                    ctx.strokeStyle = 'rgba(40,20,10,0.1)'; ctx.lineWidth = 2;
+                    ctx.beginPath(); ctx.arc(d.x, d.y, d.size * 0.9, 0, Math.PI * 2); ctx.stroke();
+                } else if (d.type === 'stain') {
+                    // Radioactive stains (Green/Yellow glow)
+                    const pulse = 0.7 + Math.sin(renderTime * 0.001 + d.phase) * 0.3;
+                    const g = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, d.size);
+                    g.addColorStop(0, `${d.color}${Math.floor(d.opacity * 200).toString(16).padStart(2,'0')}`);
+                    g.addColorStop(1, 'rgba(0,0,0,0)');
+                    ctx.fillStyle = g; ctx.globalAlpha = d.opacity * pulse;
+                    ctx.beginPath(); ctx.ellipse(d.x, d.y, d.size, d.size * 0.6, d.phase, 0, Math.PI * 2); ctx.fill();
+                    ctx.globalAlpha = 1.0;
+                } else if (d.type === 'slab') {
+                    // Broken building parts (Square/Rectangular)
+                    ctx.save();
+                    ctx.translate(d.x, d.y); ctx.rotate(d.phase);
+                    ctx.fillStyle = d.color; ctx.globalAlpha = d.opacity * 2;
+                    ctx.fillRect(-d.size/2, -d.size/2, d.size, d.size * 0.7);
+                    // Detail line on slab
+                    ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 1;
+                    ctx.beginPath(); ctx.moveTo(-d.size/2, 0); ctx.lineTo(d.size/2, 0); ctx.stroke();
+                    ctx.restore();
+                } else if (d.type === 'stone') {
+                    // Jagged stones
+                    ctx.fillStyle = d.color; ctx.globalAlpha = d.opacity * 2.5;
+                    ctx.beginPath();
+                    ctx.moveTo(d.x, d.y - d.size/2);
+                    ctx.lineTo(d.x + d.size/2, d.y + d.size/4);
+                    ctx.lineTo(d.x - d.size/3, d.y + d.size/2);
+                    ctx.closePath(); ctx.fill();
                 } else if (d.type === 'rubble') {
                     // Scorched debris
                     ctx.fillStyle = '#0a0806'; ctx.globalAlpha = d.opacity * 2;
@@ -2437,22 +2477,43 @@ function drawGrid() {
                     ctx.lineTo(d.x + d.size/2, d.y + d.size/2);
                     ctx.lineTo(d.x - d.size/2, d.y + d.size/2);
                     ctx.closePath(); ctx.fill();
+                    ctx.globalAlpha = 1.0;
                 } else {
                     // Ash/Dust
                     ctx.fillStyle = d.color; ctx.globalAlpha = d.opacity;
                     ctx.beginPath(); ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2); ctx.fill();
+                    ctx.globalAlpha = 1.0;
                 }
             });
             ctx.restore();
 
-            // Atmospheric Heat Distortion (Subtle)
+            // 2. Toxic Sky Glow (Distant flashes)
+            if (Math.random() > 0.992) {
+                ctx.save();
+                ctx.globalAlpha = 0.08;
+                ctx.fillStyle = Math.random() > 0.7 ? '#88ff00' : '#ff8800';
+                ctx.fillRect(camera.x, camera.y, canvas.width, canvas.height);
+                ctx.restore();
+            }
+ 
+            // 3. Nuclear Fog (Depth & Atmosphere)
+            ctx.save();
+            ctx.globalCompositeOperation = 'multiply';
+            const fogGrad = ctx.createLinearGradient(camera.x, camera.y, camera.x, camera.y + canvas.height);
+            fogGrad.addColorStop(0, 'rgba(50, 30, 20, 0)');
+            fogGrad.addColorStop(1, 'rgba(20, 10, 5, 0.2)');
+            ctx.fillStyle = fogGrad;
+            ctx.fillRect(camera.x, camera.y, canvas.width, canvas.height);
+            ctx.restore();
+ 
+            // 4. Atmospheric Heat Distortion
             ctx.save();
             ctx.globalCompositeOperation = 'screen';
-            ctx.fillStyle = 'rgba(255, 68, 0, 0.02)';
+            ctx.fillStyle = 'rgba(255, 68, 0, 0.01)';
             for (let i = 0; i < 2; i++) {
-                const cx = ((renderTime * 0.2) + (i * worldSize/2)) % worldSize;
-                const cy = ((renderTime * 0.1) + (i * worldSize/3)) % worldSize;
-                ctx.beginPath(); ctx.arc(cx, cy, 600, 0, Math.PI * 2); ctx.fill();
+                const cx = ((renderTime * 0.15) + (i * worldSize/2)) % worldSize;
+                const cy = ((renderTime * 0.08) + (i * worldSize/3)) % worldSize;
+                ctx.beginPath(); ctx.arc(cx, cy, 800, 0, Math.PI * 2); ctx.fill();
             }
             ctx.restore();
         }
@@ -3067,16 +3128,86 @@ function drawElements() {
             ctx.lineWidth = 2;
             
             ctx.beginPath();
-            if (isIndustrial && e.sh === 'circle') ctx.ellipse(e.x, e.y, e.w/2, e.h/2, 0, 0, Math.PI * 2);
-            else ctx.roundRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h, 4);
+            if (e.sh === 'circle') {
+                if (isWasteland) {
+                    // Broken Silo/Circle
+                    ctx.beginPath();
+                    for (let i = 0; i < 16; i++) {
+                        const angle = (i / 16) * Math.PI * 2;
+                        const dist = (e.w/2) * (0.95 + getStableRandom(e.id + i) * 0.1);
+                        if (i === 0) ctx.moveTo(e.x + Math.cos(angle) * dist, e.y + Math.sin(angle) * dist);
+                        else ctx.lineTo(e.x + Math.cos(angle) * dist, e.y + Math.sin(angle) * dist);
+                    }
+                    ctx.closePath();
+                } else {
+                    ctx.beginPath(); ctx.ellipse(e.x, e.y, e.w/2, e.h/2, 0, 0, Math.PI * 2);
+                }
+            } else if (isWasteland) {
+                // Jagged Broken Building Shape
+                const seed = e.id;
+                ctx.moveTo(e.x - e.w/2, e.y - e.h/2);
+                // Top edge (sometimes broken)
+                if (getStableRandom(seed) > 0.3) {
+                    ctx.lineTo(e.x - e.w/4, e.y - e.h/2 + 5);
+                    ctx.lineTo(e.x, e.y - e.h/2 - 2);
+                }
+                ctx.lineTo(e.x + e.w/2, e.y - e.h/2);
+                // Right edge (chunk missing)
+                if (getStableRandom(seed + 1) > 0.5) {
+                    ctx.lineTo(e.x + e.w/2 - 5, e.y);
+                }
+                ctx.lineTo(e.x + e.w/2, e.y + e.h/2);
+                ctx.lineTo(e.x - e.w/2, e.y + e.h/2);
+                // Left edge (damaged)
+                if (getStableRandom(seed + 2) > 0.6) {
+                    ctx.lineTo(e.x - e.w/2 + 8, e.y + 10);
+                }
+                ctx.closePath();
+            } else {
+                ctx.roundRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h, 4);
+            }
             ctx.fill();
             ctx.stroke();
+
+            // Internal Fire Glow (Wasteland)
+            if (isWasteland && ENABLE_PREMIUM_VISUALS) {
+                const firePulse = 0.4 + Math.sin(renderTime * 0.003 + e.id) * 0.3;
+                const fg = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, e.w * 0.7);
+                fg.addColorStop(0, `rgba(255, 100, 0, ${firePulse * 0.3})`);
+                fg.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.fillStyle = fg;
+                ctx.fill(); // Fill the same path again with glow
+            }
 
             // 3. Interior Details (Clipped)
             ctx.save();
             ctx.beginPath();
-            if (isIndustrial && e.sh === 'circle') ctx.ellipse(e.x, e.y, e.w/2, e.h/2, 0, 0, Math.PI * 2);
-            else ctx.roundRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h, 4);
+            if (e.sh === 'circle') {
+                if (isWasteland) {
+                    for (let i = 0; i < 16; i++) {
+                        const angle = (i / 16) * Math.PI * 2;
+                        const dist = (e.w/2) * (0.95 + getStableRandom(e.id + i) * 0.1);
+                        if (i === 0) ctx.moveTo(e.x + Math.cos(angle) * dist, e.y + Math.sin(angle) * dist);
+                        else ctx.lineTo(e.x + Math.cos(angle) * dist, e.y + Math.sin(angle) * dist);
+                    }
+                    ctx.closePath();
+                } else {
+                    ctx.ellipse(e.x, e.y, e.w/2, e.h/2, 0, 0, Math.PI * 2);
+                }
+            } else if (isWasteland) {
+                // Same jagged path for clipping
+                const seed = e.id;
+                ctx.moveTo(e.x - e.w/2, e.y - e.h/2);
+                if (getStableRandom(seed) > 0.3) { ctx.lineTo(e.x - e.w/4, e.y - e.h/2 + 5); ctx.lineTo(e.x, e.y - e.h/2 - 2); }
+                ctx.lineTo(e.x + e.w/2, e.y - e.h/2);
+                if (getStableRandom(seed + 1) > 0.5) { ctx.lineTo(e.x + e.w/2 - 5, e.y); }
+                ctx.lineTo(e.x + e.w/2, e.y + e.h/2);
+                ctx.lineTo(e.x - e.w/2, e.y + e.h/2);
+                if (getStableRandom(seed + 2) > 0.6) { ctx.lineTo(e.x - e.w/2 + 8, e.y + 10); }
+                ctx.closePath();
+            } else {
+                ctx.roundRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h, 4);
+            }
             ctx.clip();
 
             // A. Industrial Interior (Pipes, Rivets, Cooling Fins)
@@ -3188,6 +3319,37 @@ function drawElements() {
                 ctx.fillStyle = '#555';
                 for (let py = -e.h/2 + 20; py < e.h/2 - 10; py += 30) {
                     ctx.beginPath(); ctx.arc(e.x - e.w/2 - 2, e.y + py, 2, 0, Math.PI * 2); ctx.fill();
+                }
+
+                // 4. Exposed Rebar (Bent metal rods)
+                ctx.strokeStyle = '#444'; ctx.lineWidth = 1.5;
+                for (let i = 0; i < 2; i++) {
+                    const seed = e.id + i * 50;
+                    if (getStableRandom(seed) > 0.5) {
+                        const rx = e.x + (i === 0 ? -e.w/2 : e.w/2);
+                        const ry = e.y - e.h/2 + 15;
+                        ctx.beginPath();
+                        ctx.moveTo(rx, ry);
+                        ctx.quadraticCurveTo(rx + (i === 0 ? -10 : 10), ry - 10, rx + (i === 0 ? -5 : 5), ry - 20);
+                        ctx.stroke();
+                    }
+                }
+
+                // 5. Flickering Scrap Sign
+                if (e.w > 50 && e.id % 4 === 0) {
+                    const flick = Math.random() > 0.9 ? 0 : (0.4 + Math.sin(renderTime * 0.01 + e.id) * 0.3);
+                    if (flick > 0) {
+                        ctx.save();
+                        ctx.translate(e.x, e.y - e.h/4);
+                        ctx.fillStyle = '#222'; ctx.fillRect(-15, -8, 30, 16); 
+                        ctx.strokeStyle = '#444'; ctx.lineWidth = 1; ctx.strokeRect(-15, -8, 30, 16);
+                        ctx.fillStyle = `rgba(255, 100, 0, ${flick})`;
+                        ctx.shadowBlur = 10 * flick; ctx.shadowColor = '#ff6600';
+                        ctx.font = 'bold 8px Courier';
+                        ctx.textAlign = 'center';
+                        ctx.fillText('HOT', 0, 3);
+                        ctx.restore();
+                    }
                 }
             }
 
@@ -4058,17 +4220,17 @@ function updateAtmosphere(dt) {
     });
 
     // Ash Particles (Embers) for Wasteland
-    if (currentBiome === 'WASTELAND' && ashParticles.length < 40) {
-        if (Math.random() > 0.9) {
+    if (currentBiome === 'WASTELAND' && ashParticles.length < 60) {
+        if (Math.random() > 0.85) {
             ashParticles.push({
                 x: Math.random() * worldSize,
                 y: worldSize + 50,
-                vx: (Math.random() - 0.5) * 2 + (1.5 * windIntensity),
-                vy: -Math.random() * 3 - 2,
-                size: 2 + Math.random() * 3,
+                vx: (Math.random() - 0.5) * 2 + (2.5 * windIntensity),
+                vy: -Math.random() * 4 - 3,
+                size: 1.5 + Math.random() * 4,
                 life: 1.0,
                 rotation: Math.random() * Math.PI * 2,
-                rotVel: (Math.random() - 0.5) * 0.2
+                rotVel: (Math.random() - 0.5) * 0.4
             });
         }
     }
@@ -4095,19 +4257,19 @@ function updateEnvironmentalObjects(dt) {
     const currentBiome = gameState.zones && gameState.zones[0] ? gameState.zones[0].type : 'RANDOM';
     const worldSize = gameState.worldSize || 4000;
 
-    if (currentBiome === 'WASTELAND' && environmentalObjects.length < 15) {
-        if (Math.random() > 0.98) {
-            const type = Math.random() > 0.3 ? 'tumbleweed' : 'debris';
+    if (currentBiome === 'WASTELAND' && environmentalObjects.length < 20) {
+        if (Math.random() > 0.97) {
+            const type = Math.random() > 0.4 ? 'tumbleweed' : 'debris';
             environmentalObjects.push({
                 x: -100,
                 y: Math.random() * worldSize,
-                size: type === 'tumbleweed' ? 10 + Math.random() * 15 : 5 + Math.random() * 10,
-                vx: (3 + Math.random() * 5) * windIntensity,
-                vy: (Math.random() - 0.5) * 2,
+                size: type === 'tumbleweed' ? 12 + Math.random() * 18 : 6 + Math.random() * 12,
+                vx: (4 + Math.random() * 6) * windIntensity,
+                vy: (Math.random() - 0.5) * 3,
                 angle: Math.random() * Math.PI * 2,
-                rotationSpeed: 0.1 + Math.random() * 0.2,
+                rotationSpeed: 0.15 + Math.random() * 0.3,
                 type: type,
-                color: type === 'debris' ? (Math.random() > 0.5 ? '#666' : '#8b4513') : '#3a2a1a'
+                color: type === 'debris' ? (Math.random() > 0.5 ? '#555' : '#704214') : '#2d1b0f'
             });
         }
     }
@@ -4227,10 +4389,17 @@ function drawAtmosphere() {
             ctx.translate(p.x, p.y);
             ctx.rotate(p.rotation);
             ctx.globalAlpha = p.life;
-            ctx.fillStyle = '#ff6600';
-            ctx.shadowBlur = 5;
-            ctx.shadowColor = '#ff3300';
+            const isGlow = p.size > 2.5;
+            ctx.fillStyle = isGlow ? '#ff8800' : '#333';
+            ctx.shadowBlur = isGlow ? 12 : 0;
+            ctx.shadowColor = '#ff4400';
             ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size);
+            // Inner hot core
+            if (isGlow && p.life > 0.5) {
+                ctx.fillStyle = '#fff';
+                ctx.globalAlpha = p.life * 0.5;
+                ctx.fillRect(-p.size/4, -p.size/4, p.size/2, p.size/2);
+            }
             ctx.restore();
         }
     });

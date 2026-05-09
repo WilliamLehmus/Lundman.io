@@ -178,9 +178,37 @@ export class MapGenerator {
     }
 
     generateCityBlock(bx, by, size) {
-        const bw = size * (0.6 + Math.random() * 0.3);
-        const bh = size * (0.6 + Math.random() * 0.3);
-        this.lobby.spawnBuilding({ x: bx + size/2, y: by + size/2 }, bw, bh);
+        const mapType = this.lobby.mapType;
+        const randShape = Math.random();
+        
+        // 1. Chance for Circular Buildings in specific biomes
+        if (randShape < 0.15 && (mapType === 'WASTELAND' || mapType === 'INDUSTRIAL')) {
+            const diam = size * (0.5 + Math.random() * 0.3);
+            this.lobby.spawnBuilding({ x: bx + size/2, y: by + size/2 }, diam, diam, 'circle');
+        } 
+        else if (randShape < 0.6) {
+            // Standard Rectangle
+            const bw = size * (0.6 + Math.random() * 0.3);
+            const bh = size * (0.6 + Math.random() * 0.3);
+            this.lobby.spawnBuilding({ x: bx + size/2, y: by + size/2 }, bw, bh);
+        } else if (randShape < 0.85) {
+            // L-Shape Building (2 Overlapping Rects)
+            const bw1 = size * (0.6 + Math.random() * 0.2);
+            const bh1 = size * (0.3 + Math.random() * 0.2);
+            const bw2 = size * (0.3 + Math.random() * 0.2);
+            const bh2 = size * (0.6 + Math.random() * 0.2);
+            
+            this.lobby.spawnBuilding({ x: bx + size/2, y: by + size/2 - bh1/4 }, bw1, bh1);
+            this.lobby.spawnBuilding({ x: bx + size/2 - bw1/2 + bw2/2, y: by + size/2 + bh2/4 }, bw2, bh2);
+        } else {
+            // T-Shape or Plus Shape
+            const bw1 = size * (0.7 + Math.random() * 0.2);
+            const bh1 = size * (0.3 + Math.random() * 0.15);
+            const bw2 = size * (0.3 + Math.random() * 0.15);
+            const bh2 = size * (0.7 + Math.random() * 0.2);
+            this.lobby.spawnBuilding({ x: bx + size/2, y: by + size/2 }, bw1, bh1);
+            this.lobby.spawnBuilding({ x: bx + size/2, y: by + size/2 }, bw2, bh2);
+        }
         const propCount = 1 + Math.floor(Math.random() * 2);
         for (let i = 0; i < propCount; i++) {
             const pos = { x: bx + Math.random() * size, y: by + Math.random() * size };

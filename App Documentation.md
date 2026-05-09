@@ -389,3 +389,14 @@ To transition from a learning project to a **marketable product**, the following
 +- **Verification**: Validated syntax and verified that the urban road markings render correctly without crashing.
 
 
+#### **Wasteland "Scorched Earth" Visual Overhaul**
+- **Date**: 2026-05-09
+- **Goal**: Elevate the Wasteland biome to "True Premium" standards with more depth and atmosphere.
+- **Features Added**:
+    1.  **Scorched Earth**: Added large impact craters and radioactive "stains" (green/yellow glows) to the ground.
+    2.  **Toxic Sky Glow**: Occasional distant flashes of orange/green light to simulate toxic storms.
+    3.  **Nuclear Fog**: Layered, low-hanging brown/orange fog for depth.
+    4.  **Ruined Architecture**: Buildings now feature jagged, procedurally broken shapes, internal fire glows, exposed rebar, and flickering "HOT" scrap signs.
+    5.  **Varied Footprints**: Implemented L-shaped, T-shaped, and Plus-shaped building complexes for organic, non-grid layouts.
+    6.  **Glowing Embers**: Upgraded ash particles into high-fidelity glowing coals with inner white-hot cores.
+- **Technical Note**: Fixed a critical brace imbalance in the biome rendering loop and updated the `MapGenerator` to support procedural composite building shapes.
