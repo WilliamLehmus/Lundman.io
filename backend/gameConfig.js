@@ -14,7 +14,8 @@ export const MATERIALS = {
     BARREL_EXPLOSIVE: 'barrel_explosive',
     BARREL_OIL: 'barrel_oil',
     CRATE: 'crate',
-    DRONE: 'drone'
+    DRONE: 'drone',
+    QUICKSAND: 'quicksand'
 };
 
 export const MATERIAL_PROPERTIES = {
@@ -32,7 +33,8 @@ export const MATERIAL_PROPERTIES = {
     [MATERIALS.BARREL_EXPLOSIVE]: { w: 35, h: 45, color: '#ff4444', hp: 20 },
     [MATERIALS.BARREL_OIL]: { w: 35, h: 45, color: '#ffcc00', hp: 20 },
     [MATERIALS.CRATE]: { w: 45, h: 45, color: '#8b4513', hp: 30 },
-    [MATERIALS.DRONE]: { w: 40, h: 40, color: '#00f2ff', hp: 150 }
+    [MATERIALS.DRONE]: { w: 40, h: 40, color: '#00f2ff', hp: 150 },
+    [MATERIALS.QUICKSAND]: { w: 140, h: 140, color: '#4d3a24', name: 'Quicksand' }
 };
 
 export const BIOMES = {

@@ -298,7 +298,7 @@ class Lobby {
             scrap: 0,
             kills: 0,
             deaths: 0,
-            statusEffects: { stun: 0, slip: 0, slow: 0, burn: 0, wet: 0, stunImmunity: 0, revealed: 0 },
+            statusEffects: { stun: 0, slip: 0, slow: 0, burn: 0, wet: 0, stunImmunity: 0, revealed: 0, quicksand: 0, trapImmunity: 0 },
             inputs: { up: false, down: false, left: false, right: false, shoot: false, aimAngle: 0 },
             lastInputSeq: 0,
             lastBuffLevel: 0,
@@ -358,7 +358,7 @@ class Lobby {
             scrap: 0,
             kills: 0,
             deaths: 0,
-            statusEffects: { stun: 0, slip: 0, slow: 0, burn: 0, wet: 0, stunImmunity: 0, revealed: 0 },
+            statusEffects: { stun: 0, slip: 0, slow: 0, burn: 0, wet: 0, stunImmunity: 0, revealed: 0, quicksand: 0, trapImmunity: 0 },
             inputs: { up: false, down: false, left: false, right: false, shoot: false, aimAngle: 0 },
             lastInputSeq: 0,
             isBot: true,
@@ -781,6 +781,30 @@ class Lobby {
                 const isAcidVSWater = (bulletData.type === MATERIALS.ACID && element.type === MATERIALS.WATER) || 
                                      (bulletData.type === MATERIALS.WATER && element.type === MATERIALS.ACID);
                 const isFireVSAcid = (bulletData.type === MATERIALS.FIRE && element.type === MATERIALS.ACID);
+                const isWaterVSDirt = (bulletData.type === MATERIALS.WATER && element.type === MATERIALS.DIRT);
+
+                if (isWaterVSDirt) {
+                    const dirt = element;
+                    dirt.type = MATERIALS.QUICKSAND;
+                    dirt.hp = 200;
+                    dirt.originalType = MATERIALS.DIRT;
+                    dirt.expiresAt = Date.now() + 15000;
+                    
+                    // RECREATE BODY to force physics engine to clear state
+                    const oldPos = { x: dirt.body.position.x, y: dirt.body.position.y };
+                    Composite.remove(this.engine.world, dirt.body);
+                    dirt.body = Bodies.rectangle(oldPos.x, oldPos.y, dirt.w, dirt.h, {
+                        label: 'element',
+                        isStatic: true,
+                        isSensor: true,
+                        collisionFilter: { category: 0, mask: 0 }
+                    });
+                    dirt.body.elementId = dirt.id;
+                    Composite.add(this.engine.world, dirt.body);
+                    
+                    this.destroyBullet(bullet.id);
+                    return;
+                }
 
                 if (isFireVSOil) {
                     // TRANSFORM Oil into Fire instead of destroy/create
@@ -829,6 +853,7 @@ class Lobby {
                     this.destroyBullet(bullet.id);
                     return;
                 }
+
 
                 if (isFireVSAcid) {
                     // Fire + Acid = GAS cloud (Area denial)
@@ -954,6 +979,28 @@ class Lobby {
                 this.destroyElement(elementB.id);
                 this.spawnElement(pos, MATERIALS.GAS, 6000, null, fire.ownerId, w * 1.5, h * 1.5);
             }
+
+            // Water vs Dirt Alchemy
+            if ((elementA.type === MATERIALS.WATER && elementB.type === MATERIALS.DIRT) ||
+                (elementB.type === MATERIALS.WATER && elementA.type === MATERIALS.DIRT)) {
+                const dirt = elementA.type === MATERIALS.DIRT ? elementA : elementB;
+                dirt.type = MATERIALS.QUICKSAND;
+                dirt.hp = 200;
+                dirt.originalType = MATERIALS.DIRT;
+                dirt.expiresAt = Date.now() + 15000;
+                
+                // RECREATE BODY
+                const oldPos = { x: dirt.body.position.x, y: dirt.body.position.y };
+                Composite.remove(this.engine.world, dirt.body);
+                dirt.body = Bodies.rectangle(oldPos.x, oldPos.y, dirt.w, dirt.h, {
+                    label: 'element',
+                    isStatic: true,
+                    isSensor: true,
+                    collisionFilter: { category: 0, mask: 0 }
+                });
+                dirt.body.elementId = dirt.id;
+                Composite.add(this.engine.world, dirt.body);
+            }
         }
 
         const tankBody = bodyA.label.startsWith('tank-') ? bodyA : (bodyB.label.startsWith('tank-') ? bodyB : null);
@@ -987,6 +1034,14 @@ class Lobby {
                             // Give small immunity to prevent instant restun from overlapping hazards
                             p.statusEffects.stunImmunity = now + duration + 1000;
                         }
+                    }
+                }
+                if (element.type === MATERIALS.QUICKSAND) {
+                    p.statusEffects.quicksand = now + 1000;
+                    // Quicksand Trap: 3s stun, then 5s cooldown (total 8s cycle)
+                    if (now > p.statusEffects.stun && now > (p.statusEffects.trapImmunity || 0)) {
+                        p.statusEffects.stun = now + 3000;
+                        p.statusEffects.trapImmunity = now + 8000;
                     }
                 }
                 if ((element.type === MATERIALS.ICE || element.type === MATERIALS.OIL)) p.statusEffects.slip = now + 1000;
@@ -1212,9 +1267,23 @@ class Lobby {
             if (e.expiresAt && now > e.expiresAt) {
                 if (e.originalType) {
                     // Revert to original state instead of destroying
+                    const oldPos = { x: e.body.position.x, y: e.body.position.y };
+                    Composite.remove(this.engine.world, e.body);
+                    
                     e.type = e.originalType;
                     e.originalType = null;
                     e.expiresAt = null; 
+                    
+                    // Recreate solid body
+                    const newBody = Bodies.rectangle(oldPos.x, oldPos.y, e.w, e.h, {
+                        label: 'element',
+                        isStatic: true,
+                        isSensor: false,
+                        collisionFilter: { category: 1, mask: -1 }
+                    });
+                    newBody.elementId = e.id;
+                    e.body = newBody;
+                    Composite.add(this.engine.world, newBody);
                 } else {
                     this.destroyElement(id);
                 }
@@ -1411,6 +1480,7 @@ class Lobby {
                 const biome = BIOMES[zone.type];
                 const isSlipping = now < statusEffects.slip;
                 const isSlowed = now < statusEffects.slow;
+                const isQuicksand = now < (statusEffects.quicksand || 0);
                 const isBurning = now < statusEffects.burn;
 
                 if (isBurning) p.hp -= 0.3; // Damage over time while burning
@@ -1422,8 +1492,9 @@ class Lobby {
                 
                 const upgrades = p.upgrades || { health: 0, speed: 0, power: 0 };
                 const speedBonus = 1 + (upgrades.speed * 0.15); // +15% speed per level
-                const moveSpeed = config.speed * biome.speedMult * (isSlowed ? 0.5 : 1.0) * speedBonus;
-                const turnSpeed = config.turnSpeed * (isSlowed ? 0.6 : 1.0) * speedBonus;
+                const slowMult = isSlowed ? 0.5 : (isQuicksand ? 0.3 : 1.0);
+                const moveSpeed = config.speed * biome.speedMult * slowMult * speedBonus;
+                const turnSpeed = config.turnSpeed * (isSlowed ? 0.6 : (isQuicksand ? 0.4 : 1.0)) * speedBonus;
 
                 // Smooth Turning (Lerp)
                 const targetAngularVel = inputs.left ? -turnSpeed : (inputs.right ? turnSpeed : 0);

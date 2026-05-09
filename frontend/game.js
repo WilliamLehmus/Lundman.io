@@ -3091,7 +3091,7 @@ function drawElements() {
             ctx.strokeRect(-e.w/2 + 8, -e.h/2 + 8, e.w - 16, e.h - 16);
         } else {
             ctx.fillStyle = config.color;
-            const isLiquid = [MATERIALS.WATER, MATERIALS.OIL, MATERIALS.DIRT, MATERIALS.ELECTRIC, MATERIALS.ICE, MATERIALS.ACID, MATERIALS.FIRE].includes(e.t);
+            const isLiquid = [MATERIALS.WATER, MATERIALS.OIL, MATERIALS.DIRT, MATERIALS.ELECTRIC, MATERIALS.ICE, MATERIALS.ACID, MATERIALS.FIRE, MATERIALS.QUICKSAND].includes(e.t);
             const hasSpecialRendering = [MATERIALS.GAS, MATERIALS.STEAM, MATERIALS.FIRE].includes(e.t);
 
             if (isLiquid) {
@@ -3278,6 +3278,98 @@ function drawElements() {
                     }
                     ctx.restore();
                 }
+            } else if (e.t === MATERIALS.DIRT && ENABLE_PREMIUM_VISUALS) {
+                ctx.save();
+                const drawRadius = baseRadius;
+                
+                // 1. Mound Depth (Radial Gradient for 3D feel)
+                const dirtGrad = ctx.createRadialGradient(e.x - drawRadius*0.2, e.y - drawRadius*0.2, 0, e.x, e.y, drawRadius);
+                dirtGrad.addColorStop(0, '#6d5a44'); // Highlight top
+                dirtGrad.addColorStop(0.5, '#4d3a24'); // Mid
+                dirtGrad.addColorStop(1, '#2d1a04');   // Deep Shadow edge
+                ctx.fillStyle = dirtGrad;
+                
+                // 2. Organic Jagged Mound Shape
+                drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
+                ctx.fill();
+
+                // 3. Procedural Rocks & Debris
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                for (let i = 0; i < 4; i++) {
+                    const seed = e.id + i * 7.7;
+                    const angle = getStableRandom(seed) * Math.PI * 2;
+                    const dist = getStableRandom(seed + 1) * drawRadius * 0.7;
+                    const rx = e.x + Math.cos(angle) * dist;
+                    const ry = e.y + Math.sin(angle) * dist;
+                    const rSize = 2 + getStableRandom(seed + 2) * 4;
+                    
+                    ctx.beginPath();
+                    ctx.arc(rx, ry, rSize, 0, Math.PI * 2);
+                    ctx.fill();
+                    // Rock Highlight
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+                    ctx.beginPath(); ctx.arc(rx - rSize/3, ry - rSize/3, rSize/3, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                }
+
+                // 4. Subtle Ambient Shadow on ground
+                ctx.globalCompositeOperation = 'destination-over';
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                ctx.beginPath();
+                ctx.arc(e.x + 5, e.y + 5, drawRadius + 2, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.restore();
+            } else if (e.t === MATERIALS.QUICKSAND && ENABLE_PREMIUM_VISUALS) {
+                ctx.save();
+                const drawRadius = baseRadius * pulse;
+                
+                // 1. Murky Mud Depth
+                const mudGrad = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, drawRadius * 1.2);
+                mudGrad.addColorStop(0, '#3d2a14');
+                mudGrad.addColorStop(0.8, '#2d1a04');
+                mudGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                ctx.fillStyle = mudGrad;
+                drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
+                ctx.fill();
+
+                // 2. Swirling Mud Pattern (Viscous flow)
+                if (oilPatterns.length > 0) {
+                    ctx.save();
+                    ctx.globalAlpha = 0.4;
+                    ctx.globalCompositeOperation = 'multiply';
+                    const p = oilPatterns[e.id % 9];
+                    const flowX = (renderTime * 0.005) % OIL_TILE_SIZE;
+                    const matrix = new DOMMatrix().translate(flowX, flowX);
+                    p.setTransform(matrix);
+                    ctx.fillStyle = p;
+                    drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
+                    ctx.fill();
+                    ctx.restore();
+                }
+
+                // 3. Mud Bubbles (Popping)
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                for (let i = 0; i < 3; i++) {
+                    const seed = e.id + i * 13.3;
+                    const phase = (renderTime * 0.002 + seed) % (Math.PI * 2);
+                    const bPulse = Math.sin(phase);
+                    if (bPulse > 0) {
+                        const dist = getStableRandom(seed) * drawRadius * 0.6;
+                        const angle = getStableRandom(seed + 1) * Math.PI * 2;
+                        const bx = e.x + Math.cos(angle) * dist;
+                        const by = e.y + Math.sin(angle) * dist;
+                        const bSize = bPulse * 6;
+                        
+                        ctx.beginPath();
+                        ctx.arc(bx, by, bSize, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+                        ctx.stroke();
+                    }
+                }
+                
+                ctx.restore();
             } else if (e.t === MATERIALS.FIRE && ENABLE_PREMIUM_VISUALS && firePatterns.length > 0) {
                 ctx.save();
                 const drawRadius = baseRadius * pulse;
@@ -3343,6 +3435,10 @@ function drawElements() {
                     ctx.shadowColor = '#ff4400';
                 } else if (e.t === MATERIALS.OIL) {
                     ctx.fillStyle = 'rgba(20, 20, 20, 0.95)';
+                } else if (e.t === MATERIALS.DIRT) {
+                    ctx.fillStyle = '#4d3a24';
+                } else if (e.t === MATERIALS.QUICKSAND) {
+                    ctx.fillStyle = '#2d1a04';
                 } else {
                     ctx.fillStyle = config.color;
                 }
