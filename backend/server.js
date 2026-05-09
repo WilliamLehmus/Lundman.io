@@ -528,21 +528,45 @@ class Lobby {
         }
     }
     generateIndustrialComplex(bx, by, size) {
-        // Large factory-style buildings
-        const bw = size * (0.7 + Math.random() * 0.4);
-        const bh = size * (0.5 + Math.random() * 0.3);
-        this.spawnBuilding({ x: bx + size/2, y: by + size/2 }, bw, bh);
-
-        // Add industrial machinery/props clustered around factory
-        const propCount = 2 + Math.floor(Math.random() * 3);
-        for (let i = 0; i < propCount; i++) {
-            const side = Math.random() > 0.5 ? 1 : -1;
-            const pos = {
-                x: bx + size/2 + (bw/2 + 30) * side,
-                y: by + size/2 + (Math.random() - 0.5) * bh
-            };
-            const pType = Math.random() > 0.5 ? MATERIALS.BARREL_OIL : MATERIALS.CRATE;
-            this.spawnElement(pos, pType, null, MATERIAL_PROPERTIES[pType].hp);
+        // Factory Cluster: Main building + 1-2 annexes
+        const clusterCount = 2 + Math.floor(Math.random() * 2);
+        
+        for (let i = 0; i < clusterCount; i++) {
+            const isMain = i === 0;
+            const isSilo = !isMain && Math.random() > 0.5;
+            
+            let bw, bh, ox, oy;
+            if (isMain) {
+                // Main building: Large but must leave some room for movement
+                bw = size * (0.85 + Math.random() * 0.15);
+                bh = size * (0.65 + Math.random() * 0.2);
+                ox = size/2; oy = size/2;
+            } else {
+                bw = size * (0.3 + Math.random() * 0.3);
+                bh = bw;
+                // Place annexes closer to the main building to keep corridors open
+                const angle = (i / clusterCount) * Math.PI * 2;
+                const dist = size * 0.45;
+                ox = size/2 + Math.cos(angle) * dist;
+                oy = size/2 + Math.sin(angle) * dist;
+            }
+            
+            this.spawnBuilding({ x: bx + ox, y: by + oy }, bw, bh, isSilo ? 'circle' : 'rect');
+            
+            // Cluster props (Barrels, Crates)
+            if (isMain) {
+                const propCount = 4 + Math.floor(Math.random() * 4);
+                for (let j = 0; j < propCount; j++) {
+                    const ang = Math.random() * Math.PI * 2;
+                    const r = (bw/2 + 35) + Math.random() * 15;
+                    const pos = {
+                        x: bx + ox + Math.cos(ang) * r,
+                        y: by + oy + Math.sin(ang) * r
+                    };
+                    const pType = Math.random() > 0.7 ? MATERIALS.BARREL_EXPLOSIVE : (Math.random() > 0.4 ? MATERIALS.BARREL_OIL : MATERIALS.CRATE);
+                    this.spawnElement(pos, pType, null, MATERIAL_PROPERTIES[pType].hp);
+                }
+            }
         }
     }
 
@@ -572,7 +596,7 @@ class Lobby {
     }
 
 
-    spawnBuilding(pos, w, h) {
+    spawnBuilding(pos, w, h, shape = 'rect') {
         // Skip if building is outside world bounds
         const padding = 10;
         if (pos.x - w/2 < padding || pos.x + w/2 > this.worldSize - padding ||
@@ -593,7 +617,8 @@ class Lobby {
             body,
             type: MATERIALS.BUILDING,
             hp: 800,
-            w, h
+            w, h,
+            shape: shape
         };
         Composite.add(this.engine.world, body);
     }
@@ -1783,7 +1808,7 @@ class Lobby {
             })),
             elements: Object.values(this.elements).map(e => ({
                 id: e.id, x: Number(e.body.position.x.toFixed(1)), y: Number(e.body.position.y.toFixed(1)),
-                t: e.type, r: e.body.circleRadius, w: e.w, h: e.h,
+                t: e.type, r: e.body.circleRadius, w: e.w, h: e.h, sh: e.shape,
                 c: e.type === MATERIALS.SCRAP ? '#ffff00' : 
                    e.type === MATERIALS.OIL ? '#333' : 
                    e.type === MATERIALS.FIRE ? '#ff4400' : 

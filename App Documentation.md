@@ -36,7 +36,7 @@ The core of the game engine lives on the **Node.js server**.
 Matches feature unique, randomly generated maps:
 - **URBAN**: Dense city grid with buildings and narrow streets.
 - **WASTELAND**: Post-apocalyptic terrain with radioactive pools, floating ash, and dynamic wind.
-- **INDUSTRIAL**: High-tech factory environment with concrete floors, pulsing neon power cables, and procedural steam vents.
+- **INDUSTRIAL**: High-tech factory environment with concrete floors, pulsing neon power cables, procedural steam vents, and complex industrial structures like **Silos** and **Refineries**. Features circular and rectangular building clusters with hazard-striped bases and vertical piping.
 - **WETLAND**: Murky swamp land with lily pads, fireflies, rising gas bubbles, and a thick atmospheric mist. Reduced movement speed.
 - **TUNDRA**: Frozen wasteland with snow hares, wind gusts, and slippery ice. Features a cold frost aesthetic.
 
@@ -124,7 +124,7 @@ npm run dev
 ### Controls
 - **Weapons**: `1-6` to switch slots.
 - **Scrap Shop**: `B` to toggle the upgrade shop (during match).
-- **Options Menu**: `ESC` to toggle volume and exit settings.
+- **Options Menu**: `ESC` to toggle volume, mute all sound, and exit settings.
 - **Navigation**: "QUIT" buttons in the Options Menu and Lobby Screen allow returning to the main menu.
 
 ---
@@ -311,3 +311,15 @@ To transition from a learning project to a **marketable product**, the following
 - **Fix**: Re-balanced the `if/else` ladder within `drawElements`, ensuring each material (Water, Oil, Electric, Fire) occupies its own distinct branch. Cleaned up trailing braces to correctly close the main element loop.
 - **Aesthetic Update**: Improved the `firePattern` density (15 blobs) and replaced the dark core with a solid white-hot fill (`#fff`) to eliminate the "biological/meatball" look and achieve a premium "Hellfire" aesthetic.
 - **Verification**: Validated using `node -c frontend/game.js`.
+#### **Industrial Biome "True Factory" Overhaul**
+- **Date**: 2026-05-09
+- **Issue**: The Industrial biome felt like an "Urban" reskin and lacked a true factory atmosphere.
+- **Root Cause**: Reliance on the "City Block" grid system and generic windowed buildings.
+- **Fix (The "Megastructure" Update)**: 
+    1.  **Abolished City Grid**: Removed yellow dashed sidewalks and streets. Replaced with a unified **Facility Floor** using large concrete plates and hazard zones.
+    2.  **Megastructures**: Increased building size and clustering. Buildings now overlap "streets" to create dense, interconnected factory complexes.
+    3.  **Industrial Detail System**:
+        - **Clipping**: All interior details are now clipped to the building shape (eliminating rectangular artifacts on silos).
+        - **Industrial Modules**: Replaced apartment windows with **Cooling Fins**, **Ventilation Fans** (animated), and **Support Girders**.
+        - **Volumetric Silos**: Circular buildings now feature radial shading for a 3D cylindrical look.
+        - **Ground Infrastructure**: Added procedural **Floor Pipes** and **Caution Tape** zones around environmental hazards.

@@ -662,29 +662,37 @@ const teslaSFX = new Audio('/tesla_gun.mp3');
 let currentMusicIndex = 0;
 let musicVolume = parseFloat(localStorage.getItem('tanks_music_vol')) || 0.5;
 let sfxVolume = parseFloat(localStorage.getItem('tanks_sfx_vol')) || 0.7;
+let isMuted = localStorage.getItem('tanks_is_muted') === 'true';
 let isMenuOpen = false;
 let isShopOpen = false;
 
 function setupAudio() {
+    const currentMusicVol = isMuted ? 0 : musicVolume;
+    const currentSfxVol = isMuted ? 0 : sfxVolume;
+
     musicTracks.forEach(track => {
         track.loop = false;
-        track.volume = musicVolume;
+        track.volume = currentMusicVol;
         track.onended = () => {
             currentMusicIndex = (currentMusicIndex + 1) % musicTracks.length;
             playMusic();
         };
     });
-    shotSFX.volume = sfxVolume;
-    flameSFX.volume = sfxVolume;
-    teslaSFX.volume = sfxVolume;
+    shotSFX.volume = currentSfxVol;
+    flameSFX.volume = currentSfxVol;
+    teslaSFX.volume = currentSfxVol;
+
+    syncAudioUI();
 }
 
 function playMusic() {
+    if (isMuted) return;
     const track = musicTracks[currentMusicIndex];
     track.play().catch(e => console.log("Audio play blocked until interaction"));
 }
 
 function playWeaponSound(weaponType, x, y) {
+    if (isMuted) return;
     // Spatial volume based on distance to camera
     const dist = Math.hypot(x - (camera.x + canvas.width/2), y - (camera.y + canvas.height/2));
     const spatialVol = Math.max(0, 1 - (dist / 1500));
@@ -713,17 +721,57 @@ function playWeaponSound(weaponType, x, y) {
     sfx.play();
 }
 
+function syncAudioUI() {
+    const muteToggle = document.getElementById('mute-toggle');
+    if (muteToggle) muteToggle.checked = isMuted;
+    
+    if (musicSlider) {
+        musicSlider.disabled = isMuted;
+        musicSlider.style.opacity = isMuted ? '0.3' : '1';
+    }
+    if (sfxSlider) {
+        sfxSlider.disabled = isMuted;
+        sfxSlider.style.opacity = isMuted ? '0.3' : '1';
+    }
+}
+
+const muteToggle = document.getElementById('mute-toggle');
+if (muteToggle) {
+    muteToggle.onchange = (e) => {
+        isMuted = e.target.checked;
+        localStorage.setItem('tanks_is_muted', isMuted);
+        
+        const currentMusicVol = isMuted ? 0 : musicVolume;
+        const currentSfxVol = isMuted ? 0 : sfxVolume;
+        
+        musicTracks.forEach(t => t.volume = currentMusicVol);
+        shotSFX.volume = currentSfxVol;
+        flameSFX.volume = currentSfxVol;
+        teslaSFX.volume = currentSfxVol;
+        
+        if (!isMuted) {
+            playMusic();
+        }
+        
+        syncAudioUI();
+    };
+}
+
 if (musicSlider) musicSlider.oninput = (e) => {
-    musicVolume = e.target.value;
-    musicTracks.forEach(t => t.volume = musicVolume);
+    musicVolume = parseFloat(e.target.value);
+    if (!isMuted) {
+        musicTracks.forEach(t => t.volume = musicVolume);
+    }
     localStorage.setItem('tanks_music_vol', musicVolume);
 };
 
 if (sfxSlider) sfxSlider.oninput = (e) => {
-    sfxVolume = e.target.value;
-    shotSFX.volume = sfxVolume;
-    flameSFX.volume = sfxVolume;
-    teslaSFX.volume = sfxVolume;
+    sfxVolume = parseFloat(e.target.value);
+    if (!isMuted) {
+        shotSFX.volume = sfxVolume;
+        flameSFX.volume = sfxVolume;
+        teslaSFX.volume = sfxVolume;
+    }
     localStorage.setItem('tanks_sfx_vol', sfxVolume);
 };
 
@@ -2138,47 +2186,93 @@ function drawGrid() {
             ctx.restore();
         }
 
-        // 2. Sidewalks & Curbs
+        // 2. Facility Floor (Industrial) or Sidewalks (Other)
         const blockSize = 350, streetWidth = 150, padding = 150, step = blockSize + streetWidth;
-        for (let x = padding - 10; x < worldSize - padding; x += step) {
-            for (let y = padding - 10; y < worldSize - padding; y += step) {
-                // Sidewalk Base
-                ctx.fillStyle = isIndustrial ? '#11111a' : '#1a1a25';
+        
+        if (isIndustrial) {
+            // Draw a continuous "Weathered Concrete" Facility Floor
+            ctx.fillStyle = '#22222a'; 
+            ctx.fillRect(0, 0, worldSize, worldSize);
+            
+            // Concrete Grit & Scratches (Static detail)
+            ctx.save();
+            ctx.strokeStyle = 'rgba(255,255,255,0.02)'; ctx.lineWidth = 1;
+            for (let i=0; i<worldSize; i+=200) {
+                for (let j=0; j<worldSize; j+=200) {
+                    if (i < camera.x - 200 || i > camera.x + canvas.width + 200) continue;
+                    if (Math.random() > 0.7) {
+                        ctx.beginPath();
+                        ctx.moveTo(i + Math.random()*200, j + Math.random()*200);
+                        ctx.lineTo(i + Math.random()*200, j + Math.random()*200);
+                        ctx.stroke();
+                    }
+                }
+            }
+            ctx.restore();
+
+            // Large Industrial Plate Lines (Heavier & Rusted)
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.lineWidth = 3;
+            for (let g = 0; g < worldSize; g += 500) {
+                ctx.beginPath(); ctx.moveTo(g, 0); ctx.lineTo(g, worldSize); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, g); ctx.lineTo(worldSize, g); ctx.stroke();
+            }
+
+            // Procedural Industrial Pipes on floor (Slightly more organic)
+            ctx.save();
+            ctx.strokeStyle = '#050508'; ctx.lineWidth = 14;
+            const pipeStep = 600;
+            for (let px = 0; px < worldSize; px += pipeStep) {
+                if (px < camera.x - 200 || px > camera.x + canvas.width + 200) continue;
                 ctx.beginPath();
-                ctx.roundRect(x, y, blockSize + 20, blockSize + 20, 10);
-                ctx.fill();
-                
-                // Caution Stripes for Industrial
-                if (isIndustrial) {
+                ctx.moveTo(px + 150, 0); ctx.lineTo(px + 150, worldSize);
+                ctx.stroke();
+                // Pipe highlights & Rust
+                ctx.strokeStyle = 'rgba(255,255,255,0.04)'; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(px + 146, 0); ctx.lineTo(px + 146, worldSize); ctx.stroke();
+                ctx.strokeStyle = 'rgba(100, 50, 0, 0.05)'; ctx.lineWidth = 4;
+                ctx.beginPath(); ctx.moveTo(px + 154, 0); ctx.lineTo(px + 154, worldSize); ctx.stroke();
+                ctx.strokeStyle = '#050508'; ctx.lineWidth = 14;
+            }
+            ctx.restore();
+
+            // Hazard Zones (Just subtle stains)
+            gameState.elements.forEach(e => {
+                if ([MATERIALS.OIL, MATERIALS.ACID, MATERIALS.FIRE].includes(e.t)) {
+                    if (e.x < camera.x - 200 || e.x > camera.x + canvas.width + 200) return;
                     ctx.save();
-                    ctx.strokeStyle = '#ffcc00'; ctx.lineWidth = 6;
-                    ctx.setLineDash([10, 10]);
-                    ctx.strokeRect(x, y, blockSize + 20, blockSize + 20);
+                    // Inner dirt/stain around hazard
+                    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+                    ctx.beginPath(); ctx.arc(e.x, e.y, e.w * 0.7, 0, Math.PI * 2); ctx.fill();
                     ctx.restore();
-                } else {
+                }
+            });
+        } else {
+            for (let x = padding - 10; x < worldSize - padding; x += step) {
+                for (let y = padding - 10; y < worldSize - padding; y += step) {
+                    if (x < camera.x - 500 || x > camera.x + canvas.width + 500 || y < camera.y - 500 || y > camera.y + canvas.height + 500) continue;
+
+                    // Sidewalk Base
+                    ctx.fillStyle = '#1a1a25';
+                    ctx.beginPath();
+                    ctx.roundRect(x, y, blockSize + 20, blockSize + 20, 10);
+                    ctx.fill();
+                    
                     ctx.strokeStyle = 'rgba(255,255,255,0.03)';
                     ctx.strokeRect(x, y, blockSize + 20, blockSize + 20);
-                }
-
-                // Internal grid patterns
-                if (isIndustrial && ENABLE_PREMIUM_VISUALS) {
-                    ctx.strokeStyle = 'rgba(0, 242, 255, 0.04)'; ctx.lineWidth = 1;
-                    for (let i = 40; i < blockSize; i += 80) {
-                        ctx.beginPath(); ctx.moveTo(x + i, y + 10); ctx.lineTo(x + i, y + blockSize + 10); ctx.stroke();
-                        ctx.beginPath(); ctx.moveTo(x + 10, y + i); ctx.lineTo(x + blockSize + 10, y + i); ctx.stroke();
-                    }
                 }
             }
         }
 
-        // 3. Road Markings
-        ctx.strokeStyle = isIndustrial ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 200, 0, 0.1)';
-        ctx.setLineDash([20, 30]); ctx.lineWidth = 2;
-        ctx.beginPath();
-        for (let x = padding - streetWidth/2; x < worldSize; x += step) { ctx.moveTo(x, 0); ctx.lineTo(x, worldSize); }
-        for (let y = padding - streetWidth/2; y < worldSize; y += step) { ctx.moveTo(0, y); ctx.lineTo(worldSize, y); }
-        ctx.stroke(); ctx.setLineDash([]); 
-
+        // 3. Road Markings (Urban Only)
+        if (!isIndustrial) {
+            ctx.strokeStyle = 'rgba(255, 200, 0, 0.1)';
+            ctx.setLineDash([20, 30]); ctx.lineWidth = 2;
+            ctx.beginPath();
+            for (let x = padding - streetWidth/2; x < worldSize; x += step) { ctx.moveTo(x, 0); ctx.lineTo(x, worldSize); }
+            for (let y = padding - streetWidth/2; y < worldSize; y += step) { ctx.moveTo(0, y); ctx.lineTo(worldSize, y); }
+            ctx.stroke(); ctx.setLineDash([]); 
+        }
     } else if (currentBiome === 'WASTELAND') {
         ctx.fillStyle = '#160e0a';
         ctx.fillRect(0, 0, worldSize, worldSize);
@@ -2532,7 +2626,7 @@ const drawOrganicPath = (ctx, x, y, radius, id) => {
 
 function drawElements() {
     if (!gameState.elements) return;
-    const currentBiome = gameState.zones && gameState.zones[0] ? gameState.zones[0].t : 'RANDOM';
+    const currentBiome = gameState.zones && gameState.zones[0] ? gameState.zones[0].type : 'RANDOM';
     const isWasteland = currentBiome === 'WASTELAND';
     const isIndustrial = currentBiome === 'INDUSTRIAL';
     const isWetland = currentBiome === 'WETLAND';
@@ -2546,57 +2640,82 @@ function drawElements() {
             // 1. Building Shadow (Deep Depth)
             ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
             ctx.beginPath();
-            ctx.roundRect(e.x - e.w/2 + 8, e.y - e.h/2 + 8, e.w, e.h, 6);
+            if (isIndustrial && e.sh === 'circle') {
+                ctx.ellipse(e.x + 10, e.y + 10, e.w/2, e.h/2, 0, 0, Math.PI * 2);
+            } else {
+                ctx.roundRect(e.x - e.w/2 + 8, e.y - e.h/2 + 8, e.w, e.h, 6);
+            }
             ctx.fill();
 
             // 2. Main Building Body
-            const bGradient = ctx.createLinearGradient(e.x, e.y - e.h/2, e.x, e.y + e.h/2);
+            const bGradient = isIndustrial && e.sh === 'circle' ? 
+                ctx.createRadialGradient(e.x - e.w/4, e.y - e.h/4, 0, e.x, e.y, e.w/2) :
+                ctx.createLinearGradient(e.x, e.y - e.h/2, e.x, e.y + e.h/2);
+
             if (isWasteland) {
-                bGradient.addColorStop(0, '#3a2a1a'); // Rusted Top
-                bGradient.addColorStop(1, '#1a100a'); // Dark Bottom
+                bGradient.addColorStop(0, '#3a2a1a'); 
+                bGradient.addColorStop(1, '#1a100a'); 
             } else if (isIndustrial) {
-                bGradient.addColorStop(0, '#2a2a3a'); // Metallic Top
-                bGradient.addColorStop(1, '#0a0a15'); // Dark Bottom
+                if (e.sh === 'circle') {
+                    bGradient.addColorStop(0, '#3a3a4a'); // Highlight
+                    bGradient.addColorStop(0.6, '#1a1a25');
+                    bGradient.addColorStop(1, '#020205');   // Shadow edge
+                } else {
+                    bGradient.addColorStop(0, '#1a1a25'); 
+                    bGradient.addColorStop(1, '#05050a'); 
+                }
             } else if (isWetland) {
-                bGradient.addColorStop(0, '#152515'); // Mossy Green Top
-                bGradient.addColorStop(1, '#050a05'); // Murky Bottom
+                bGradient.addColorStop(0, '#152515'); 
+                bGradient.addColorStop(1, '#050a05'); 
             } else if (isTundra) {
-                bGradient.addColorStop(0, '#3a4a5a'); // Frosty Blue Top
-                bGradient.addColorStop(1, '#050c12'); // Deep Cold Bottom
+                bGradient.addColorStop(0, '#3a4a5a'); 
+                bGradient.addColorStop(1, '#050c12'); 
             } else {
-                bGradient.addColorStop(0, '#252535'); // Top (lighter)
-                bGradient.addColorStop(1, '#151520'); // Bottom (darker)
+                bGradient.addColorStop(0, '#252535'); 
+                bGradient.addColorStop(1, '#151520'); 
             }
             ctx.fillStyle = bGradient;
             ctx.strokeStyle = isWasteland ? 'rgba(150, 80, 50, 0.5)' : (isWetland ? 'rgba(50, 100, 50, 0.4)' : (isTundra ? 'rgba(200, 240, 255, 0.6)' : 'rgba(0, 242, 255, 0.6)'));
             ctx.lineWidth = 2;
+            
             ctx.beginPath();
-            ctx.roundRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h, 4);
+            if (isIndustrial && e.sh === 'circle') {
+                ctx.ellipse(e.x, e.y, e.w/2, e.h/2, 0, 0, Math.PI * 2);
+            } else {
+                ctx.roundRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h, 4);
+            }
             ctx.fill();
             ctx.stroke();
 
-            // Wetland Overgrowth (Moss & Vines)
-            if (isWetland && ENABLE_PREMIUM_VISUALS) {
+            // CLIPPING BLOCK FOR INTERIOR DETAILS
+            ctx.save();
+            ctx.beginPath();
+            if (isIndustrial && e.sh === 'circle') {
+                ctx.ellipse(e.x, e.y, e.w/2, e.h/2, 0, 0, Math.PI * 2);
+            } else {
+                ctx.roundRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h, 4);
+            }
+            ctx.clip();
+
+            // Industrial Pipes / Connectors
+            if (isIndustrial && ENABLE_PREMIUM_VISUALS) {
                 ctx.save();
-                // Moss Patches
-                ctx.fillStyle = 'rgba(40, 80, 40, 0.4)';
-                for (let i = 0; i < 5; i++) {
-                    const mx = e.x + (Math.sin(e.id + i) * 0.4) * e.w;
-                    const my = e.y + (Math.cos(e.id * 2 + i) * 0.4) * e.h;
-                    ctx.beginPath(); ctx.arc(mx, my, 15 + getStableRandom(e.id + i) * 15, 0, Math.PI * 2); ctx.fill();
-                }
-                // Hanging Vines
-                ctx.strokeStyle = 'rgba(20, 40, 20, 0.6)'; ctx.lineWidth = 2;
-                for (let i = 0; i < 3; i++) {
-                    const vx = e.x - e.w/2 + 20 + (i * (e.w-40)/3);
-                    ctx.beginPath(); ctx.moveTo(vx, e.y - e.h/2); ctx.lineTo(vx + Math.sin(e.id+i)*10, e.y + e.h/2 - 10); ctx.stroke();
+                ctx.strokeStyle = '#222';
+                ctx.lineWidth = 6;
+                if (e.id % 2 === 0) {
+                    ctx.beginPath();
+                    ctx.moveTo(e.x + e.w/2, e.y);
+                    ctx.lineTo(e.x + e.w/2 - 30, e.y); // Pipe inside building
+                    ctx.stroke();
                 }
                 ctx.restore();
             }
 
             // 3. Roof Details (The "Shell" fix)
             ctx.fillStyle = isWasteland ? 'rgba(100, 50, 0, 0.05)' : 'rgba(255, 255, 255, 0.03)';
-            ctx.fillRect(e.x - e.w/2 + 10, e.y - e.h/2 + 10, e.w - 20, e.h - 20);
+            if (!(isIndustrial && e.sh === 'circle')) {
+                ctx.fillRect(e.x - e.w/2 + 10, e.y - e.h/2 + 10, e.w - 20, e.h - 20);
+            }
             
             // Add a "Roof Unit" (HVAC / Helipad)
             if (e.w > 120 && e.h > 120) {
@@ -2611,6 +2730,19 @@ function drawElements() {
                 ctx.arc(e.x, e.y, 15, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.stroke();
+                
+                // Rotating Fan for Industrial
+                if (isIndustrial) {
+                    ctx.save();
+                    ctx.translate(e.x, e.y);
+                    ctx.rotate(Date.now() * 0.005);
+                    ctx.strokeStyle = '#444'; ctx.lineWidth = 4;
+                    for (let i=0; i<3; i++) {
+                        ctx.rotate(Math.PI*2/3);
+                        ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(12, 0); ctx.stroke();
+                    }
+                    ctx.restore();
+                }
             }
 
             // Tundra Roof Details (Snow Cap)
@@ -2618,11 +2750,9 @@ function drawElements() {
                 ctx.save();
                 ctx.fillStyle = '#fff';
                 ctx.globalAlpha = 0.2;
-                // Accumulate snow on top edge
                 ctx.beginPath();
                 ctx.roundRect(e.x - e.w/2 + 5, e.y - e.h/2 + 5, e.w - 10, 15, 5);
                 ctx.fill();
-                // Random snow patches
                 for (let i = 0; i < 3; i++) {
                     const sx = e.x + Math.sin(e.id + i) * (e.w * 0.3);
                     const sy = e.y + Math.cos(e.id + i) * (e.h * 0.3);
@@ -2634,43 +2764,20 @@ function drawElements() {
 
             // 3. Industrial / Factory Details
             if (isIndustrial && ENABLE_PREMIUM_VISUALS) {
-                // Hazard Stripes (Yellow/Black) at the base
-                ctx.save();
-                ctx.beginPath();
-                ctx.rect(e.x - e.w/2, e.y + e.h/2 - 12, e.w, 12);
-                ctx.clip();
-                const stripeW = 15;
-                for (let sx = e.x - e.w/2 - 20; sx < e.x + e.w/2 + 20; sx += stripeW * 2) {
-                    ctx.fillStyle = '#ffcc00';
-                    ctx.beginPath();
-                    ctx.moveTo(sx, e.y + e.h/2 - 15);
-                    ctx.lineTo(sx + stripeW, e.y + e.h/2 - 15);
-                    ctx.lineTo(sx + stripeW - 10, e.y + e.h/2 + 5);
-                    ctx.lineTo(sx - 10, e.y + e.h/2 + 5);
-                    ctx.fill();
-                    ctx.fillStyle = '#111';
-                    ctx.beginPath();
-                    ctx.moveTo(sx + stripeW, e.y + e.h/2 - 15);
-                    ctx.lineTo(sx + stripeW * 2, e.y + e.h/2 - 15);
-                    ctx.lineTo(sx + stripeW * 2 - 10, e.y + e.h/2 + 5);
-                    ctx.lineTo(sx + stripeW - 10, e.y + e.h/2 + 5);
-                    ctx.fill();
-                }
-                ctx.restore();
-
                 // Vertical Metal Pipes
                 ctx.strokeStyle = '#333';
                 ctx.lineWidth = 5;
                 ctx.beginPath();
-                ctx.moveTo(e.x - e.w/2 + 8, e.y - e.h/2);
-                ctx.lineTo(e.x - e.w/2 + 8, e.y + e.h/2 - 12);
+                const pipeX = e.sh === 'circle' ? e.x - e.w/3 : e.x - e.w/2 + 8;
+                ctx.moveTo(pipeX, e.y - e.h/2);
+                ctx.lineTo(pipeX, e.y + e.h/2 - 12);
                 ctx.stroke();
                 
                 // Rivets/Bolts along the pipe
                 ctx.fillStyle = 'rgba(255,255,255,0.15)';
                 for (let ry = -e.h/2 + 20; ry < e.h/2 - 20; ry += 35) {
                     ctx.beginPath();
-                    ctx.arc(e.x - e.w/2 + 8, e.y + ry, 2.5, 0, Math.PI*2);
+                    ctx.arc(pipeX, e.y + ry, 2.5, 0, Math.PI*2);
                     ctx.fill();
                 }
 
@@ -2678,45 +2785,58 @@ function drawElements() {
                 ctx.strokeStyle = 'rgba(255,255,255,0.05)';
                 ctx.lineWidth = 1;
                 ctx.beginPath();
-                ctx.moveTo(e.x, e.y - e.h/2); ctx.lineTo(e.x, e.y + e.h/2 - 12);
-                ctx.moveTo(e.x - e.w/2, e.y); ctx.lineTo(e.x + e.w/2, e.y);
+                if (e.sh === 'circle') {
+                    ctx.arc(e.x, e.y, e.w/4, 0, Math.PI * 2);
+                } else {
+                    ctx.moveTo(e.x, e.y - e.h/2); ctx.lineTo(e.x, e.y + e.h/2 - 12);
+                    ctx.moveTo(e.x - e.w/2, e.y); ctx.lineTo(e.x + e.w/2, e.y);
+                }
                 ctx.stroke();
+
+                // Cooling Fins (Instead of windows)
+                ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+                ctx.lineWidth = 1;
+                for (let fy = -e.h/2 + 20; fy < e.h/2 - 20; fy += 10) {
+                    ctx.beginPath();
+                    ctx.moveTo(e.x - e.w/4, e.y + fy);
+                    ctx.lineTo(e.x + e.w/4, e.y + fy);
+                    ctx.stroke();
+                }
             }
 
             // 4. Windows ( facade feel)
-            const flicker = Math.sin(Date.now() * 0.01 + e.id) * 0.3 + 0.7;
-            const winSize = 6;
-            const winSpacingX = 15;
-            const winSpacingY = 18;
-            for (let wx = e.x - e.w/2 + 15; wx < e.x + e.w/2 - 10; wx += winSpacingX) {
-                for (let wy = e.y - e.h/2 + 15; wy < e.y + e.h/2 - 10; wy += winSpacingY) {
-                    const isLit = !isWetland && (Math.floor(wx * 0.7 + wy * 1.3 + e.id)) % 6 > (isWasteland ? 5 : 3);
-                    if (isLit) {
-                        if (isIndustrial) {
-                            ctx.fillStyle = `rgba(0, 242, 255, ${0.4 * flicker})`;
-                            ctx.shadowBlur = 8;
-                            ctx.shadowColor = '#00f2ff';
-                        } else if (isTundra) {
-                            ctx.fillStyle = `rgba(150, 220, 255, ${0.3 * flicker})`;
-                            ctx.shadowBlur = 5;
-                            ctx.shadowColor = '#aaddff';
+            if (!isIndustrial) {
+                const flicker = Math.sin(Date.now() * 0.01 + e.id) * 0.3 + 0.7;
+                const winSize = 6;
+                const winSpacingX = 15;
+                const winSpacingY = 18;
+                for (let wx = e.x - e.w/2 + 15; wx < e.x + e.w/2 - 10; wx += winSpacingX) {
+                    for (let wy = e.y - e.h/2 + 15; wy < e.y + e.h/2 - 10; wy += winSpacingY) {
+                        const isLit = !isWetland && (Math.floor(wx * 0.7 + wy * 1.3 + e.id)) % 6 > (isWasteland ? 5 : 3);
+                        if (isLit) {
+                            if (isTundra) {
+                                ctx.fillStyle = `rgba(150, 220, 255, ${0.3 * flicker})`;
+                                ctx.shadowBlur = 5;
+                                ctx.shadowColor = '#aaddff';
+                            } else {
+                                ctx.fillStyle = isWasteland ? `rgba(255, 150, 50, ${0.2 * flicker})` : `rgba(255, 240, 150, ${0.3 * flicker})`;
+                                ctx.shadowBlur = isWasteland ? 2 : 5;
+                                ctx.shadowColor = isWasteland ? '#ff6600' : 'rgba(255, 240, 150, 0.5)';
+                            }
+                            ctx.fillRect(wx, wy, winSize, winSize);
+                            ctx.shadowBlur = 0;
                         } else {
-                            ctx.fillStyle = isWasteland ? `rgba(255, 150, 50, ${0.2 * flicker})` : `rgba(255, 240, 150, ${0.3 * flicker})`;
-                            ctx.shadowBlur = isWasteland ? 2 : 5;
-                            ctx.shadowColor = isWasteland ? '#ff6600' : 'rgba(255, 240, 150, 0.5)';
+                            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+                            ctx.fillRect(wx, wy, winSize, winSize);
                         }
-                        ctx.fillRect(wx, wy, winSize, winSize);
-                        ctx.shadowBlur = 0;
-                    } else {
-                        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-                        ctx.fillRect(wx, wy, winSize, winSize);
                     }
                 }
             }
 
-            // Neon Signs (Disabled for Wetland)
+            ctx.restore(); // END CLIPPING
+
+            // Neon Signs (Outside clipping)
             if (e.id % 5 === 0 && !isWetland) {
-                const isIndustrial = currentBiome === 'INDUSTRIAL';
                 let neonColors = ['#ff00ff', '#00f2ff', '#ffff00', '#ff0000'];
                 let texts = ['HOTEL', 'BAR', 'CLUB', 'REPAIR', 'TANK', 'NEON'];
                 
@@ -2725,7 +2845,7 @@ function drawElements() {
                     texts = ['DEAD', 'LOST', 'VOID', 'RUST', 'STOP', 'WAR'];
                 } else if (isIndustrial) {
                     neonColors = ['#00f2ff', '#00ffff', '#ffff00', '#55ff00'];
-                    texts = ['POWER', 'TECH', 'CORE', 'GRID', 'FLOW', 'HVAC'];
+                    texts = ['REACTOR', 'CORE', 'REFINERY', 'ASSEMBLY', 'STORAGE', 'POWER'];
                 }
                 
                 const nColor = neonColors[e.id % neonColors.length];
@@ -2733,10 +2853,7 @@ function drawElements() {
                 
                 ctx.save();
                 ctx.translate(e.x, e.y - e.h/2 - 10);
-                
-                // Intense flickering for wasteland
                 const atmoFlicker = isWasteland ? (Math.random() > 0.2 ? (Math.sin(Date.now() * 0.05 + e.id) > 0 ? 1 : 0) : 0) : (Math.sin(Date.now() * 0.02 + e.id) > -0.9 ? 1 : 0);
-                
                 if (atmoFlicker) {
                     ctx.shadowBlur = isWasteland ? 5 : 10;
                     ctx.shadowColor = nColor;
@@ -2744,7 +2861,37 @@ function drawElements() {
                     ctx.font = 'bold 14px Outfit';
                     ctx.textAlign = 'center';
                     ctx.fillText(text, 0, 0);
-                    ctx.fillRect(-ctx.measureText(text).width/2 - 4, 4, ctx.measureText(text).width + 8, 2);
+                }
+                ctx.restore();
+            }
+
+            // Hazard Stripes at the base (Drawn outside clipping to allow bleed)
+            if (isIndustrial && ENABLE_PREMIUM_VISUALS) {
+                ctx.save();
+                ctx.beginPath();
+                if (e.sh === 'circle') {
+                    // Curved base plate for silos
+                    ctx.ellipse(e.x, e.y + e.h/2 - 6, e.w/2 + 4, 12, 0, 0, Math.PI * 2);
+                } else {
+                    ctx.rect(e.x - e.w/2 - 4, e.y + e.h/2 - 12, e.w + 8, 12);
+                }
+                ctx.clip();
+                const stripeW = 15;
+                for (let sx = e.x - e.w/2 - 40; sx < e.x + e.w/2 + 40; sx += stripeW * 2) {
+                    ctx.fillStyle = '#ffcc00';
+                    ctx.beginPath();
+                    ctx.moveTo(sx, e.y + e.h/2 - 20);
+                    ctx.lineTo(sx + stripeW, e.y + e.h/2 - 20);
+                    ctx.lineTo(sx + stripeW - 10, e.y + e.h/2 + 10);
+                    ctx.lineTo(sx - 10, e.y + e.h/2 + 10);
+                    ctx.fill();
+                    ctx.fillStyle = '#111';
+                    ctx.beginPath();
+                    ctx.moveTo(sx + stripeW, e.y + e.h/2 - 20);
+                    ctx.lineTo(sx + stripeW * 2, e.y + e.h/2 - 20);
+                    ctx.lineTo(sx + stripeW * 2 - 10, e.y + e.h/2 + 10);
+                    ctx.lineTo(sx + stripeW - 10, e.y + e.h/2 + 10);
+                    ctx.fill();
                 }
                 ctx.restore();
             }
