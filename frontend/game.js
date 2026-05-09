@@ -155,6 +155,8 @@ let atmosphereParticles = []; // { x, y, size, vx, vy, speed, color }
 let environmentalObjects = []; // Dynamic objects like Tumbleweeds
 let lizards = []; // Scurrying desert life
 let snowHares = []; // Scurrying arctic life
+let dragonflies = []; // Darting wetland life
+let ripples = []; // Surface disturbances for wetland
 let windStreaks = []; // Fast moving wind lines
 let ashParticles = []; // Atmospheric embers/ash for wasteland
 let groundDetails = []; // Cache for procedural cracks/stains
@@ -260,21 +262,25 @@ let firePattern = null;
 let steamPattern = null;
 
 function updateElectricPattern(time) {
-    if (time - lastElectricPatternUpdate < 30) return; // Faster updates for jitter
+    if (time - lastElectricPatternUpdate < 40) return;
     lastElectricPatternUpdate = time;
 
     for (let p = 0; p < 9; p++) {
         const ctx = electricContexts[p];
         ctx.clearRect(0, 0, ELECTRIC_TILE_SIZE, ELECTRIC_TILE_SIZE);
         
-        // Jittery Static Noise Pattern
-        ctx.strokeStyle = 'rgba(0, 242, 255, 0.4)';
+        // 1. Deep Core Glow
+        ctx.fillStyle = 'rgba(0, 40, 100, 0.2)';
+        ctx.fillRect(0, 0, ELECTRIC_TILE_SIZE, ELECTRIC_TILE_SIZE);
+
+        // 2. Jittery Static Noise Pattern
+        ctx.strokeStyle = 'rgba(0, 242, 255, 0.3)';
         ctx.lineWidth = 1;
-        for (let i = 0; i < 15; i++) {
+        for (let i = 0; i < 12; i++) {
             const x1 = getStableRandom(p + i + time) * ELECTRIC_TILE_SIZE;
             const y1 = getStableRandom(p + i + 1 + time) * ELECTRIC_TILE_SIZE;
-            const x2 = x1 + (getStableRandom(p + i + 2) - 0.5) * 20;
-            const y2 = y1 + (getStableRandom(p + i + 3) - 0.5) * 20;
+            const x2 = x1 + (getStableRandom(p + i + 2) - 0.5) * 30;
+            const y2 = y1 + (getStableRandom(p + i + 3) - 0.5) * 30;
             
             ctx.beginPath();
             ctx.moveTo(x1, y1);
@@ -282,9 +288,26 @@ function updateElectricPattern(time) {
             ctx.stroke();
         }
 
-        // Faint Cyan Glow base
-        ctx.fillStyle = 'rgba(0, 80, 150, 0.1)';
-        ctx.fillRect(0, 0, ELECTRIC_TILE_SIZE, ELECTRIC_TILE_SIZE);
+        // 3. Arcing Bolts (Sharp neon white/cyan)
+        ctx.strokeStyle = '#fff';
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#00f2ff';
+        ctx.lineWidth = 1.5;
+        for (let i = 0; i < 3; i++) {
+            const seed = p * 5 + i + Math.floor(time/100);
+            let lx = getStableRandom(seed) * ELECTRIC_TILE_SIZE;
+            let ly = getStableRandom(seed + 1) * ELECTRIC_TILE_SIZE;
+            
+            ctx.beginPath();
+            ctx.moveTo(lx, ly);
+            for (let segment = 0; segment < 4; segment++) {
+                lx += (getStableRandom(seed + segment * 2) - 0.5) * 40;
+                ly += (getStableRandom(seed + segment * 2 + 1) - 0.5) * 40;
+                ctx.lineTo(lx, ly);
+            }
+            ctx.stroke();
+        }
+        ctx.shadowBlur = 0;
 
         electricPatterns[p] = ctx.createPattern(electricCanvases[p], 'repeat');
     }
@@ -298,20 +321,30 @@ function updateGasPattern(time) {
         const ctx = gasContexts[p];
         ctx.clearRect(0, 0, GAS_TILE_SIZE, GAS_TILE_SIZE);
         
-        // Wispy Toxic Smoke Texture (Soft Puffs, no lines)
-        for (let i = 0; i < 6; i++) {
-            const seed = p * 10 + i;
+        // Wispy Toxic Smoke Texture (Soft Puffs with seamless wrapping)
+        for (let i = 0; i < 8; i++) {
+            const seed = p * 12 + i;
             const gx = getStableRandom(seed) * GAS_TILE_SIZE;
             const gy = getStableRandom(seed + 1) * GAS_TILE_SIZE;
-            const r = 30 + getStableRandom(seed + 2) * 30;
+            const r = 35 + getStableRandom(seed + 2) * 35;
             
-            const g = ctx.createRadialGradient(gx, gy, 0, gx, gy, r);
-            g.addColorStop(0, 'rgba(212, 255, 0, 0.15)'); // More Yellowish
-            g.addColorStop(1, 'rgba(212, 255, 0, 0)');
-            ctx.fillStyle = g;
-            ctx.beginPath();
-            ctx.arc(gx, gy, r, 0, Math.PI * 2);
-            ctx.fill();
+            const drawPuff = (ox, oy) => {
+                const g = ctx.createRadialGradient(gx + ox, gy + oy, 0, gx + ox, gy + oy, r);
+                g.addColorStop(0, 'rgba(180, 255, 0, 0.25)'); // More intense toxic yellow-green
+                g.addColorStop(0.5, 'rgba(120, 200, 0, 0.1)');
+                g.addColorStop(1, 'rgba(120, 200, 0, 0)');
+                ctx.fillStyle = g;
+                ctx.beginPath();
+                ctx.arc(gx + ox, gy + oy, r, 0, Math.PI * 2);
+                ctx.fill();
+            };
+
+            // Draw with 9-way wrapping for perfect tiling
+            for (let xx = -1; xx <= 1; xx++) {
+                for (let yy = -1; yy <= 1; yy++) {
+                    drawPuff(xx * GAS_TILE_SIZE, yy * GAS_TILE_SIZE);
+                }
+            }
         }
 
         // Add soft swirling wisps
@@ -665,6 +698,11 @@ socket.on('collision-effect', (data) => {
             // Dust/Debris
             spawnParticles(data.x, data.y, '#666', 5, 1.5); 
             shake.intensity = Math.max(shake.intensity, 2);
+        }
+        
+        const currentBiome = gameState.zones && gameState.zones[0] ? (gameState.zones[0].t || gameState.zones[0].type) : 'RANDOM';
+        if (currentBiome === 'WETLAND') {
+            ripples.push({ x: data.x, y: data.y, size: 5, life: 1.2 });
         }
     }
 
@@ -1712,6 +1750,10 @@ function renderLoop(now) {
                                 isWaterWake: true
                             });
                         }
+                        // Dynamic Ripple
+                        if (renderTime % 30 < 1) {
+                            ripples.push({ x: p.x, y: p.y, size: 10, life: 1.0 });
+                        }
                     } else {
                         // More intense dust in wasteland/tundra
                         const pCount = (currentBiome === 'WASTELAND' || currentBiome === 'TUNDRA') ? 2 : 1;
@@ -2167,6 +2209,7 @@ function drawKillFeed() {
 
 function drawZones() {
     if (!gameState.zones) return;
+    const worldSize = gameState.worldSize || 4000;
     const currentBiome = gameState.zones[0] ? gameState.zones[0].type : 'RANDOM';
     gameState.zones.forEach(z => {
         // Draw Zone Color
@@ -2354,53 +2397,68 @@ function drawGrid() {
             ctx.stroke(); ctx.setLineDash([]); 
         }
     } else if (currentBiome === 'WASTELAND') {
-        ctx.fillStyle = '#160e0a';
+        // Nuclear Wasteland Base (Scorched Earth)
+        ctx.fillStyle = '#1c120d'; 
         ctx.fillRect(0, 0, worldSize, worldSize);
+
         if (ENABLE_PREMIUM_VISUALS) {
-            const wobble = Math.sin(Date.now() * 0.003) * 1.5;
-            ctx.translate(0, wobble);
             if (groundDetails.length === 0) {
-                for (let i = 0; i < 700; i++) {
+                for (let i = 0; i < 800; i++) {
                     const r = Math.random();
                     groundDetails.push({
-                        x: Math.random() * worldSize, y: Math.random() * worldSize,
-                        size: r < 0.1 ? 15 + Math.random() * 25 : (r < 0.3 ? 5 + Math.random() * 10 : 2 + Math.random() * 5),
-                        opacity: 0.04 + Math.random() * 0.1,
-                        type: r < 0.1 ? 'rock' : (r < 0.3 ? 'crack' : 'dust'),
-                        color: Math.random() > 0.5 ? '#2a1a0f' : '#1e140d'
+                        x: Math.random() * worldSize,
+                        y: Math.random() * worldSize,
+                        size: r < 0.1 ? 20 + Math.random() * 40 : (r < 0.3 ? 8 + Math.random() * 15 : 2 + Math.random() * 6),
+                        opacity: 0.05 + Math.random() * 0.15,
+                        type: r < 0.1 ? 'rubble' : (r < 0.25 ? 'heatcrack' : 'ash'),
+                        color: Math.random() > 0.5 ? '#2d1b0f' : '#1a0e08'
                     });
                 }
             }
+
             ctx.save();
             groundDetails.forEach(d => {
-                if (d.x < camera.x - 40 || d.x > camera.x + canvas.width + 40 || d.y < camera.y - 40 || d.y > camera.y + canvas.height + 40) return;
-                if (d.type === 'rock') {
-                    ctx.fillStyle = '#1a100a'; ctx.globalAlpha = d.opacity * 2;
-                    ctx.beginPath(); ctx.moveTo(d.x, d.y - d.size); ctx.lineTo(d.x + d.size, d.y); ctx.lineTo(d.x, d.y + d.size); ctx.lineTo(d.x - d.size, d.y); ctx.closePath(); ctx.fill();
-                } else if (d.type === 'crack') {
-                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(d.x - d.size, d.y); ctx.lineTo(d.x + d.size, d.y); ctx.stroke();
+                if (d.x < camera.x - 100 || d.x > camera.x + canvas.width + 100 || d.y < camera.y - 100 || d.y > camera.y + canvas.height + 100) return;
+                
+                if (d.type === 'heatcrack') {
+                    // Glowing heat cracks
+                    ctx.strokeStyle = '#ff4400'; ctx.lineWidth = 1;
+                    ctx.globalAlpha = d.opacity * 0.3;
+                    ctx.beginPath();
+                    ctx.moveTo(d.x - d.size, d.y);
+                    ctx.lineTo(d.x, d.y + d.size/2);
+                    ctx.lineTo(d.x + d.size, d.y - d.size/4);
+                    ctx.stroke();
+                } else if (d.type === 'rubble') {
+                    // Scorched debris
+                    ctx.fillStyle = '#0a0806'; ctx.globalAlpha = d.opacity * 2;
+                    ctx.beginPath();
+                    ctx.moveTo(d.x, d.y - d.size/2);
+                    ctx.lineTo(d.x + d.size/2, d.y + d.size/2);
+                    ctx.lineTo(d.x - d.size/2, d.y + d.size/2);
+                    ctx.closePath(); ctx.fill();
                 } else {
-                    ctx.fillStyle = d.color; ctx.globalAlpha = d.opacity; ctx.beginPath(); ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2); ctx.fill();
+                    // Ash/Dust
+                    ctx.fillStyle = d.color; ctx.globalAlpha = d.opacity;
+                    ctx.beginPath(); ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2); ctx.fill();
                 }
             });
             ctx.restore();
-            ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
-            for (let i = 0; i < 3; i++) {
-                const cx = ((renderTime * 0.5) + (i * worldSize/3)) % worldSize, cy = ((renderTime * 0.3) + (i * worldSize/4)) % worldSize;
-                ctx.beginPath(); ctx.ellipse(cx, cy, 400, 300, Math.PI/4, 0, Math.PI * 2); ctx.fill();
+
+            // Atmospheric Heat Distortion (Subtle)
+            ctx.save();
+            ctx.globalCompositeOperation = 'screen';
+            ctx.fillStyle = 'rgba(255, 68, 0, 0.02)';
+            for (let i = 0; i < 2; i++) {
+                const cx = ((renderTime * 0.2) + (i * worldSize/2)) % worldSize;
+                const cy = ((renderTime * 0.1) + (i * worldSize/3)) % worldSize;
+                ctx.beginPath(); ctx.arc(cx, cy, 600, 0, Math.PI * 2); ctx.fill();
             }
             ctx.restore();
-            if (lizards.length === 0) for (let i = 0; i < 20; i++) lizards.push({ x: Math.random() * worldSize, y: Math.random() * worldSize, vx: 0, vy: 0 });
-            const me = gameState.players.find(p => p.id === myId);
-            lizards.forEach(l => {
-                if (me) { const dist = Math.hypot(me.x - l.x, me.y - l.y); if (dist < 150) { const a = Math.atan2(l.y - me.y, l.x - me.x); l.vx = Math.cos(a)*5; l.vy = Math.sin(a)*5; } }
-                l.x += l.vx; l.y += l.vy; l.vx *= 0.95; l.vy *= 0.95;
-                if (l.x > camera.x && l.x < camera.x + canvas.width && l.y > camera.y && l.y < camera.y + canvas.height) { ctx.fillStyle = '#4a3a1a'; ctx.fillRect(l.x, l.y, 3, 2); }
-            });
         }
     } else if (currentBiome === 'DESERT') {
-        // Warm Golden Sand Base
-        ctx.fillStyle = '#1e1a0f'; // Darker base for neon contrast
+        // Warm Golden Sand Base (Improved for better visibility and sand feel)
+        ctx.fillStyle = '#4a3728'; 
         ctx.fillRect(0, 0, worldSize, worldSize);
 
         if (ENABLE_PREMIUM_VISUALS) {
@@ -2410,8 +2468,8 @@ function drawGrid() {
                     groundDetails.push({
                         x: Math.random() * worldSize,
                         y: Math.random() * worldSize,
-                        size: r < 0.1 ? 40 + Math.random() * 80 : (r < 0.3 ? 10 + Math.random() * 20 : 1 + Math.random() * 3),
-                        opacity: 0.03 + Math.random() * 0.08,
+                        size: r < 0.1 ? 60 + Math.random() * 100 : (r < 0.3 ? 15 + Math.random() * 30 : 1 + Math.random() * 3),
+                        opacity: 0.05 + Math.random() * 0.1,
                         type: r < 0.1 ? 'dune' : (r < 0.3 ? 'ripple' : 'glint'),
                         phase: Math.random() * Math.PI * 2
                     });
@@ -2425,14 +2483,14 @@ function drawGrid() {
                 if (d.type === 'dune') {
                     // Soft Sand Dune (Radial Gradient)
                     const g = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, d.size);
-                    g.addColorStop(0, 'rgba(237, 201, 175, 0.08)');
+                    g.addColorStop(0, 'rgba(255, 220, 180, 0.12)');
                     g.addColorStop(1, 'rgba(0, 0, 0, 0)');
                     ctx.fillStyle = g;
                     ctx.beginPath(); ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2); ctx.fill();
                 } else if (d.type === 'ripple') {
                     // Wind Ripples (Sine waves)
-                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
-                    ctx.lineWidth = 1;
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+                    ctx.lineWidth = 1.5;
                     ctx.beginPath();
                     for(let j=-d.size; j<d.size; j+=4) {
                         const off = Math.sin(j * 0.2 + d.phase) * 2;
@@ -2642,15 +2700,18 @@ function drawGrid() {
         
         if (ENABLE_PREMIUM_VISUALS) {
             if (groundDetails.length === 0) {
-                for (let i = 0; i < 400; i++) {
+                for (let i = 0; i < 450; i++) {
                     const r = Math.random();
+                    const isLily = r < 0.25;
                     groundDetails.push({
                         x: Math.random() * worldSize, y: Math.random() * worldSize,
-                        size: r < 0.2 ? 10 + Math.random() * 15 : (r < 0.5 ? 20 + Math.random() * 30 : 2 + Math.random() * 5),
+                        size: isLily ? 10 + Math.random() * 15 : (r < 0.5 ? 20 + Math.random() * 30 : 2 + Math.random() * 5),
                         opacity: 0.1 + Math.random() * 0.2,
-                        type: r < 0.2 ? 'lily' : (r < 0.5 ? 'mud' : 'bubble'),
-                        color: r < 0.2 ? '#2d4d2d' : '#1a221a',
-                        phase: Math.random() * Math.PI * 2
+                        type: isLily ? 'lily' : (r < 0.5 ? 'mud' : 'bubble'),
+                        color: isLily ? '#2d4d2d' : '#1a221a',
+                        phase: Math.random() * Math.PI * 2,
+                        hasBloom: isLily && Math.random() > 0.7,
+                        bloomColor: Math.random() > 0.5 ? '#ff88cc' : '#ffffff'
                     });
                 }
             }
@@ -2665,6 +2726,18 @@ function drawGrid() {
                     ctx.arc(d.x, d.y, d.size, 0.2, Math.PI * 1.8);
                     ctx.lineTo(d.x, d.y);
                     ctx.fill();
+                    // Bloom
+                    if (d.hasBloom) {
+                        ctx.fillStyle = d.bloomColor; ctx.globalAlpha = d.opacity * 3;
+                        const petals = 6;
+                        for (let j = 0; j < petals; j++) {
+                            const ang = (j / petals) * Math.PI * 2 + renderTime * 0.001;
+                            ctx.beginPath();
+                            ctx.ellipse(d.x + Math.cos(ang) * (d.size * 0.4), d.y + Math.sin(ang) * (d.size * 0.4), d.size * 0.3, d.size * 0.15, ang, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+                        ctx.fillStyle = '#ffcc00'; ctx.beginPath(); ctx.arc(d.x, d.y, d.size * 0.15, 0, Math.PI * 2); ctx.fill();
+                    }
                     // Subtle vein
                     ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 1;
                     ctx.beginPath(); ctx.moveTo(d.x, d.y); ctx.lineTo(d.x + d.size, d.y); ctx.stroke();
@@ -2681,7 +2754,92 @@ function drawGrid() {
             });
             ctx.restore();
 
-            // 2. Fireflies (Lively particles)
+            // 1.5 Dynamic Ripples
+            ctx.save();
+            ripples.forEach((r, idx) => {
+                r.life -= 0.015;
+                r.size += 1.5;
+                if (r.life <= 0) { ripples.splice(idx, 1); return; }
+                
+                if (r.x > camera.x - 50 && r.x < camera.x + canvas.width + 50 && r.y > camera.y - 50 && r.y < camera.y + canvas.height + 50) {
+                    ctx.strokeStyle = `rgba(255, 255, 255, ${r.life * 0.2})`;
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.arc(r.x, r.y, r.size, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+            });
+            ctx.restore();
+
+            // 1.6 Dragonflies
+            if (dragonflies.length === 0) {
+                for (let i = 0; i < 25; i++) {
+                    dragonflies.push({
+                        x: Math.random() * worldSize, y: Math.random() * worldSize,
+                        vx: 0, vy: 0,
+                        angle: Math.random() * Math.PI * 2,
+                        targetAngle: Math.random() * Math.PI * 2,
+                        speed: 2 + Math.random() * 3,
+                        wait: 0,
+                        color: `hsl(${180 + Math.random() * 60}, 70%, 60%)`
+                    });
+                }
+            }
+
+            const me = gameState.players.find(p => p.id === myId);
+            dragonflies.forEach(df => {
+                if (df.wait > 0) {
+                    df.wait--;
+                    if (df.wait === 0) df.targetAngle = Math.random() * Math.PI * 2;
+                } else {
+                    df.angle = lerpAngle(df.angle, df.targetAngle, 0.1);
+                    df.x += Math.cos(df.angle) * df.speed;
+                    df.y += Math.sin(df.angle) * df.speed;
+                    if (Math.random() > 0.98) df.wait = 30 + Math.random() * 60;
+                }
+
+                // React to player
+                if (me) {
+                    const dist = Math.hypot(me.x - df.x, me.y - df.y);
+                    if (dist < 150) {
+                        df.targetAngle = Math.atan2(df.y - me.y, df.x - me.x);
+                        df.wait = 0;
+                        df.speed = 8;
+                    } else {
+                        df.speed = lerp(df.speed, 3, 0.05);
+                    }
+                }
+
+                // Keep in bounds
+                if (df.x < 0 || df.x > worldSize || df.y < 0 || df.y > worldSize) {
+                    df.targetAngle = Math.atan2(worldSize/2 - df.y, worldSize/2 - df.x);
+                }
+
+                if (df.x > camera.x - 20 && df.x < camera.x + canvas.width + 20 && 
+                    df.y > camera.y - 20 && df.y < camera.y + canvas.height + 20) {
+                    ctx.save();
+                    ctx.translate(df.x, df.y);
+                    ctx.rotate(df.angle);
+                    
+                    // Wings (Blurred motion)
+                    ctx.fillStyle = 'rgba(200, 255, 255, 0.3)';
+                    const wingSpread = Math.sin(renderTime * 0.1) * 10;
+                    ctx.beginPath();
+                    ctx.ellipse(0, -2, 8, 2, -0.2 + wingSpread * 0.01, 0, Math.PI * 2);
+                    ctx.ellipse(0, 2, 8, 2, 0.2 - wingSpread * 0.01, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Body
+                    ctx.fillStyle = df.color;
+                    ctx.beginPath();
+                    ctx.ellipse(0, 0, 5, 1, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    ctx.restore();
+                }
+            });
+
+            // 2. Fireflies (Lively particles with trails)
             ctx.save();
             for (let i = 0; i < 40; i++) {
                 const fx = (Math.sin(renderTime * 0.0005 + i) * 0.5 + 0.5) * worldSize;
@@ -2689,23 +2847,53 @@ function drawGrid() {
                 
                 if (fx > camera.x && fx < camera.x + canvas.width && fy > camera.y && fy < camera.y + canvas.height) {
                     const glow = 0.5 + Math.sin(renderTime * 0.01 + i) * 0.5;
-                    ctx.shadowBlur = 10 * glow;
+                    ctx.shadowBlur = 15 * glow;
                     ctx.shadowColor = '#aaff00';
-                    ctx.fillStyle = `rgba(170, 255, 0, ${0.4 * glow})`;
+                    ctx.fillStyle = `rgba(170, 255, 0, ${0.6 * glow})`;
                     ctx.beginPath(); ctx.arc(fx, fy, 2, 0, Math.PI * 2); ctx.fill();
+                    
+                    // Tiny trail
+                    if (ENABLE_PREMIUM_VISUALS && renderTime % 5 < 1) {
+                        particles.push({
+                            x: fx, y: fy, vx: (Math.random()-0.5)*0.5, vy: (Math.random()-0.5)*0.5,
+                            life: 0.5, color: 'rgba(170, 255, 0, 0.3)', size: 1
+                        });
+                    }
                 }
             }
             ctx.restore();
 
-            // 3. Murky Fog/Mist
+            // 3. Murky Fog/Mist (Enhanced)
             ctx.save();
             ctx.globalCompositeOperation = 'screen';
-            const mistGrad = ctx.createRadialGradient(camera.x + canvas.width/2, camera.y + canvas.height/2, 100, camera.x + canvas.width/2, camera.y + canvas.height/2, 800);
-            mistGrad.addColorStop(0, 'rgba(40, 60, 40, 0)');
-            mistGrad.addColorStop(1, 'rgba(20, 30, 20, 0.15)');
-            ctx.fillStyle = mistGrad;
+            // Layer 1: Dark Outer Mist
+            const mistGrad1 = ctx.createRadialGradient(camera.x + canvas.width/2, camera.y + canvas.height/2, 200, camera.x + canvas.width/2, camera.y + canvas.height/2, 1000);
+            mistGrad1.addColorStop(0, 'rgba(40, 60, 40, 0)');
+            mistGrad1.addColorStop(1, 'rgba(10, 25, 10, 0.2)');
+            ctx.fillStyle = mistGrad1;
             ctx.fillRect(camera.x, camera.y, canvas.width, canvas.height);
+            
+            // Layer 2: Moving Mist patches
+            for (let i = 0; i < 3; i++) {
+                const mx = (camera.x + canvas.width/2) + Math.sin(renderTime * 0.0006 + i) * 400;
+                const my = (camera.y + canvas.height/2) + Math.cos(renderTime * 0.0004 + i) * 300;
+                const mGrad = ctx.createRadialGradient(mx, my, 0, mx, my, 500);
+                mGrad.addColorStop(0, 'rgba(80, 110, 80, 0.08)');
+                mGrad.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.fillStyle = mGrad;
+                ctx.fillRect(camera.x, camera.y, canvas.width, canvas.height);
+            }
             ctx.restore();
+
+            // 4. Swamp Drips (Occasional ripples)
+            if (Math.random() > 0.985) {
+                ripples.push({
+                    x: camera.x + Math.random() * canvas.width,
+                    y: camera.y + Math.random() * canvas.height,
+                    size: 2,
+                    life: 0.8
+                });
+            }
         }
     } else {
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)'; ctx.lineWidth = 1;
@@ -2850,9 +3038,10 @@ function drawElements() {
             const isTundra = currentBiome === 'TUNDRA';
             const isWetland = currentBiome === 'WETLAND';
             const isUrban = currentBiome === 'URBAN';
+            const isDesert = currentBiome === 'DESERT';
 
-            // 1. Building Shadow (Deep Depth)
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            // 1. Building Shadow (Deep Depth - Warmer for Desert)
+            ctx.fillStyle = isDesert ? 'rgba(61, 43, 31, 0.6)' : 'rgba(0, 0, 0, 0.5)';
             ctx.beginPath();
             if (isIndustrial && e.sh === 'circle') ctx.ellipse(e.x + 10, e.y + 10, e.w/2, e.h/2, 0, 0, Math.PI * 2);
             else ctx.roundRect(e.x - e.w/2 + 8, e.y - e.h/2 + 8, e.w, e.h, 6);
@@ -2869,10 +3058,12 @@ function drawElements() {
                 else { bGradient.addColorStop(0, '#1a1a25'); bGradient.addColorStop(1, '#05050a'); }
             } else if (isUrban) { bGradient.addColorStop(0, '#10101a'); bGradient.addColorStop(1, '#020205'); }
             else if (isTundra) { bGradient.addColorStop(0, '#3a4a5a'); bGradient.addColorStop(1, '#050c12'); }
+            else if (isDesert) { bGradient.addColorStop(0, '#c2b280'); bGradient.addColorStop(0.4, '#a68a64'); bGradient.addColorStop(1, '#7a5c43'); }
+            else if (isWetland) { bGradient.addColorStop(0, '#2d1a0f'); bGradient.addColorStop(1, '#0d0805'); }
             else { bGradient.addColorStop(0, '#252535'); bGradient.addColorStop(1, '#151520'); }
             
             ctx.fillStyle = bGradient;
-            ctx.strokeStyle = isWasteland ? 'rgba(150, 80, 50, 0.5)' : (isIndustrial ? '#333' : (isTundra ? 'rgba(200, 240, 255, 0.6)' : 'rgba(0, 242, 255, 0.6)'));
+            ctx.strokeStyle = isWasteland ? 'rgba(150, 80, 50, 0.5)' : (isIndustrial ? '#333' : (isTundra ? 'rgba(200, 240, 255, 0.6)' : (isDesert ? '#5d4a37' : (isWetland ? '#1a2a1a' : 'rgba(0, 242, 255, 0.6)'))));
             ctx.lineWidth = 2;
             
             ctx.beginPath();
@@ -2930,8 +3121,112 @@ function drawElements() {
                 ctx.globalAlpha = 1.0; ctx.shadowBlur = 0;
             }
 
-            // C. Fallback Windows (Tundra, Wasteland, Default)
-            if (!isIndustrial && !isUrban) {
+            // C. Desert Adobe Details (Small windows, Vigas, Texture)
+            if (isDesert && ENABLE_PREMIUM_VISUALS) {
+                // 1. Sand-blasted Texture
+                ctx.fillStyle = 'rgba(0,0,0,0.05)';
+                for (let i = 0; i < 20; i++) {
+                    const seed = e.id + i * 19;
+                    const tx = e.x - e.w/2 + getStableRandom(seed) * e.w;
+                    const ty = e.y - e.h/2 + getStableRandom(seed + 1) * e.h;
+                    ctx.beginPath(); ctx.arc(tx, ty, 1.5, 0, Math.PI * 2); ctx.fill();
+                }
+
+                // 2. Adobe Windows (Small, dark, recessed)
+                const winSize = 8; const spacing = 20;
+                ctx.fillStyle = '#2a1a0f';
+                for (let wy = e.y - e.h/2 + 20; wy < e.y + e.h/2 - 10; wy += spacing) {
+                    for (let wx = e.x - e.w/2 + 20; wx < e.x + e.w/2 - 10; wx += spacing) {
+                        const seed = wx + wy + e.id;
+                        if (getStableRandom(seed) > 0.4) {
+                            ctx.fillRect(wx, wy, winSize, winSize);
+                            // Window Sill/Shadow
+                            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+                            ctx.fillRect(wx, wy, winSize, 2);
+                            ctx.fillStyle = '#2a1a0f';
+                        }
+                    }
+                }
+
+                // 3. Wooden Vigas (Support beams sticking out)
+                ctx.fillStyle = '#3d2b1f';
+                const vigaSize = 4;
+                for (let vx = e.x - e.w/2 + 10; vx < e.x + e.w/2 - 5; vx += 15) {
+                    // Top row
+                    ctx.beginPath(); ctx.arc(vx, e.y - e.h/2 + 10, vigaSize, 0, Math.PI * 2); ctx.fill();
+                    // Bottom shadow for viga
+                    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+                    ctx.beginPath(); ctx.arc(vx, e.y - e.h/2 + 11, vigaSize, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = '#3d2b1f';
+                }
+            }
+
+            // D. Wasteland Scrap Ruins (Corrugated Metal, Rust, Scaffolding)
+            if (isWasteland && ENABLE_PREMIUM_VISUALS) {
+                // 1. Corrugated Metal Texture
+                ctx.strokeStyle = 'rgba(0,0,0,0.1)'; ctx.lineWidth = 1;
+                for (let i = 8; i < e.w; i += 8) {
+                    ctx.beginPath(); ctx.moveTo(e.x - e.w/2 + i, e.y - e.h/2); ctx.lineTo(e.x - e.w/2 + i, e.y + e.h/2); ctx.stroke();
+                }
+                
+                // 2. Rust patches
+                ctx.fillStyle = 'rgba(139, 69, 19, 0.2)';
+                for (let i = 0; i < 5; i++) {
+                    const seed = e.id + i;
+                    const rx = e.x - e.w/2 + getStableRandom(seed) * e.w;
+                    const ry = e.y - e.h/2 + getStableRandom(seed + 1) * e.h;
+                    ctx.beginPath(); ctx.arc(rx, ry, 10, 0, Math.PI * 2); ctx.fill();
+                }
+
+                // 3. Scaffolding / External Pipes
+                ctx.strokeStyle = '#333'; ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(e.x - e.w/2 - 2, e.y - e.h/2 + 10);
+                ctx.lineTo(e.x - e.w/2 - 2, e.y + e.h/2 - 10);
+                ctx.stroke();
+                // Rivets on pipes
+                ctx.fillStyle = '#555';
+                for (let py = -e.h/2 + 20; py < e.h/2 - 10; py += 30) {
+                    ctx.beginPath(); ctx.arc(e.x - e.w/2 - 2, e.y + py, 2, 0, Math.PI * 2); ctx.fill();
+                }
+            }
+
+            // F. Wetland Swamp Shack Details (Moss, Vines, Stilts)
+            if (isWetland && ENABLE_PREMIUM_VISUALS) {
+                // 1. Moss Patches
+                ctx.fillStyle = 'rgba(40, 80, 40, 0.3)';
+                for (let i = 0; i < 4; i++) {
+                    const seed = e.id + i * 11;
+                    const mx = e.x - e.w/2 + getStableRandom(seed) * e.w;
+                    const my = e.y - e.h/2 + getStableRandom(seed + 1) * e.h;
+                    ctx.beginPath(); ctx.ellipse(mx, my, 12, 6, getStableRandom(seed + 2) * Math.PI, 0, Math.PI * 2); ctx.fill();
+                }
+
+                // 2. Hanging Vines
+                ctx.strokeStyle = 'rgba(60, 100, 60, 0.5)'; ctx.lineWidth = 2;
+                for (let i = 0; i < 3; i++) {
+                    const seed = e.id + i * 23;
+                    const vx = e.x - e.w/2 + 10 + getStableRandom(seed) * (e.w - 20);
+                    const vy = e.y - e.h/2;
+                    const vLen = 15 + getStableRandom(seed + 1) * 20;
+                    ctx.beginPath();
+                    ctx.moveTo(vx, vy);
+                    ctx.quadraticCurveTo(vx + Math.sin(renderTime * 0.002 + i) * 5, vy + vLen/2, vx, vy + vLen);
+                    ctx.stroke();
+                }
+
+                // 3. Wooden Stilts (Corner support beams)
+                ctx.fillStyle = '#1a0d05';
+                const stiltW = 6;
+                ctx.fillRect(e.x - e.w/2 - 2, e.y - e.h/2, stiltW, e.h); // Left stilt
+                ctx.fillRect(e.x + e.w/2 - stiltW + 2, e.y - e.h/2, stiltW, e.h); // Right stilt
+                
+                // Horizontal reinforcement
+                ctx.fillRect(e.x - e.w/2, e.y + e.h/4, e.w, 4);
+            }
+
+            // G. Fallback Windows (Tundra, Default)
+            if (!isIndustrial && !isUrban && !isDesert && !isWasteland && !isWetland) {
                 const winSpacingX = 15; const winSpacingY = 18;
                 for (let wx = e.x - e.w/2 + 15; wx < e.x + e.w/2 - 10; wx += winSpacingX) {
                     for (let wy = e.y - e.h/2 + 15; wy < e.y + e.h/2 - 10; wy += winSpacingY) {
@@ -2951,10 +3246,20 @@ function drawElements() {
                 let texts = ['HOTEL', 'BAR', 'CLUB', 'REPAIR', 'TANK', 'NEON'];
                 if (isWasteland) { neonColors = ['#ff5500', '#ff0000', '#aa6600']; texts = ['DEAD', 'LOST', 'VOID', 'RUST']; }
                 else if (isIndustrial) { neonColors = ['#00f2ff', '#ffff00', '#55ff00']; texts = ['REACTOR', 'CORE', 'POWER']; }
+                else if (isDesert) { neonColors = ['#ff8800', '#ffff00', '#ff0000']; texts = ['OASIS', 'SALOON', 'DUST', 'MIRAGE']; }
                 const nColor = neonColors[e.id % neonColors.length]; const text = texts[e.id % texts.length];
-                ctx.save(); ctx.translate(e.x, e.y - e.h/2 - 10);
+                ctx.save(); ctx.translate(e.x, e.y - e.h/2);
+                // Draw Support Pole for the sign
+                ctx.strokeStyle = '#333'; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -15); ctx.stroke();
+                
                 const flicker = isWasteland ? (Math.random() > 0.2 ? (Math.sin(renderTime * 0.05 + e.id) > 0 ? 1 : 0) : 0) : 1;
-                if (flicker) { ctx.shadowBlur = 10; ctx.shadowColor = nColor; ctx.fillStyle = nColor; ctx.font = 'bold 14px Outfit'; ctx.textAlign = 'center'; ctx.fillText(text, 0, 0); }
+                if (flicker) { 
+                    ctx.shadowBlur = 10; ctx.shadowColor = nColor; 
+                    ctx.fillStyle = nColor; ctx.font = 'bold 14px Outfit'; 
+                    ctx.textAlign = 'center'; 
+                    ctx.fillText(text, 0, -20); 
+                }
                 ctx.restore();
             }
 
@@ -2968,6 +3273,20 @@ function drawElements() {
                     ctx.fillStyle = '#ffcc00'; ctx.beginPath(); ctx.moveTo(sx, e.y + e.h/2 - 20); ctx.lineTo(sx + 15, e.y + e.h/2 - 20); ctx.lineTo(sx + 5, e.y + e.h/2 + 10); ctx.lineTo(sx - 10, e.y + e.h/2 + 10); ctx.fill();
                     ctx.fillStyle = '#111'; ctx.beginPath(); ctx.moveTo(sx + 15, e.y + e.h/2 - 20); ctx.lineTo(sx + 30, e.y + e.h/2 - 20); ctx.lineTo(sx + 20, e.y + e.h/2 + 10); ctx.lineTo(sx + 5, e.y + e.h/2 + 10); ctx.fill();
                 }
+                ctx.restore();
+            }
+
+            // Desert Roof Details (AC units, Vents)
+            if (isDesert && ENABLE_PREMIUM_VISUALS) {
+                ctx.save();
+                ctx.fillStyle = '#5d4a37'; // Dusty metallic
+                const unitSize = 10;
+                // Add a small AC unit on the roof
+                const ux = e.x + e.w/4; const uy = e.y - e.h/4;
+                ctx.fillRect(ux - unitSize/2, uy - unitSize/2, unitSize, unitSize);
+                // AC Unit Grille
+                ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 1;
+                for(let i=0; i<3; i++) { ctx.beginPath(); ctx.moveTo(ux - 4, uy - 3 + i*3); ctx.lineTo(ux + 4, uy - 3 + i*3); ctx.stroke(); }
                 ctx.restore();
             }
 
@@ -3140,6 +3459,15 @@ function drawElements() {
                     p.setTransform(new DOMMatrix().translate(flowX, flowX * 0.5));
                     ctx.fillStyle = p; ctx.globalAlpha = 0.8; ctx.shadowBlur = 15; ctx.shadowColor = 'rgba(0, 242, 255, 0.6)';
                     drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id); ctx.fill();
+                    // Water Bubbles
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+                    for (let i = 0; i < 3; i++) {
+                        const seed = e.id + i * 15;
+                        const phase = renderTime * 0.0015 + seed;
+                        const bx = e.x + Math.cos(phase) * drawRadius * 0.5;
+                        const by = e.y + Math.sin(phase) * drawRadius * 0.5;
+                        ctx.beginPath(); ctx.arc(bx, by, 2, 0, Math.PI * 2); ctx.fill();
+                    }
                     ctx.restore();
                 } else if (e.t === MATERIALS.OIL && ENABLE_PREMIUM_VISUALS && oilPatterns.length > 0) {
                     ctx.fillStyle = 'rgba(15, 15, 20, 0.95)'; drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id); ctx.fill();
@@ -3167,6 +3495,16 @@ function drawElements() {
                     p.setTransform(new DOMMatrix().translate(flowX, flowX * 0.5));
                     ctx.fillStyle = p; ctx.shadowBlur = 12; ctx.shadowColor = 'rgba(0, 255, 100, 0.8)';
                     drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id); ctx.fill();
+                    // Acid Bubbles
+                    ctx.fillStyle = 'rgba(100, 255, 100, 0.3)';
+                    for (let i = 0; i < 4; i++) {
+                        const seed = e.id + i * 12;
+                        const phase = renderTime * 0.002 + seed;
+                        const bx = e.x + Math.cos(phase) * drawRadius * 0.6;
+                        const by = e.y + Math.sin(phase) * drawRadius * 0.6;
+                        const r = 1.5 + Math.sin(phase * 2) * 2;
+                        if (r > 0.5) { ctx.beginPath(); ctx.arc(bx, by, r, 0, Math.PI * 2); ctx.fill(); }
+                    }
                     ctx.restore();
                 } else if (e.t === MATERIALS.ELECTRIC && ENABLE_PREMIUM_VISUALS && electricPatterns.length > 0) {
                     ctx.fillStyle = 'rgba(0, 50, 150, 0.4)'; drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id); ctx.fill();
@@ -3176,6 +3514,37 @@ function drawElements() {
                     p.setTransform(new DOMMatrix().translate(flowX, -flowX * 0.5));
                     ctx.fillStyle = p; ctx.shadowBlur = 15; ctx.shadowColor = '#00f2ff';
                     drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id); ctx.fill();
+                    ctx.restore();
+                } else if (e.t === MATERIALS.DIRT && ENABLE_PREMIUM_VISUALS) {
+                    const drawRadiusDirt = drawRadius;
+                    // 1. Base Shadow
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                    drawOrganicPath(ctx, e.x + 5, e.y + 5, drawRadiusDirt, e.id);
+                    ctx.fill();
+
+                    // 2. Main Earth Body (Radial Gradient for Volume)
+                    const dirtGrad = ctx.createRadialGradient(e.x - drawRadiusDirt * 0.2, e.y - drawRadiusDirt * 0.2, 0, e.x, e.y, drawRadiusDirt);
+                    dirtGrad.addColorStop(0, '#6b4f3a'); // Lighter center
+                    dirtGrad.addColorStop(1, '#3d2b1f'); // Darker edges
+                    ctx.fillStyle = dirtGrad;
+                    drawOrganicPath(ctx, e.x, e.y, drawRadiusDirt, e.id);
+                    ctx.fill();
+
+                    // 3. Texture (Grit/Pebbles)
+                    ctx.save();
+                    ctx.clip(); // Keep texture inside the mound
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                    for (let i = 0; i < 8; i++) {
+                        const seed = e.id + i * 77;
+                        const px = e.x + (getStableRandom(seed) - 0.5) * drawRadiusDirt * 1.5;
+                        const py = e.y + (getStableRandom(seed + 1) - 0.5) * drawRadiusDirt * 1.5;
+                        const ps = 2 + getStableRandom(seed + 2) * 4;
+                        ctx.beginPath(); ctx.arc(px, py, ps, 0, Math.PI * 2); ctx.fill();
+                    }
+                    // Highlight on top edges
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath(); ctx.arc(e.x, e.y, drawRadiusDirt * 0.8, -2, -0.5); ctx.stroke();
                     ctx.restore();
                 } else if (e.t === MATERIALS.ICE && ENABLE_PREMIUM_VISUALS) {
                     const drawRadiusIce = baseRadius;

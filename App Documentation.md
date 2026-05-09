@@ -41,7 +41,7 @@ Matches feature unique, randomly generated maps:
 - **URBAN**: Dense city grid with buildings and narrow streets.
 - **WASTELAND**: Post-apocalyptic terrain with radioactive pools, floating ash, and dynamic wind.
 - **INDUSTRIAL**: High-tech factory environment with concrete floors, pulsing neon power cables, procedural steam vents, and complex industrial structures like **Silos** and **Refineries**. Features circular and rectangular building clusters with hazard-striped bases and vertical piping.
-- **WETLAND**: Murky swamp land with lily pads, fireflies, rising gas bubbles, and a thick atmospheric mist. Reduced movement speed.
+- **WETLAND**: Murky swamp land with dynamic water ripples, interactive **Dragonflies**, and detailed lily pads featuring procedural blooms (white/pink). Features **Swamp Shack** structures (stilt houses with moss and vines), thick atmospheric mist, fireflies with trailing glow, and rising gas bubbles. Reduced movement speed.
 - **TUNDRA**: Frozen wasteland with snow hares, wind gusts, and slippery ice. Features a cold frost aesthetic.
 
 ### 2. Elemental Interactions (Alchemy)
@@ -380,4 +380,12 @@ To transition from a learning project to a **marketable product**, the following
     5.  **Engine Vapor**: Smoke/vapor puffs from tank chassit in cold air.
     6.  **Refined Ice Sheets**: Improved "Black Ice" ground details with sharp crack lines and reflections.
 - **Technical Note**: Added global `windVector` and `auroraPhase` to manage atmospheric animations.
++
++#### **ReferenceError: worldSize is not defined in drawZones**
++- **Date**: 2026-05-09
++- **Issue**: The game would crash in the `drawZones` function with `Uncaught ReferenceError: worldSize is not defined`.
++- **Root Cause**: The `drawZones` function was using `worldSize` in a loop to draw road markings/grid lines, but the variable was not defined within the function's scope.
++- **Fix**: Added `const worldSize = gameState.worldSize || 4000;` to the top of the `drawZones` function, consistent with other rendering functions like `drawGrid` and `drawMinimap`.
++- **Verification**: Validated syntax and verified that the urban road markings render correctly without crashing.
+
 
