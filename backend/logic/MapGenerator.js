@@ -73,8 +73,12 @@ export class MapGenerator {
             }
         }
 
-        if (mapType === 'INDUSTRIAL') {
-            const puddleCount = Math.floor(this.lobby.worldSize / 600); 
+        if (['INDUSTRIAL', 'URBAN', 'WASTELAND', 'DESERT'].includes(mapType)) {
+            const isUrban = mapType === 'URBAN';
+            const isDesert = mapType === 'DESERT';
+            const isWasteland = mapType === 'WASTELAND';
+            
+            const puddleCount = Math.floor(this.lobby.worldSize / (isUrban ? 400 : 250)); 
             for (let i = 0; i < puddleCount; i++) {
                 let spawned = false;
                 for (let attempts = 0; attempts < 15 && !spawned; attempts++) {
@@ -83,10 +87,22 @@ export class MapGenerator {
                         y: 200 + Math.random() * (this.lobby.worldSize - 400) 
                     };
                     const r = Math.random();
-                    let pType = MATERIALS.ELECTRIC;
-                    if (r > 0.5 && r <= 0.7) pType = MATERIALS.ACID;
-                    else if (r > 0.7 && r <= 0.85) pType = MATERIALS.WATER;
-                    else if (r > 0.85) pType = MATERIALS.OIL;
+                    let pType = MATERIALS.WATER;
+
+                    if (isUrban) {
+                        pType = r > 0.8 ? MATERIALS.OIL : MATERIALS.WATER;
+                    } else if (isWasteland) {
+                        pType = r > 0.6 ? MATERIALS.ACID : MATERIALS.OIL;
+                    } else if (isDesert) {
+                        if (r > 0.7) pType = MATERIALS.WATER;
+                        else if (r > 0.4) pType = MATERIALS.OIL;
+                        else pType = MATERIALS.DIRT;
+                    } else { // Industrial
+                        pType = MATERIALS.ELECTRIC;
+                        if (r > 0.5 && r <= 0.7) pType = MATERIALS.ACID;
+                        else if (r > 0.7 && r <= 0.85) pType = MATERIALS.WATER;
+                        else if (r > 0.85) pType = MATERIALS.OIL;
+                    }
 
                     const tooClose = Object.values(this.lobby.elements).some(e => {
                         const dist = Vector.magnitude(Vector.sub(e.body.position, pos));
@@ -94,7 +110,7 @@ export class MapGenerator {
                     });
 
                     if (!tooClose) {
-                        const size = 100 + Math.random() * 60; 
+                        const size = 100 + Math.random() * 80; 
                         if (this.lobby.spawnElement(pos, pType, null, null, null, size, size)) {
                             spawned = true;
                         }
@@ -166,7 +182,7 @@ export class MapGenerator {
             }
             this.lobby.spawnBuilding({ x: bx + ox, y: by + oy }, bw, bh, isSilo ? 'circle' : 'rect');
             if (isMain) {
-                const propCount = 4 + Math.floor(Math.random() * 4);
+                const propCount = 6 + Math.floor(Math.random() * 4);
                 for (let j = 0; j < propCount; j++) {
                     const ang = Math.random() * Math.PI * 2;
                     const r = (bw/2 + 35) + Math.random() * 15;
@@ -214,7 +230,7 @@ export class MapGenerator {
             this.lobby.spawnBuilding({ x: bx + size/2, y: by + size/2 }, bw1, bh1);
             this.lobby.spawnBuilding({ x: bx + size/2, y: by + size/2 }, bw2, bh2);
         }
-        const propCount = 1 + Math.floor(Math.random() * 2);
+        const propCount = 3 + Math.floor(Math.random() * 3);
         for (let i = 0; i < propCount; i++) {
             const pos = { x: bx + Math.random() * size, y: by + Math.random() * size };
             const rand = Math.random();
