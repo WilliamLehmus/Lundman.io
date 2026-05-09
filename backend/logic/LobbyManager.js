@@ -233,6 +233,8 @@ export class Lobby {
         Query.region(Object.values(this.elements).map(e => e.body), body.bounds).forEach(other => {
             if (other !== body) this.combatEngine.processElementInteraction(body, other);
         });
+
+        if (isSolid) this.navGrid.markDirty();
         return this.elements[id];
     }
 
@@ -244,6 +246,7 @@ export class Lobby {
         body.elementId = id;
         this.elements[id] = { id, body, type: MATERIALS.BUILDING, hp: 800, w, h, shape: shape };
         Composite.add(this.engine.world, body);
+        this.navGrid.markDirty();
     }
 
     destroyBullet(id) {
@@ -251,7 +254,12 @@ export class Lobby {
     }
 
     destroyElement(id) {
-        if (this.elements[id]) { Composite.remove(this.engine.world, this.elements[id].body); delete this.elements[id]; }
+        if (this.elements[id]) { 
+            const isSolid = !this.elements[id].body.isSensor;
+            Composite.remove(this.engine.world, this.elements[id].body); 
+            delete this.elements[id]; 
+            if (isSolid) this.navGrid.markDirty();
+        }
     }
 
     cleanupElements() {

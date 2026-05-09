@@ -18,8 +18,10 @@ export class BotAI {
             if (!b.isSensor) return true;
             if (b.label === 'element') {
                 const e = this.lobby.elements[b.elementId];
-                if (e && [MATERIALS.FIRE, MATERIALS.ELECTRIC, MATERIALS.ACID, MATERIALS.GAS].includes(e.type)) return true;
-                if (e && e.type === MATERIALS.BUILDING) return true;
+                if (!e) return false;
+                const hazardous = [MATERIALS.FIRE, MATERIALS.ELECTRIC, MATERIALS.ACID, MATERIALS.GAS].includes(e.type);
+                const solid = [MATERIALS.BUILDING, MATERIALS.DIRT, MATERIALS.CRATE, MATERIALS.BARREL_EXPLOSIVE, MATERIALS.BARREL_OIL].includes(e.type);
+                if (hazardous || solid) return true;
             }
             return false;
         });
@@ -30,7 +32,6 @@ export class BotAI {
                 return;
             }
 
-            const now = Date.now();
             const diff = bot.botDifficulty || 'NORMAL';
             const settings = {
                 'EASY':   { aimError: 0.25, leadMult: 0.3, dodgeChance: 0.3, reactionMs: 1000, strafeFreq: 0.01 },
@@ -38,29 +39,44 @@ export class BotAI {
                 'HARD':   { aimError: 0.02, leadMult: 1.0, dodgeChance: 0.9, reactionMs: 200,  strafeFreq: 0.08 }
             }[diff] || { aimError: 0.10, leadMult: 0.7, dodgeChance: 0.6, reactionMs: 500, strafeFreq: 0.03 };
 
+            const speed = Vector.magnitude(bot.body.velocity);
+            const botObstacles = localObstacles.filter(b => b.id !== bot.body.id);
+
             // 0. Objective Selection (Targeting)
             let target = null;
-            let minDist = 1500;
+            let minDist = 2000;
+            const myPos = bot.body.position;
+
             Object.values(this.lobby.players).forEach(p => {
                 if (p.id !== bot.id && p.team !== bot.team && p.hp > 0 && !p.hidden) {
-                    const d = Vector.magnitude(Vector.sub(p.body.position, bot.body.position));
+                    const d = Vector.magnitude(Vector.sub(p.body.position, myPos));
                     if (d < minDist) {
-                        if (diff === 'HARD' && p.hp < 40 && d < 1200) { target = p; minDist = d; }
+                        if (diff === 'HARD' && p.hp < 40 && d < 1500) { target = p; minDist = d; }
                         else if (!target || d < minDist) { target = p; minDist = d; }
                     }
                 }
             });
 
             // 1. Pathfinding Logic
+            let canSeeTarget = false;
             if (target) {
-                const distToTarget = Vector.magnitude(Vector.sub(target.body.position, bot.body.position));
+                canSeeTarget = this.canSee(bot.body, target.body, botObstacles);
+            }
+
+            let engaging = false;
+            let idealDist = 250;
+
+            if (target) {
+                const distToTarget = Vector.magnitude(Vector.sub(target.body.position, myPos));
                 
-                // Recalculate path if target moved far or path is old
-                if (distToTarget > 250 && (!bot.path || bot.path.length === 0 || now - bot.lastPathUpdate > 1200)) {
-                    let newPath = this.lobby.navGrid.findPath(bot.body.position, target.body.position);
+                // Recalculate path if target moved far, path is old, or LOS is blocked
+                const shouldUpdatePath = distToTarget > 250 || !canSeeTarget;
+                const pathStale = !bot.path || bot.path.length === 0 || now - (bot.lastPathUpdate || 0) > 1000;
+                
+                if (shouldUpdatePath && pathStale) {
+                    let newPath = this.lobby.navGrid.findPath(myPos, target.body.position);
                     if (newPath) {
-                        // String Pulling / Path Smoothing
-                        bot.path = this.smoothPath(bot.body.position, newPath, localObstacles);
+                        bot.path = newPath;
                         bot.lastPathUpdate = now;
                     }
                 }
@@ -68,15 +84,15 @@ export class BotAI {
                 // If we have a path, follow it
                 if (bot.path && bot.path.length > 0) {
                     let nextNode = bot.path[0];
-                    let distToNode = Vector.magnitude(Vector.sub(nextNode, bot.body.position));
+                    let distToNode = Vector.magnitude(Vector.sub(nextNode, myPos));
                     
                     // LOS Check to further nodes to skip intermediate steps
                     if (bot.path.length > 1) {
                         for (let i = Math.min(bot.path.length - 1, 3); i > 0; i--) {
-                            if (this.canSee(bot.body, { position: bot.path[i] }, localObstacles)) {
+                            if (this.canSee(bot.body, { position: bot.path[i] }, botObstacles)) {
                                 bot.path.splice(0, i);
                                 nextNode = bot.path[0];
-                                distToNode = Vector.magnitude(Vector.sub(nextNode, bot.body.position));
+                                distToNode = Vector.magnitude(Vector.sub(nextNode, myPos));
                                 break;
                             }
                         }
@@ -92,13 +108,39 @@ export class BotAI {
             } else {
                 bot.path = [];
                 if (Math.random() > 0.99 || !bot.idleTarget) {
-                    bot.idleTarget = { x: 300 + Math.random() * (this.lobby.worldSize - 600), y: 300 + Math.random() * (this.lobby.worldSize - 600) };
+                    bot.idleTarget = { x: 400 + Math.random() * (this.lobby.worldSize - 800), y: 400 + Math.random() * (this.lobby.worldSize - 800) };
                 }
                 bot.pathObjective = bot.idleTarget;
+                
+                // Periodic pathfinding to idle target if far
+                const distToIdle = Vector.magnitude(Vector.sub(bot.idleTarget, bot.body.position));
+                if (distToIdle > 500 && now - (bot.lastPathUpdate || 0) > 2000) {
+                    const idlePath = this.lobby.navGrid.findPath(bot.body.position, bot.idleTarget);
+                    if (idlePath) {
+                        bot.path = idlePath;
+                        bot.lastPathUpdate = now;
+                    }
+                }
             }
 
             // 2. Navigation & Steering
-            const objectivePos = bot.pathObjective || bot.body.position;
+            let objectivePos = bot.pathObjective || bot.body.position;
+
+            // Combat Engagement Override
+            if (target && canSeeTarget) {
+                const currentWeapon = bot.slots[bot.currentSlot];
+                if (['TESLA', 'FLAMETHROWER'].includes(currentWeapon)) idealDist = 130;
+                if (['HEAVY_GUN', 'SNIPER'].includes(currentWeapon)) idealDist = 500;
+                
+                const tDist = Vector.magnitude(Vector.sub(target.body.position, bot.body.position));
+                
+                // If we can see target and we are close enough, stop following path and engage directly
+                if (tDist < 800) {
+                    objectivePos = target.body.position;
+                    engaging = true;
+                }
+            }
+
             const dist = Vector.magnitude(Vector.sub(objectivePos, bot.body.position));
             const angleToPos = Math.atan2(objectivePos.y - bot.body.position.y, objectivePos.x - bot.body.position.x);
             let angleDiff = angleToPos - bot.body.angle;
@@ -108,16 +150,19 @@ export class BotAI {
             bot.inputs.left = angleDiff < -0.15;
             bot.inputs.right = angleDiff > 0.15;
 
-            // Triple-Raycast Obstacle Avoidance (Now with wider spread for cornering)
-            const rayDist = 130;
-            const spread = 0.7;
-            const centerRay = Vector.add(bot.body.position, Vector.mult(Vector.create(Math.cos(bot.body.angle), Math.sin(bot.body.angle)), rayDist));
-            const leftRay = Vector.add(bot.body.position, Vector.mult(Vector.create(Math.cos(bot.body.angle - spread), Math.sin(bot.body.angle - spread)), rayDist));
-            const rightRay = Vector.add(bot.body.position, Vector.mult(Vector.create(Math.cos(bot.body.angle + spread), Math.sin(bot.body.angle + spread)), rayDist));
-
-            const hitC = Query.point(localObstacles, centerRay).length > 0;
-            const hitL = Query.point(localObstacles, leftRay).length > 0;
-            const hitR = Query.point(localObstacles, rightRay).length > 0;
+            // Multi-Point Raycast (Check 75px and 150px for better near-field awareness)
+            const rayDist = 150;
+            const rayDistMid = 75;
+            const spread = 0.8;
+            
+            const getRayPoints = (angle, dist) => Vector.add(bot.body.position, Vector.mult(Vector.create(Math.cos(angle), Math.sin(angle)), dist));
+            
+            const hitC = Query.point(botObstacles, getRayPoints(bot.body.angle, rayDist)).length > 0 || 
+                         Query.point(botObstacles, getRayPoints(bot.body.angle, rayDistMid)).length > 0;
+            const hitL = Query.point(botObstacles, getRayPoints(bot.body.angle - spread, rayDist)).length > 0 ||
+                         Query.point(botObstacles, getRayPoints(bot.body.angle - spread, rayDistMid)).length > 0;
+            const hitR = Query.point(botObstacles, getRayPoints(bot.body.angle + spread, rayDist)).length > 0 ||
+                         Query.point(botObstacles, getRayPoints(bot.body.angle + spread, rayDistMid)).length > 0;
 
             const isRecovering = (bot.recoveryUntil || 0) > now;
 
@@ -127,35 +172,32 @@ export class BotAI {
                 bot.inputs.left = bot.recoveryDir > 0;
                 bot.inputs.right = bot.recoveryDir < 0;
             } else if (hitC || hitL || hitR) {
+                bot.inputs.up = false;
                 if (hitL && !hitR) { bot.inputs.right = true; bot.inputs.left = false; }
                 else if (hitR && !hitL) { bot.inputs.left = true; bot.inputs.right = false; }
                 else {
-                    bot.inputs.up = false;
                     bot.inputs.down = true;
                     bot.inputs.left = Math.random() > 0.5;
                     bot.inputs.right = !bot.inputs.left;
                 }
             } else {
-                let idealDist = 250;
-                const currentWeapon = bot.slots[bot.currentSlot];
-                if (['TESLA', 'FLAMETHROWER'].includes(currentWeapon)) idealDist = 130;
-                if (['HEAVY_GUN', 'SNIPER'].includes(currentWeapon)) idealDist = 500;
-
                 const isFacing = Math.abs(angleDiff) < 0.6;
-                const isVeryCloseToObjective = dist < 70;
-
-                if (target && dist < 300) {
-                    const tDist = Vector.magnitude(Vector.sub(target.body.position, bot.body.position));
-                    bot.inputs.up = isFacing && tDist > idealDist + 50;
-                    bot.inputs.down = isFacing && tDist < idealDist - 50 && bot.chassis !== 'BRAWLER';
+                const canMoveWhileTurning = Math.abs(angleDiff) < 1.2; // Allow moving while turning if somewhat facing
+                
+                if (engaging) {
+                    // Engagement Movement (Strafe, Maintain Distance)
+                    bot.inputs.up = canMoveWhileTurning && dist > idealDist + 50;
+                    bot.inputs.down = canMoveWhileTurning && dist < idealDist - 50 && bot.chassis !== 'BRAWLER';
                     
                     if (Math.random() < settings.strafeFreq) bot.strafeDir = Math.random() > 0.5 ? 1 : -1;
-                    if (tDist < idealDist + 200) {
+                    if (dist < idealDist + 200) {
                         if (bot.strafeDir > 0) bot.inputs.right = true; else bot.inputs.left = true;
                     }
                 } else {
-                    bot.inputs.up = isFacing && !isVeryCloseToObjective;
-                    bot.inputs.down = !isFacing && dist < 120;
+                    // Pure Path following
+                    const isVeryCloseToObjective = dist < 50;
+                    bot.inputs.up = canMoveWhileTurning && !isVeryCloseToObjective;
+                    bot.inputs.down = !isFacing && dist < 120 && speed > 2; // only brake if going fast
                 }
             }
 
@@ -172,11 +214,10 @@ export class BotAI {
                 const aimAngle = Math.atan2(aimTarget.y - bot.body.position.y, aimTarget.x - bot.body.position.x);
                 bot.inputs.aimAngle = aimAngle + (Math.random() - 0.5) * settings.aimError;
                 
-                const canSee = this.canSee(bot.body, target.body, localObstacles);
-                bot.inputs.shoot = canSee && tDist < 850;
+                bot.inputs.shoot = canSeeTarget && tDist < 850;
 
                 if (now > (bot.evadeUntil || 0)) {
-                    const bullets = Object.values(this.lobby.bullets).filter(b => b.customData.ownerId !== bot.id && Vector.magnitude(Vector.sub(b.position, bot.body.position)) < 250);
+                    const bullets = Object.values(this.lobby.bullets || {}).filter(b => b.customData.ownerId !== bot.id && Vector.magnitude(Vector.sub(b.position, bot.body.position)) < 250);
                     if (bullets.length > 0 && Math.random() < settings.dodgeChance) {
                         bot.evadeUntil = now + 600;
                         bot.evadeDir = Math.random() > 0.5 ? 1 : -1;
@@ -191,11 +232,10 @@ export class BotAI {
             }
 
             // 4. Stuck Detection & Recovery
-            const speed = Vector.magnitude(bot.body.velocity);
-            if ((bot.inputs.up || bot.inputs.down) && speed < 0.2) {
+            if ((bot.inputs.up || bot.inputs.down) && speed < 0.25) {
                 bot.stuckTicks = (bot.stuckTicks || 0) + 1;
-                if (bot.stuckTicks > 50) {
-                    bot.recoveryUntil = now + 800;
+                if (bot.stuckTicks > 40) {
+                    bot.recoveryUntil = now + 1000;
                     bot.recoveryDir = Math.random() > 0.5 ? 1 : -1;
                     bot.path = []; // Force rebuild
                     bot.stuckTicks = 0;
@@ -204,25 +244,6 @@ export class BotAI {
                 bot.stuckTicks = 0;
             }
         });
-    }
-
-    smoothPath(startPos, path, obstacles) {
-        if (!path || path.length < 2) return path;
-        // Simple string pulling: if we can see further, skip intermediate nodes
-        const result = [];
-        let current = startPos;
-        for (let i = 0; i < path.length; i++) {
-            if (i === path.length - 1) {
-                result.push(path[i]);
-                break;
-            }
-            // Check if we can see the NEXT node from current
-            if (!this.canSee({ position: current }, { position: path[i+1] }, obstacles)) {
-                result.push(path[i]);
-                current = path[i];
-            }
-        }
-        return result;
     }
 
     predictTargetPosition(shooterPos, targetPos, targetVel, bulletSpeed) {
@@ -237,8 +258,17 @@ export class BotAI {
         return { x: targetPos.x + vx * t, y: targetPos.y + vy * t };
     }
 
-    canSee(botBody, targetBody, obstacles) {
-        const ray = Query.ray(obstacles, botBody.position, targetBody.position);
-        return !ray.some(hit => hit.body !== botBody && hit.body !== targetBody);
+    canSee(source, target, obstacles, sourceBody = null) {
+        // Source and target can be bodies or just objects with position
+        const p1 = source.position || source;
+        const p2 = target.position || target;
+        const ray = Query.ray(obstacles, p1, p2);
+        
+        return !ray.some(hit => {
+            if (sourceBody && hit.body.id === sourceBody.id) return false;
+            if (source.id && hit.body.id === source.id) return false;
+            if (target.id && hit.body.id === target.id) return false;
+            return true;
+        });
     }
 }

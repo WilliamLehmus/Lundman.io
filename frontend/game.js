@@ -1663,6 +1663,13 @@ const FPS_LIMIT = 60;
 const FRAME_INTERVAL = 1000 / FPS_LIMIT;
 let lastRenderTime = 0;
 
+function isRectInView(x, y, w, h, buffer = 100) {
+    return x + w/2 > camera.x - buffer && 
+           x - w/2 < camera.x + canvas.width + buffer && 
+           y + h/2 > camera.y - buffer && 
+           y - h/2 < camera.y + canvas.height + buffer;
+}
+
 function renderLoop(now) {
     requestAnimationFrame(renderLoop);
 
@@ -1838,6 +1845,7 @@ function renderLoop(now) {
 }
 
 function drawTank(p) {
+    if (!isRectInView(p.x, p.y, TANK_WIDTH * 1.5, TANK_WIDTH * 1.5)) return;
     if (p.hid && p.id !== myId) return;
 
     const teamColor = p.t === 'blue' ? '#00f2ff' : '#ff00ff';
@@ -2326,8 +2334,9 @@ function drawGrid() {
         if (isUrban) {
             ctx.save();
             // A. Grainy Asphalt
+            const grainCount = ENABLE_PREMIUM_VISUALS ? 400 : 150;
             ctx.fillStyle = 'rgba(255,255,255,0.015)';
-            for (let i = 0; i < 1000; i++) {
+            for (let i = 0; i < grainCount; i++) {
                 const seed = i * 13.5;
                 const rx = getStableRandom(seed) * worldSize;
                 const ry = getStableRandom(seed + 1) * worldSize;
@@ -3333,6 +3342,9 @@ function drawElements() {
     const isTundra = currentBiome === 'TUNDRA';
 
     gameState.elements.forEach(e => {
+        // CULLING: Skip off-screen elements
+        if (!isRectInView(e.x, e.y, e.w || 50, e.h || 50, 200)) return;
+
         ctx.save();
         const config = MATERIAL_PROPERTIES[e.t] || { color: '#fff' };
         
@@ -3524,43 +3536,49 @@ function drawElements() {
 
             // B. Urban Neon Windows
             if (isUrban && ENABLE_PREMIUM_VISUALS) {
-                const winSize = 6; const spacing = 12;
-                const cols = Math.floor((e.w - 15) / spacing); const rows = Math.floor((e.h - 15) / spacing);
+                const winSize = 6; 
+                const spacingX = 16; // Increased spacing to spread out
+                const spacingY = 22;
+                const cols = Math.floor((e.w - 15) / spacingX); 
+                const rows = Math.floor((e.h - 15) / spacingY);
                 
                 ctx.save();
                 for (let r = 0; r < rows; r++) {
                     for (let c = 0; c < cols; c++) {
+                        // User Request: Halve the windows, spread evenly.
+                        // We use a checkerboard pattern or skip every other one.
+                        if ((r + c) % 2 === 0) continue; 
+
                         const seed = e.id + r * 13 + c * 7;
                         const rand = getStableRandom(seed);
-                        if (rand > 0.4) {
-                            const wx = e.x - e.w/2 + 12 + c * spacing; const wy = e.y - e.h/2 + 12 + r * spacing;
-                            
-                            // Window Logic: 
-                            // 1. Office (White/Blue, stable)
-                            // 2. Residential (Warm Yellow, stable)
-                            // 3. TV (Flickering Blue)
-                            // 4. Empty (Dark)
+                        if (rand > 0.3) {
+                            const wx = e.x - e.w/2 + 10 + c * spacingX; 
+                            const wy = e.y - e.h/2 + 10 + r * spacingY;
                             
                             let winColor = '#000';
                             let alpha = 0.8;
-                            let glow = 0;
+                            let glow = false;
 
                             if (rand > 0.85) { // Office
-                                winColor = '#b0e0ff'; glow = 8;
+                                winColor = '#b0e0ff'; glow = true;
                             } else if (rand > 0.7) { // Residential
-                                winColor = '#ffcc66'; glow = 6;
+                                winColor = '#ffcc66'; glow = true;
                             } else if (rand > 0.6) { // TV Glow
-                                const flicker = Math.sin(renderTime * 0.01 + seed) > 0 ? '#66ccff' : '#336699';
-                                winColor = flicker; glow = 12;
+                                winColor = Math.sin(renderTime * 0.01 + seed) > 0 ? '#66ccff' : '#336699';
                                 alpha = 0.5 + Math.random() * 0.2;
+                                glow = true;
                             }
 
                             if (winColor !== '#000') {
                                 ctx.globalAlpha = alpha;
                                 ctx.fillStyle = winColor;
-                                if (glow > 0) { ctx.shadowBlur = glow; ctx.shadowColor = winColor; }
+                                // PERFORMANCE FIX: Remove shadowBlur, use a small glow rect instead
+                                if (glow) {
+                                    ctx.globalAlpha = alpha * 0.3;
+                                    ctx.fillRect(wx - 2, wy - 2, winSize + 4, winSize + 4);
+                                    ctx.globalAlpha = alpha;
+                                }
                                 ctx.fillRect(wx, wy, winSize, winSize);
-                                ctx.shadowBlur = 0;
                             }
                         }
                     }
@@ -4406,6 +4424,7 @@ function drawBulletTrails() {
 
 function drawBullets() {
     for (const b of gameState.bullets) {
+        if (!isRectInView(b.x, b.y, 20, 20, 50)) continue;
         ctx.save();
         ctx.translate(b.x, b.y);
         drawBulletBody(b);

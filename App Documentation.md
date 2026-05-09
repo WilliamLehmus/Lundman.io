@@ -59,7 +59,8 @@ The core of the game engine lives on the **Node.js server**.
 - **`backend/logic/LobbyManager.js`**: Core `Lobby` class. Manages player lifecycle, teams, and match state.
 - **`backend/logic/CombatEngine.js`**: Physics interactions, bullet collisions, damage, status effects, and AI Guardians.
 - **`backend/logic/MapGenerator.js`**: Biome-aware procedural map generation.
-- **`backend/logic/BotAI.js`**: Decision making and movement logic for bots. Features **Difficulty Scaling** (Easy/Normal/Hard) and distance-based weapon strategy.
+- **`backend/logic/BotAI.js`**: Decision making and movement logic for bots. Features **Difficulty Scaling** (Easy/Normal/Hard), distance-based weapon strategy, and **Multi-Point Raycasting** for local avoidance.
+- **`backend/logic/Navigation.js`**: **Dynamic A* Pathfinding** with a weighted heatmap. Rebuilds automatically when the environment changes (e.g., walls destroyed or built). Uses **Octile Heuristic** for optimized 8-directional movement.
 - **`backend/logic/Persistence.js`**: JSON-based player statistics and PIN authentication.
 - **`backend/gameConfig.js`**: Shared source of truth for weapon and chassis data.
 
@@ -455,13 +456,13 @@ To transition from a learning project to a **marketable product**, the following
 - **Datum**: 2026-05-09
 - **Symptom**: Webbläsarkonsolen visar `WebSocket connection to 'ws://localhost:5173/socket.io/... failed` och spelet fastnar i "Game Initializing...".
 - **Root Cause**: 
-    1.  **Port-konflikt**: Backend-servern kunde inte starta p.g.a. `EADDRINUSE`.
+    1.  **Port-konklift**: Backend-servern kunde inte starta p.g.a. `EADDRINUSE`. Detta orsakades av att `nodemon` hamnade i en omstarts-loop när `backend/players.json` uppdaterades av servern (eftersom filen inte ignorerades korrekt i `package.json`).
     2.  **DNS/Proxy Issue**: Vite-proxyn hade svårt att mappa `localhost` på Windows.
-    3.  **Transport Race**: `websocket` transport försökte initieras innan proxyn var redo.
 - **Åtgärd**:
-    1.  **Polling-First**: Ändrat `transports` i både frontend och backend till `['polling', 'websocket']`. Detta gör att anslutningen sker omedelbart via HTTP och uppgraderar sedan till WebSocket.
-    2.  **Vite Config**: Ändrat till `127.0.0.1` och ökat `timeout/proxyTimeout` till 60 sekunder.
-    3.  **Backend Error Handling**: Lagt till explicit felhantering för `EADDRINUSE`.
+    1.  **Nodemon Fix**: Uppdaterat `package.json` med `"ignore": ["backend/players.json"]` för att bryta omstarts-loopen.
+    2.  **Process Cleanup**: Dödat gamla Node-processer som låste porten.
+    3.  **Polling-First**: Ändrat `transports` till `['polling', 'websocket']`.
+    4.  **Backend Error Handling**: Lagt till explicit felhantering för `EADDRINUSE`.
 - **Felsökning**: Kontrollerat port-status med `netstat` och verifierat att anslutningen stabiliseras efter transport-bytet.
 
 #### **ReferenceError: Matter is not defined in server.js**
@@ -518,3 +519,18 @@ To transition from a learning project to a **marketable product**, the following
     4. **Snappier Steering**: Increased the server's angular velocity lerp factor from `0.15` to `0.3`.
     5. **Softer Smoothing**: Reduced reconciliation stiffness to `0.4` to hide minor sync offsets.
 - **Verification**: Steering now feels responsive and collisions are smooth without visual jitter.
+
+#### **Urban Performance & AI Navigation Fix**
+- **Date**: 2026-05-10
+- **Issue**: FPS drops to 40 in 10-player Urban matches and bots get stuck or crash the server.
+- **Root Causes**:
+    1. **Expensive Windows**: Hundreds of windows with `shadowBlur` were rendered per frame.
+    2. **Redundant Rendering**: Objects outside the viewport were still being drawn.
+    3. **Navigation Bottleneck**: Slow `JSON.parse(JSON.stringify)` and `Map` lookups in the A* algorithm.
+    4. **ReferenceError**: `canSeeTarget` was referenced before initialization in `BotAI.js`.
+- **Fix**:
+    1. **View Frustum Culling**: Implemented `isRectInView` to skip off-screen rendering.
+    2. **Urban Optimization**: Halved window count and replaced `shadowBlur` with a lightweight "glow" rect.
+    3. **Backend Acceleration**: Switched to `TypedArrays` for A* scores and removed slow cloning logic.
+    4. **Stability Fix**: Properly scoped and initialized AI variables.
+- **Verification**: 60 FPS maintained in dense 5v5 Urban scenarios; `test_ai_deep.js` passed.
