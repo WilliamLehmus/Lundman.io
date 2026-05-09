@@ -322,4 +322,16 @@ To transition from a learning project to a **marketable product**, the following
         - **Clipping**: All interior details are now clipped to the building shape (eliminating rectangular artifacts on silos).
         - **Industrial Modules**: Replaced apartment windows with **Cooling Fins**, **Ventilation Fans** (animated), and **Support Girders**.
         - **Volumetric Silos**: Circular buildings now feature radial shading for a 3D cylindrical look.
-        - **Ground Infrastructure**: Added procedural **Floor Pipes** and **Caution Tape** zones around environmental hazards.
+---
+
+## 🛡️ Known Issues & Critical Fixes
+
+#### **Electric Puddle Stun Lock**
+- **Date**: 2026-05-09
+- **Issue**: Players would get "stuck" indefinitely in small electric puddles in the Industrial biome.
+- **Root Cause**: A nesting error in `processElementInteraction` prevented the logic for destroying/reverting small puddles from executing. Additionally, the 2.0s stun duration was too punishing for a non-lethal hazard.
+- **Fix**: 
+    1. Corrected the `if/else` nesting to ensure small puddles are reliably destroyed or reverted after one stun activation.
+    2. Reduced environmental stun duration from **2.0s** to **1.2s**.
+    3. Added a `stunImmunity` grace period for all hits to prevent instant restun from overlapping hazards.
+- **Verification**: Verified that small puddles disappear on hit and large ones grant enough immunity to exit.

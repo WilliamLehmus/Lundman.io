@@ -1,6 +1,6 @@
 import { io } from "socket.io-client";
 import versionData from './version.json';
-import { MATERIALS, MATERIAL_PROPERTIES, BIOMES, CHASSIS, WEAPON_MODULES } from '../backend/gameConfig.js';
+import { MATERIALS, MATERIAL_PROPERTIES, BIOMES, CHASSIS, WEAPON_MODULES, ALL_WEAPONS } from '../backend/gameConfig.js';
 
 // Connect to the same host the game is served from
 const socket = io({
@@ -45,6 +45,55 @@ socket.on('connect', () => {
 
 socket.on('connect_error', (err) => {
     console.error('Socket Connection Error:', err.message, err.description);
+});
+
+let debugMode = false;
+let debugSpawnType = null;
+let botsActive = true;
+
+socket.on('debug-init', () => {
+    debugMode = true;
+    
+    // Add DEV tank configuration to local config (hidden from selection UI)
+    if (!CHASSIS.DEV) {
+        CHASSIS.DEV = {
+            name: 'Dev Tank',
+            hp: 1000,
+            speed: 0.012, 
+            turnSpeed: 0.08,
+            mass: 10,
+            slots: 6,
+            allowedWeapons: ALL_WEAPONS,
+            weapons: ['HEAVY_GUN', 'TESLA', 'FLAMETHROWER', 'WATER_CANNON', 'FROST_GUN', 'DIRT_GUN']
+        };
+    }
+
+    const debugMenu = document.getElementById('debug-menu');
+    if (debugMenu) {
+        debugMenu.classList.remove('hidden');
+        debugMenu.style.display = 'flex';
+        
+        // Add a dedicated button for the DEV tank if it's missing from the menu
+        if (!document.getElementById('debug-dev-tank-btn')) {
+            const group = debugMenu.querySelector('.debug-group');
+            if (group) {
+                const btn = document.createElement('button');
+                btn.id = 'debug-dev-tank-btn';
+                btn.className = 'debug-btn';
+                btn.innerText = 'ACTIVATE DEV TANK';
+                btn.onclick = () => {
+                    socket.emit('debug-set-chassis', 'DEV');
+                };
+                group.appendChild(btn);
+            }
+        }
+    }
+    console.log('Debug mode activated');
+});
+
+socket.on('dev-reload', () => {
+    console.log('Backend changed, reloading...');
+    location.reload();
 });
 
 const canvas = document.getElementById('gameCanvas');
@@ -1022,22 +1071,6 @@ socket.on('connect', () => {
     myId = socket.id;
 });
 
-let debugMode = false;
-let debugSpawnType = null;
-let botsActive = true;
-
-socket.on('debug-init', () => {
-    debugMode = true;
-    const debugMenu = document.getElementById('debug-menu');
-    if (debugMenu) debugMenu.classList.remove('hidden');
-    console.log('Debug mode activated');
-});
-
-socket.on('dev-reload', () => {
-    console.log('Backend changed, reloading...');
-    location.reload();
-});
-
 function updateLobbyUI(id, players) {
     if (lobbyIdSpan) lobbyIdSpan.innerText = id.toUpperCase();
     
@@ -1046,7 +1079,9 @@ function updateLobbyUI(id, players) {
     const me = players.find(p => p.id === myId);
     if (selectionArea && me) {
         selectionArea.innerHTML = '';
-        Object.entries(CHASSIS).forEach(([type, config]) => {
+        Object.entries(CHASSIS)
+            .filter(([type]) => type !== 'DEV') // Hide DEV tank from lobby selection
+            .forEach(([type, config]) => {
 
             const card = document.createElement('div');
             card.className = `tank-card ${me.ch === type ? 'selected' : ''}`;

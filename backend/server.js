@@ -12,6 +12,20 @@ import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import { MATERIALS, MATERIAL_PROPERTIES, BIOMES, CHASSIS, WEAPON_MODULES, ALL_WEAPONS } from './gameConfig.js';
 
+// Re-enable DEV tank for local development
+if (process.env.ENVIRONMENT === 'development' || process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
+    CHASSIS.DEV = {
+        name: 'Dev Tank',
+        hp: 1000,
+        speed: 0.012, 
+        turnSpeed: 0.08,
+        mass: 10,
+        slots: 6,
+        allowedWeapons: ALL_WEAPONS,
+        weapons: ['HEAVY_GUN', 'TESLA', 'FLAMETHROWER', 'WATER_CANNON', 'FROST_GUN', 'DIRT_GUN']
+    };
+}
+
 dotenv.config(); // Force restart triggered by Antigravity - PIN removed for Lundixz
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -774,6 +788,7 @@ class Lobby {
                     element.type = MATERIALS.FIRE;
                     element.expiresAt = Date.now() + 6000;
                     element.hp = 100;
+                    element.ownerId = bulletData.ownerId; // NEW: Transfer ownership to the igniter
                     this.destroyBullet(bullet.id);
                     return;
                 }
@@ -782,13 +797,14 @@ class Lobby {
                     element.type = MATERIALS.ELECTRIC;
                     element.originalType = MATERIALS.WATER; // Track for reversion
                     element.expiresAt = Date.now() + 2000;
+                    element.ownerId = bulletData.ownerId; // NEW: Transfer ownership to the electrifier
                     this.destroyBullet(bullet.id);
                     return;
                 }
 
                 if (isFireVSWater) {
                     // Fire vs Water -> Immediate Steam & Destroy
-                    this.spawnElement(bullet.position, MATERIALS.STEAM, 15000);
+                    this.spawnElement(bullet.position, MATERIALS.STEAM, 15000, null, bulletData.ownerId);
                     if (element.w < 150) {
                         this.destroyElement(element.id);
                     }
@@ -800,6 +816,7 @@ class Lobby {
                     element.type = MATERIALS.ICE;
                     element.originalType = MATERIALS.WATER;
                     element.expiresAt = Date.now() + 5000; // Frozen for 5 seconds
+                    element.ownerId = bulletData.ownerId; // NEW: Transfer ownership
                     this.destroyBullet(bullet.id);
                     return;
                 }
@@ -815,8 +832,10 @@ class Lobby {
 
                 if (isFireVSAcid) {
                     // Fire + Acid = GAS cloud (Area denial)
-                    this.spawnElement(element.body.position, MATERIALS.GAS, 6000, null, bulletData.ownerId, element.w * 1.5, element.h * 1.5);
+                    const pos = { x: element.body.position.x, y: element.body.position.y };
+                    const size = { w: element.w * 1.5, h: element.h * 1.5 };
                     this.destroyElement(element.id);
+                    this.spawnElement(pos, MATERIALS.GAS, 6000, null, bulletData.ownerId, size.w, size.h);
                     this.destroyBullet(bullet.id);
                     return;
                 }
@@ -897,10 +916,12 @@ class Lobby {
             // Fire vs Oil Chain Reaction (Spread the fire!)
             if ((elementA.type === MATERIALS.FIRE && elementB.type === MATERIALS.OIL) ||
                 (elementB.type === MATERIALS.FIRE && elementA.type === MATERIALS.OIL)) {
+                const fire = elementA.type === MATERIALS.FIRE ? elementA : elementB;
                 const oil = elementA.type === MATERIALS.OIL ? elementA : elementB;
                 oil.type = MATERIALS.FIRE;
                 oil.expiresAt = Date.now() + 6000;
                 oil.hp = 100;
+                oil.ownerId = fire.ownerId; // NEW: Transfer ownership to whoever caused the ignition
             }
 
                 // Fire vs Water -> IMMEDIATE EXTINCTION
@@ -922,6 +943,7 @@ class Lobby {
             // Fire vs Acid -> GAS
             if ((elementA.type === MATERIALS.FIRE && elementB.type === MATERIALS.ACID) ||
                 (elementB.type === MATERIALS.FIRE && elementA.type === MATERIALS.ACID)) {
+                const fire = elementA.type === MATERIALS.FIRE ? elementA : elementB;
                 const pos = { 
                     x: (elementA.body.position.x + elementB.body.position.x)/2, 
                     y: (elementA.body.position.y + elementB.body.position.y)/2 
@@ -930,7 +952,7 @@ class Lobby {
                 const h = Math.max(elementA.h, elementB.h);
                 this.destroyElement(elementA.id);
                 this.destroyElement(elementB.id);
-                this.spawnElement(pos, MATERIALS.GAS, 6000, null, null, w * 1.5, h * 1.5);
+                this.spawnElement(pos, MATERIALS.GAS, 6000, null, fire.ownerId, w * 1.5, h * 1.5);
             }
         }
 
@@ -948,10 +970,12 @@ class Lobby {
                     const canStun = now > p.statusEffects.stun && now > p.statusEffects.stunImmunity;
 
                     if (canStun) {
-                        p.statusEffects.stun = now + 2000;
+                        const duration = 1200;
+                        p.statusEffects.stun = now + duration;
                         if (isLarge) {
-                            // Large puddles stay but give 5s grace period AFTER stun wears off
-                            p.statusEffects.stunImmunity = now + 2000 + 5000;
+                            // Large puddles stay but give 4s grace period AFTER stun wears off
+                            p.statusEffects.stunImmunity = now + duration + 4000;
+                        } else {
                             // Small puddles disappear/revert after one stun
                             if (element.originalType) {
                                 element.type = element.originalType;
@@ -960,11 +984,16 @@ class Lobby {
                             } else {
                                 this.destroyElement(element.id);
                             }
+                            // Give small immunity to prevent instant restun from overlapping hazards
+                            p.statusEffects.stunImmunity = now + duration + 1000;
                         }
                     }
                 }
                 if ((element.type === MATERIALS.ICE || element.type === MATERIALS.OIL)) p.statusEffects.slip = now + 1000;
                 
+                // Self-Immunity Check: Don't take damage/effects from things you created yourself
+                if (p.id === element.ownerId) return;
+
                 // Burning tanks melt ice
                 if (element.type === MATERIALS.ICE && now < p.statusEffects.burn) {
                     this.destroyElement(element.id);
@@ -1000,9 +1029,15 @@ class Lobby {
 
     barrelExplode(pos, type, ownerId) {
         const radius = 180;
+        const attacker = Object.values(this.players).find(pl => pl.id === ownerId);
+        
         Object.values(this.players).forEach(p => {
             const dist = Vector.magnitude(Vector.sub(p.body.position, pos));
             if (dist < radius) {
+                // Friendly Fire & Self-Immunity Check for Explosions
+                if (p.id === ownerId) return;
+                if (attacker && p.team === attacker.team) return;
+
                 const damage = (1 - dist/radius) * 70;
                 p.hp -= damage;
                 if (p.hp <= 0) this.respawn(p, ownerId, 'EXPLOSION');
@@ -1080,7 +1115,7 @@ class Lobby {
             }
 
             // NEW: Spacing for liquids to prevent overlapping large puddles
-            const liquidTypes = [MATERIALS.WATER, MATERIALS.OIL, MATERIALS.ACID, MATERIALS.GAS];
+            const liquidTypes = [MATERIALS.WATER, MATERIALS.OIL, MATERIALS.ACID];
             if (liquidTypes.includes(type)) {
                 const otherLiquids = Object.values(this.elements)
                     .filter(e => liquidTypes.includes(e.type))
@@ -1967,7 +2002,9 @@ io.on('connection', (socket) => {
         if (!data || typeof data.username !== 'string' || data.username.trim() === '') return;
         let { username, chassisType, pin } = data;
         username = username.trim().substring(0, 12);
-        if (!['SCOUT', 'BRAWLER', 'ARTILLERY'].includes(chassisType)) chassisType = 'SCOUT';
+        const allowedChassis = ['SCOUT', 'BRAWLER', 'ARTILLERY'];
+        if (IS_DEV) allowedChassis.push('DEV');
+        if (!allowedChassis.includes(chassisType)) chassisType = 'SCOUT';
 
         // PIN Authentication & Validation
         if (!pin || pin.length < 4 || pin.length > 10) {
@@ -2303,6 +2340,24 @@ io.on('connection', (socket) => {
         const lobby = lobbies[socket.lobbyId];
         if (lobby) {
             lobby.spawnBuilding(data.pos, data.w || 100, data.h || 100);
+        }
+    });
+
+    socket.on('debug-set-chassis', (chassisType) => {
+        if (!IS_DEV) return;
+        const lobby = lobbies[socket.lobbyId];
+        if (lobby && lobby.players[socket.id]) {
+            const p = lobby.players[socket.id];
+            if (CHASSIS[chassisType]) {
+                const config = CHASSIS[chassisType];
+                p.chassis = chassisType;
+                p.hp = config.hp;
+                p.maxHp = p.hp;
+                p.slots = [...config.weapons];
+                p.currentSlot = 0;
+                if (p.body) Body.setMass(p.body, config.mass);
+                socket.emit('player-event', { text: `GOD MODE: ${chassisType} ACTIVATED`, color: '#ff00ff' });
+            }
         }
     });
 
