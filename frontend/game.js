@@ -165,9 +165,24 @@ let particles = []; // { x, y, vx, vy, life, color, size }
 let atmosphereParticles = []; // { x, y, size, vx, vy, speed, color }
 let environmentalObjects = []; // Dynamic objects like Tumbleweeds
 let lizards = []; // Scurrying desert life
-let snowHares = []; // Scurrying arctic life
-let dragonflies = []; // Darting wetland life
-let ripples = []; // Surface disturbances for wetland
+let scorpions = []; // Desert scorpions
+let vultures = []; // Desert vulture shadows
+let pigeons = []; // Urban pigeons
+let strayCats = []; // Urban cats
+let cockroaches = []; // Urban cockroaches
+let rats = []; // Industrial rats
+let microDrones = []; // Industrial drones
+let moths = []; // Industrial moths
+let snowHares = []; // Arctic hares
+let penguins = []; // Arctic penguins
+let arcticFoxes = []; // Arctic foxes
+let dragonflies = []; // Wetland dragonflies
+let frogs = []; // Wetland frogs
+let waterStriders = []; // Wetland striders
+let mutatedCrows = []; // Wasteland crows
+let scrapBeetles = []; // Wasteland beetles
+let radioactiveSlugs = []; // Wasteland slugs
+let ripples = []; // Surface disturbances
 let windStreaks = []; // Fast moving wind lines
 let ashParticles = []; // Atmospheric embers/ash for wasteland
 let groundDetails = []; // Cache for procedural cracks/stains
@@ -2282,7 +2297,12 @@ function drawGrid() {
     // Reset ground details if biome or size changes
     if (currentBiome !== lastBiome || worldSize !== lastWorldSize) {
         groundDetails = [];
-        lizards = []; // Reset lizards too
+        lizards = []; scorpions = []; vultures = [];
+        pigeons = []; strayCats = []; cockroaches = [];
+        rats = []; microDrones = []; moths = [];
+        snowHares = []; penguins = []; arcticFoxes = [];
+        dragonflies = []; frogs = []; waterStriders = [];
+        mutatedCrows = []; scrapBeetles = []; radioactiveSlugs = [];
         environmentalObjects = [];
         lastBiome = currentBiome;
         lastWorldSize = worldSize;
@@ -4653,6 +4673,10 @@ function updateParticles(dt) {
             p.vx += (Math.random() - 0.5) * 0.2 * dt;
             p.size *= 0.98; // Shrink as they rise
         }
+        if (p.isSlugTrail) {
+            p.life -= 0.005 * dt; // Fade very slowly
+            p.size *= 0.995;
+        }
     });
     particles = particles.filter(p => p.life > 0);
 }
@@ -4963,55 +4987,222 @@ function updateEnvironmentalLife(dt) {
     const worldSize = gameState.worldSize || 4000;
     const me = gameState.players.find(p => p.id === myId);
 
-    // 1. DESERT LIZARDS
+    // Helper to handle flee logic
+    const applyFlee = (l, fleeDist, speed) => {
+        if (!me) return;
+        const dist = Math.hypot(me.x - l.x, me.y - l.y);
+        if (dist < fleeDist) {
+            l.state = 'fleeing';
+            l.angle = Math.atan2(l.y - me.y, l.x - me.x);
+            l.x += Math.cos(l.angle) * speed * dt;
+            l.y += Math.sin(l.angle) * speed * dt;
+            return true;
+        } else if (l.state === 'fleeing') {
+            l.state = 'idle';
+        }
+        return false;
+    };
+
+    // 1. DESERT
     if (currentBiome === 'DESERT') {
         if (lizards.length === 0) {
-            for (let i = 0; i < 15; i++) lizards.push({ 
-                x: Math.random() * worldSize, y: Math.random() * worldSize, 
-                angle: Math.random() * Math.PI * 2, state: 'idle', timer: 0 
-            });
+            for (let i = 0; i < 12; i++) lizards.push({ x: Math.random() * worldSize, y: Math.random() * worldSize, angle: Math.random() * Math.PI * 2, state: 'idle', timer: 0 });
+            for (let i = 0; i < 8; i++) scorpions.push({ x: Math.random() * worldSize, y: Math.random() * worldSize, angle: Math.random() * Math.PI * 2, state: 'idle', timer: 0 });
+            for (let i = 0; i < 3; i++) vultures.push({ x: Math.random() * worldSize, y: Math.random() * worldSize, angle: Math.random() * Math.PI * 2, radius: 400 + Math.random() * 400, speed: 0.001 + Math.random() * 0.001 });
         }
         lizards.forEach(l => {
             l.timer -= dt;
-            if (me) {
-                const dist = Math.hypot(me.x - l.x, me.y - l.y);
-                if (dist < 150) {
-                    l.state = 'fleeing';
-                    const angle = Math.atan2(l.y - me.y, l.x - me.x);
-                    l.angle = angle;
-                    l.x += Math.cos(l.angle) * 4 * dt;
-                    l.y += Math.sin(l.angle) * 4 * dt;
-                } else if (l.state === 'fleeing') {
-                    l.state = 'idle';
-                }
-            }
-            if (l.state === 'idle' && l.timer <= 0) {
+            if (!applyFlee(l, 150, 4) && l.state === 'idle' && l.timer <= 0) {
                 l.angle += (Math.random() - 0.5) * 1.5;
                 l.timer = 100 + Math.random() * 200;
             }
         });
+        scorpions.forEach(s => {
+            s.timer -= dt;
+            if (!applyFlee(s, 180, 5) && s.state === 'idle' && s.timer <= 0) {
+                s.angle += (Math.random() - 0.5) * 2;
+                s.timer = 50 + Math.random() * 150;
+            }
+        });
+        vultures.forEach(v => {
+            v.angle += v.speed * dt;
+            // Circle around a point
+        });
     }
 
-    // 2. WETLAND DRAGONFLIES
+    // 2. URBAN
+    if (currentBiome === 'URBAN') {
+        if (pigeons.length === 0) {
+            for (let i = 0; i < 20; i++) pigeons.push({ x: Math.random() * worldSize, y: Math.random() * worldSize, angle: Math.random() * Math.PI * 2, state: 'idle', timer: 0, wingPhase: 0 });
+            for (let i = 0; i < 5; i++) strayCats.push({ x: Math.random() * worldSize, y: Math.random() * worldSize, angle: Math.random() * Math.PI * 2, state: 'idle', timer: 0 });
+            for (let i = 0; i < 30; i++) cockroaches.push({ x: Math.random() * worldSize, y: Math.random() * worldSize, angle: Math.random() * Math.PI * 2, state: 'idle' });
+        }
+        pigeons.forEach(p => {
+            p.timer -= dt;
+            if (applyFlee(p, 200, 6)) {
+                p.wingPhase += 0.5 * dt;
+                p.state = 'flying';
+            } else if (p.state === 'flying') {
+                p.state = 'idle';
+            }
+            if (p.state === 'idle' && p.timer <= 0) {
+                p.angle += (Math.random() - 0.5) * 1.0;
+                p.x += Math.cos(p.angle) * 0.5 * dt;
+                p.y += Math.sin(p.angle) * 0.5 * dt;
+                p.timer = 50 + Math.random() * 100;
+            }
+        });
+        strayCats.forEach(c => {
+            c.timer -= dt;
+            if (!applyFlee(c, 250, 7) && c.state === 'idle' && c.timer <= 0) {
+                c.angle += (Math.random() - 0.5) * 3;
+                c.timer = 200 + Math.random() * 400;
+            }
+        });
+        cockroaches.forEach(c => {
+            if (me && Math.hypot(me.x - c.x, me.y - c.y) < 120) {
+                c.angle = Math.atan2(c.y - me.y, c.x - me.x);
+                c.x += Math.cos(c.angle) * 8 * dt;
+                c.y += Math.sin(c.angle) * 8 * dt;
+            }
+        });
+    }
+
+    // 3. INDUSTRIAL
+    if (currentBiome === 'INDUSTRIAL') {
+        if (rats.length === 0) {
+            for (let i = 0; i < 25; i++) rats.push({ x: Math.random() * worldSize, y: Math.random() * worldSize, angle: Math.random() * Math.PI * 2, state: 'idle', timer: 0 });
+            for (let i = 0; i < 10; i++) microDrones.push({ x: Math.random() * worldSize, y: Math.random() * worldSize, startX: 0, startY: 0, angle: Math.random() * Math.PI * 2 });
+            for (let i = 0; i < 40; i++) moths.push({ x: Math.random() * worldSize, y: Math.random() * worldSize, phase: Math.random() * Math.PI * 2 });
+        }
+        rats.forEach(r => {
+            r.timer -= dt;
+            if (!applyFlee(r, 160, 9) && r.state === 'idle' && r.timer <= 0) {
+                r.angle += (Math.random() - 0.5) * 4;
+                r.x += Math.cos(r.angle) * 2 * dt;
+                r.y += Math.sin(r.angle) * 2 * dt;
+                r.timer = 20 + Math.random() * 50;
+            }
+        });
+        microDrones.forEach(d => {
+            d.angle += 0.02 * dt;
+            d.x += Math.cos(d.angle) * 1 * dt;
+            d.y += Math.sin(d.angle * 0.5) * 1 * dt;
+        });
+        moths.forEach(m => {
+            m.phase += 0.1 * dt;
+            m.x += Math.sin(m.phase) * 2 * dt;
+            m.y += Math.cos(m.phase * 0.7) * 2 * dt;
+        });
+    }
+
+    // 4. TUNDRA
+    if (currentBiome === 'TUNDRA') {
+        if (snowHares.length === 0) {
+            for (let i = 0; i < 15; i++) snowHares.push({ x: Math.random() * worldSize, y: Math.random() * worldSize, angle: Math.random() * Math.PI * 2, state: 'idle', jump: 0 });
+            for (let i = 0; i < 10; i++) penguins.push({ x: Math.random() * worldSize, y: Math.random() * worldSize, angle: Math.random() * Math.PI * 2, state: 'idle', waddle: 0 });
+            for (let i = 0; i < 6; i++) arcticFoxes.push({ x: Math.random() * worldSize, y: Math.random() * worldSize, angle: Math.random() * Math.PI * 2, state: 'idle' });
+        }
+        snowHares.forEach(h => {
+            if (applyFlee(h, 200, 8)) {
+                h.jump += 0.3 * dt;
+            } else {
+                h.jump = 0;
+            }
+        });
+        penguins.forEach(p => {
+            if (applyFlee(p, 150, 2)) {
+                p.waddle += 0.2 * dt;
+                if (Math.random() > 0.98) p.state = 'sliding';
+            } else {
+                p.waddle += 0.05 * dt;
+            }
+            if (p.state === 'sliding') {
+                p.x += Math.cos(p.angle) * 5 * dt;
+                p.y += Math.sin(p.angle) * 5 * dt;
+                if (Math.random() > 0.95) p.state = 'idle';
+            }
+        });
+        arcticFoxes.forEach(f => {
+            applyFlee(f, 300, 10);
+        });
+    }
+
+    // 5. WETLAND
     if (currentBiome === 'WETLAND') {
         if (dragonflies.length === 0) {
-            for (let i = 0; i < 20; i++) dragonflies.push({ 
-                x: Math.random() * worldSize, y: Math.random() * worldSize, 
-                vx: (Math.random()-0.5)*2, vy: (Math.random()-0.5)*2, 
-                phase: Math.random() * Math.PI * 2 
-            });
+            for (let i = 0; i < 20; i++) dragonflies.push({ x: Math.random() * worldSize, y: Math.random() * worldSize, vx: (Math.random()-0.5)*2, vy: (Math.random()-0.5)*2, phase: Math.random() * Math.PI * 2 });
+            for (let i = 0; i < 12; i++) frogs.push({ x: Math.random() * worldSize, y: Math.random() * worldSize, angle: Math.random() * Math.PI * 2, jump: 0, state: 'idle' });
+            for (let i = 0; i < 15; i++) waterStriders.push({ x: Math.random() * worldSize, y: Math.random() * worldSize, vx: 0, vy: 0, timer: 0 });
         }
         dragonflies.forEach(d => {
             d.phase += 0.05 * dt;
-            d.vx += Math.sin(d.phase) * 0.2 * dt;
-            d.vy += Math.cos(d.phase) * 0.2 * dt;
+            d.vx += Math.sin(d.phase) * 0.2 * dt; d.vy += Math.cos(d.phase) * 0.2 * dt;
             d.x += d.vx * dt; d.y += d.vy * dt;
             d.vx *= 0.98; d.vy *= 0.98;
+            if (Math.random() > 0.98) { d.vx += (Math.random()-0.5) * 4; d.vy += (Math.random()-0.5) * 4; }
+        });
+        frogs.forEach(f => {
+            if (applyFlee(f, 120, 6)) {
+                f.jump += 0.2 * dt;
+            } else {
+                f.jump = 0;
+            }
+        });
+        waterStriders.forEach(s => {
+            s.timer -= dt;
+            if (s.timer <= 0) {
+                const ang = Math.random() * Math.PI * 2;
+                s.vx = Math.cos(ang) * 3; s.vy = Math.sin(ang) * 3;
+                s.timer = 30 + Math.random() * 60;
+                // Add tiny ripple particle
+                if (Math.random() > 0.5) {
+                    particles.push({
+                        x: s.x, y: s.y,
+                        vx: 0, vy: 0,
+                        life: 0.5, color: 'rgba(255,255,255,0.3)',
+                        size: 2, isWaterWake: true
+                    });
+                }
+            }
+            s.x += s.vx * dt; s.y += s.vy * dt;
+            s.vx *= 0.9; s.vy *= 0.9;
+        });
+    }
+
+    // 6. WASTELAND
+    if (currentBiome === 'WASTELAND') {
+        if (mutatedCrows.length === 0) {
+            for (let i = 0; i < 10; i++) mutatedCrows.push({ x: Math.random() * worldSize, y: Math.random() * worldSize, angle: Math.random() * Math.PI * 2, state: 'idle', flap: 0 });
+            for (let i = 0; i < 15; i++) scrapBeetles.push({ x: Math.random() * worldSize, y: Math.random() * worldSize, angle: Math.random() * Math.PI * 2, speed: 0.2 + Math.random() * 0.3 });
+            for (let i = 0; i < 12; i++) radioactiveSlugs.push({ x: Math.random() * worldSize, y: Math.random() * worldSize, angle: Math.random() * Math.PI * 2, trailTimer: 0 });
+        }
+        mutatedCrows.forEach(c => {
+            if (applyFlee(c, 250, 8)) {
+                c.flap += 0.4 * dt;
+            } else {
+                c.flap = 0;
+            }
+        });
+        scrapBeetles.forEach(b => {
+            b.x += Math.cos(b.angle) * b.speed * dt;
+            b.y += Math.sin(b.angle) * b.speed * dt;
+            if (Math.random() > 0.99) b.angle += (Math.random()-0.5) * 1;
+        });
+        radioactiveSlugs.forEach(s => {
+            s.x += Math.cos(s.angle) * 0.1 * dt;
+            s.y += Math.sin(s.angle) * 0.1 * dt;
+            if (Math.random() > 0.99) s.angle += (Math.random()-0.5) * 2;
             
-            // Stay near water (pseudo)
-            if (Math.random() > 0.98) {
-                d.vx += (Math.random()-0.5) * 4;
-                d.vy += (Math.random()-0.5) * 4;
+            s.trailTimer -= dt;
+            if (s.trailTimer <= 0) {
+                particles.push({
+                    x: s.x, y: s.y,
+                    vx: 0, vy: 0,
+                    life: 1.0, color: 'rgba(74, 226, 74, 0.3)',
+                    size: 3, isSlugTrail: true
+                });
+                s.trailTimer = 20;
             }
         });
     }
@@ -5020,39 +5211,275 @@ function updateEnvironmentalLife(dt) {
 function drawEnvironmentalLife() {
     const currentBiome = gameState.zones && gameState.zones[0] ? (gameState.zones[0].t || gameState.zones[0].type) : 'RANDOM';
     
+    const isVisible = (obj, pad = 20) => {
+        return obj.x > camera.x - pad && obj.x < camera.x + canvas.width + pad && 
+               obj.y > camera.y - pad && obj.y < camera.y + canvas.height + pad;
+    };
+
+    // 1. DESERT
     if (currentBiome === 'DESERT') {
         lizards.forEach(l => {
-            if (l.x > camera.x - 20 && l.x < camera.x + canvas.width + 20 && 
-                l.y > camera.y - 20 && l.y < camera.y + canvas.height + 20) {
+            if (isVisible(l)) {
                 ctx.save();
                 ctx.translate(l.x, l.y);
                 ctx.rotate(l.angle);
                 ctx.fillStyle = '#8a8d4a';
-                ctx.beginPath();
-                ctx.ellipse(0, 0, 6, 3, 0, 0, Math.PI * 2);
-                ctx.fill();
-                // Tail
+                ctx.beginPath(); ctx.ellipse(0, 0, 6, 3, 0, 0, Math.PI * 2); ctx.fill();
                 ctx.strokeStyle = '#8a8d4a'; ctx.lineWidth = 1.5;
                 ctx.beginPath(); ctx.moveTo(-6, 0); ctx.quadraticCurveTo(-10, Math.sin(renderTime*0.01)*3, -15, 0); ctx.stroke();
                 ctx.restore();
             }
         });
+        scorpions.forEach(s => {
+            if (isVisible(s)) {
+                ctx.save();
+                ctx.translate(s.x, s.y);
+                ctx.rotate(s.angle);
+                ctx.fillStyle = '#6d4c41';
+                ctx.beginPath(); ctx.ellipse(0, 0, 5, 4, 0, 0, Math.PI * 2); ctx.fill();
+                // Tail
+                ctx.strokeStyle = '#6d4c41'; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(-5, 0); ctx.quadraticCurveTo(-12, -10, -8, -15); ctx.stroke();
+                // Stinger
+                ctx.fillStyle = '#3e2723'; ctx.beginPath(); ctx.arc(-8, -15, 1.5, 0, Math.PI * 2); ctx.fill();
+                ctx.restore();
+            }
+        });
+        vultures.forEach(v => {
+            // Only draw shadow on ground
+            const sx = v.x + Math.cos(v.angle) * v.radius;
+            const sy = v.y + Math.sin(v.angle) * v.radius;
+            if (isVisible({x: sx, y: sy}, 100)) {
+                ctx.save();
+                ctx.translate(sx, sy);
+                ctx.rotate(v.angle + Math.PI/2);
+                ctx.fillStyle = 'rgba(0,0,0,0.15)';
+                ctx.beginPath();
+                ctx.ellipse(0, 0, 25, 12, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        });
     }
 
+    // 2. URBAN
+    if (currentBiome === 'URBAN') {
+        pigeons.forEach(p => {
+            if (isVisible(p)) {
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                ctx.rotate(p.angle);
+                // Body
+                ctx.fillStyle = '#808080';
+                ctx.beginPath(); ctx.ellipse(0, 0, 7, 5, 0, 0, Math.PI * 2); ctx.fill();
+                // Iridescent neck
+                ctx.fillStyle = '#4b0082'; ctx.beginPath(); ctx.arc(4, 0, 3, 0, Math.PI * 2); ctx.fill();
+                // Wings (flapping if flying)
+                if (p.state === 'flying') {
+                    const flap = Math.sin(p.wingPhase) * 10;
+                    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+                    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-2, flap); ctx.moveTo(0,0); ctx.lineTo(-2, -flap); ctx.stroke();
+                }
+                ctx.restore();
+            }
+        });
+        strayCats.forEach(c => {
+            if (isVisible(c)) {
+                ctx.save();
+                ctx.translate(c.x, c.y);
+                ctx.rotate(c.angle);
+                ctx.fillStyle = '#333';
+                ctx.beginPath(); ctx.roundRect(-8, -4, 16, 8, 4); ctx.fill();
+                // Head
+                ctx.beginPath(); ctx.arc(8, 0, 5, 0, Math.PI * 2); ctx.fill();
+                // Eyes (Glowy)
+                ctx.fillStyle = '#00ff00'; ctx.beginPath(); ctx.arc(9, -2, 1, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.arc(9, 2, 1, 0, Math.PI * 2); ctx.fill();
+                // Tail
+                ctx.strokeStyle = '#333'; ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.moveTo(-8, 0); ctx.quadraticCurveTo(-15, Math.sin(renderTime*0.005)*10, -20, 0); ctx.stroke();
+                ctx.restore();
+            }
+        });
+        cockroaches.forEach(c => {
+            if (isVisible(c, 5)) {
+                ctx.fillStyle = '#3e2723';
+                ctx.fillRect(c.x - 2, c.y - 1, 4, 2);
+            }
+        });
+    }
+
+    // 3. INDUSTRIAL
+    if (currentBiome === 'INDUSTRIAL') {
+        rats.forEach(r => {
+            if (isVisible(r)) {
+                ctx.save();
+                ctx.translate(r.x, r.y);
+                ctx.rotate(r.angle);
+                ctx.fillStyle = '#4a372d';
+                ctx.beginPath(); ctx.ellipse(0, 0, 5, 3, 0, 0, Math.PI * 2); ctx.fill();
+                // Pink tail
+                ctx.strokeStyle = '#ff80ab'; ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.moveTo(-5, 0); ctx.lineTo(-12, Math.sin(renderTime*0.02)*2); ctx.stroke();
+                ctx.restore();
+            }
+        });
+        microDrones.forEach(d => {
+            if (isVisible(d)) {
+                ctx.save();
+                ctx.translate(d.x, d.y);
+                ctx.fillStyle = '#111'; ctx.strokeStyle = '#00f2ff'; ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+                // Neon eye
+                ctx.fillStyle = '#00f2ff'; ctx.beginPath(); ctx.arc(2, 0, 1.5, 0, Math.PI * 2); ctx.fill();
+                ctx.restore();
+            }
+        });
+        moths.forEach(m => {
+            if (isVisible(m, 5)) {
+                const flicker = Math.random() > 0.5 ? 1 : 0.5;
+                ctx.fillStyle = `rgba(255,255,255, ${flicker * 0.8})`;
+                ctx.beginPath(); ctx.arc(m.x, m.y, 1.5, 0, Math.PI * 2); ctx.fill();
+            }
+        });
+    }
+
+    // 4. TUNDRA
+    if (currentBiome === 'TUNDRA') {
+        snowHares.forEach(h => {
+            if (isVisible(h)) {
+                ctx.save();
+                ctx.translate(h.x, h.y - Math.abs(Math.sin(h.jump) * 8));
+                ctx.rotate(h.angle);
+                ctx.fillStyle = '#fff';
+                ctx.beginPath(); ctx.ellipse(0, 0, 7, 5, 0, 0, Math.PI * 2); ctx.fill();
+                // Ears
+                ctx.beginPath(); ctx.ellipse(-2, -4, 2, 6, 0.2, 0, Math.PI * 2); ctx.fill();
+                ctx.beginPath(); ctx.ellipse(-2, 4, 2, 6, -0.2, 0, Math.PI * 2); ctx.fill();
+                ctx.restore();
+            }
+        });
+        penguins.forEach(p => {
+            if (isVisible(p)) {
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                if (p.state === 'sliding') {
+                    ctx.rotate(p.angle);
+                    ctx.fillStyle = '#111';
+                    ctx.beginPath(); ctx.ellipse(0, 0, 12, 6, 0, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = '#fff';
+                    ctx.beginPath(); ctx.ellipse(2, 0, 8, 4, 0, 0, Math.PI * 2); ctx.fill();
+                } else {
+                    const tilt = Math.sin(p.waddle) * 0.2;
+                    ctx.rotate(tilt);
+                    ctx.fillStyle = '#111';
+                    ctx.beginPath(); ctx.ellipse(0, 0, 8, 10, 0, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = '#fff';
+                    ctx.beginPath(); ctx.ellipse(0, 2, 5, 7, 0, 0, Math.PI * 2); ctx.fill();
+                    // Beak
+                    ctx.fillStyle = '#ff9800'; ctx.beginPath(); ctx.moveTo(0, -10); ctx.lineTo(4, -8); ctx.lineTo(0, -6); ctx.fill();
+                }
+                ctx.restore();
+            }
+        });
+        arcticFoxes.forEach(f => {
+            if (isVisible(f)) {
+                ctx.save();
+                ctx.translate(f.x, f.y);
+                ctx.rotate(f.angle);
+                ctx.fillStyle = '#fff';
+                ctx.beginPath(); ctx.roundRect(-10, -5, 20, 10, 5); ctx.fill();
+                // Bushy tail
+                ctx.beginPath(); ctx.ellipse(-12, 0, 8, 4, 0, 0, Math.PI * 2); ctx.fill();
+                ctx.restore();
+            }
+        });
+    }
+
+    // 5. WETLAND
     if (currentBiome === 'WETLAND') {
         dragonflies.forEach(d => {
-            if (d.x > camera.x - 20 && d.x < camera.x + canvas.width + 20 && 
-                d.y > camera.y - 20 && d.y < camera.y + canvas.height + 20) {
+            if (isVisible(d)) {
                 ctx.save();
                 ctx.translate(d.x, d.y);
                 ctx.rotate(Math.atan2(d.vy, d.vx));
-                // Body
                 ctx.fillStyle = '#00f2ff';
                 ctx.fillRect(-4, -1, 8, 2);
-                // Wings
                 const wingW = Math.sin(renderTime * 0.5) * 8;
                 ctx.strokeStyle = 'rgba(255,255,255,0.4)';
                 ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(2, wingW); ctx.moveTo(0,0); ctx.lineTo(2, -wingW); ctx.stroke();
+                ctx.restore();
+            }
+        });
+        frogs.forEach(f => {
+            if (isVisible(f)) {
+                ctx.save();
+                const jumpY = Math.abs(Math.sin(f.jump) * 10);
+                ctx.translate(f.x, f.y - jumpY);
+                ctx.rotate(f.angle);
+                ctx.fillStyle = '#4caf50';
+                ctx.beginPath(); ctx.ellipse(0, 0, 8, 6, 0, 0, Math.PI * 2); ctx.fill();
+                // Eyes
+                ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(4, -3, 2, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.arc(4, 3, 2, 0, Math.PI * 2); ctx.fill();
+                ctx.restore();
+            }
+        });
+        waterStriders.forEach(s => {
+            if (isVisible(s)) {
+                ctx.save();
+                ctx.translate(s.x, s.y);
+                ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1;
+                for (let i = 0; i < 4; i++) {
+                    const ang = (i / 4) * Math.PI * 2 + renderTime * 0.01;
+                    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(Math.cos(ang) * 6, Math.sin(ang) * 6); ctx.stroke();
+                }
+                ctx.restore();
+            }
+        });
+    }
+
+    // 6. WASTELAND
+    if (currentBiome === 'WASTELAND') {
+        mutatedCrows.forEach(c => {
+            if (isVisible(c)) {
+                ctx.save();
+                ctx.translate(c.x, c.y);
+                ctx.rotate(c.angle);
+                ctx.fillStyle = '#1a1a1a';
+                ctx.beginPath(); ctx.ellipse(0, 0, 8, 4, 0, 0, Math.PI * 2); ctx.fill();
+                // Glowing eye
+                if (Math.random() > 0.9) { ctx.fillStyle = '#ff0000'; ctx.beginPath(); ctx.arc(6, -1, 1, 0, Math.PI * 2); ctx.fill(); }
+                // Wings
+                const flap = Math.sin(c.flap) * 12;
+                ctx.strokeStyle = '#111'; ctx.lineWidth = 3;
+                ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-4, flap); ctx.moveTo(0,0); ctx.lineTo(-4, -flap); ctx.stroke();
+                ctx.restore();
+            }
+        });
+        scrapBeetles.forEach(b => {
+            if (isVisible(b)) {
+                ctx.save();
+                ctx.translate(b.x, b.y);
+                ctx.rotate(b.angle);
+                const bGrad = ctx.createLinearGradient(-5, 0, 5, 0);
+                bGrad.addColorStop(0, '#2c3e50'); bGrad.addColorStop(1, '#16a085');
+                ctx.fillStyle = bGrad;
+                ctx.beginPath(); ctx.ellipse(0, 0, 8, 6, 0, 0, Math.PI * 2); ctx.fill();
+                // Shell split
+                ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.moveTo(-8, 0); ctx.lineTo(8, 0); ctx.stroke();
+                ctx.restore();
+            }
+        });
+        radioactiveSlugs.forEach(s => {
+            if (isVisible(s)) {
+                ctx.save();
+                ctx.translate(s.x, s.y);
+                ctx.rotate(s.angle);
+                ctx.fillStyle = '#4ae24a';
+                ctx.beginPath(); ctx.ellipse(0, 0, 10, 4, 0, 0, Math.PI * 2); ctx.fill();
+                // Glow
+                ctx.shadowBlur = 10; ctx.shadowColor = '#4ae24a';
+                ctx.beginPath(); ctx.ellipse(0, 0, 6, 2, 0, 0, Math.PI * 2); ctx.fill();
                 ctx.restore();
             }
         });

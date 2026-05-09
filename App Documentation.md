@@ -33,21 +33,54 @@ The core of the game engine lives on the **Node.js server**.
 - **Session Data**: HUD settings and volume preferences are persisted in the browser's `localStorage`.
 
 ---
+# Tanks.io | Technical Documentation
+
+## 🚀 Project Overview
+Tanks.io is a high-performance, 5v5 online multiplayer tank combat game. It features a premium neon aesthetic, server-authoritative physics, and real-time streaming using Socket.io and Matter.js.
+
+---
+
+## 🏗️ System Architecture
+
+### 1. Server-Authoritative Physics
+The core of the game engine lives on the **Node.js server**. 
+- **Reasoning**: To prevent client-side cheating and ensure perfect synchronization between all players.
+- **Implementation**: The `Matter.js` engine runs on the server at a consistent **60Hz (TICK_RATE)**. Every collision, bullet trajectory, and tank movement is calculated centrally.
+
+### 2. Real-Time Streaming
+- **Networking**: Powered by `Socket.io`.
+- **State Updates**: The server broadcasts the global game state to all clients at **30Hz (STATE_RATE)**. This rate is optimized for bandwidth while maintaining smoothness via client-side interpolation.
+- **Payload Optimization**: The game uses a compressed JSON format with shortened keys and reduced float precision to minimize network overhead.
+- **Input Handling**: Clients send minimal input packets (WASD + Shoot + Seq) to the server.
+- **Client-Side Prediction (CSP)**: The local client predicts tank movement instantly and reconciles with the server's authoritative state using sequence numbers, eliminating perceived input lag.
+
+### 3. Modular Backend Architecture
+- **`backend/server.js`**: Entry point. Handles Express, Socket.io, and high-level lobby orchestration.
+- **`backend/logic/LobbyManager.js`**: Core `Lobby` class. Manages player lifecycle, teams, and match state.
+- **`backend/logic/CombatEngine.js`**: Physics interactions, bullet collisions, damage, status effects, and AI Guardians.
+- **`backend/logic/MapGenerator.js`**: Biome-aware procedural map generation.
+- **`backend/logic/BotAI.js`**: Decision making and movement logic for bots. Features **Difficulty Scaling** (Easy/Normal/Hard) and distance-based weapon strategy.
+- **`backend/logic/Persistence.js`**: JSON-based player statistics and PIN authentication.
+- **`backend/gameConfig.js`**: Shared source of truth for weapon and chassis data.
+
+### 4. Persistence & Data
+- **Player Stats**: Persistent player statistics (Lifetime Kills, Deaths, Scrap) are stored in `players.json`.
+- **Session Data**: HUD settings and volume preferences are persisted in the browser's `localStorage`.
+
+---
 
 ## 🎮 Gameplay Features
 
 ### 1. Procedural World Generation (Biomes)
 Matches feature unique, randomly generated maps:
-- **URBAN**: Dense city grid with buildings and narrow streets.
-- **WASTELAND**: Post-apocalyptic terrain with radioactive pools, floating ash, and dynamic wind.
-- **DESERT**: Scorched sands with intense heat haze, volumetric sandstorms, oases (water pools), and ancient architecture.
-- **Tundra (Deep Freeze)**: Arctic environment with auroras, blizzards, screen frost, frozen rocks, and ice shards.
-- **Wetland (Swamp Shacks)**: Murky swamp with dragonflies, procedural lily pads, mossy rocks, and wet logs.
-- **INDUSTRIAL**: High-tech factory environment with concrete floors, pulsing neon power cables, procedural steam vents, and complex industrial structures like **Silos** and **Refineries**. Features circular and rectangular building clusters with hazard-striped bases and vertical piping.
-- **WETLAND**: Murky swamp land with dynamic water ripples, interactive **Dragonflies**, and detailed lily pads featuring procedural blooms (white/pink). Features **Swamp Shack** structures (stilt houses with moss and vines), thick atmospheric mist, fireflies with trailing glow, and rising gas bubbles. Reduced movement speed.
+- **DESERT**: Scorched sands with intense heat haze, volumetric sandstorms, oases (water pools), and ancient architecture. Features **Lizards**, **Scorpions**, and **Vulture Shadows**.
+- **TUNDRA**: Frozen wasteland with **Snow Hares**, **Penguins**, **Arctic Foxes**, wind gusts, and slippery ice. Features a cold frost aesthetic.
+- **URBAN**: Dense city grid with buildings and narrow streets. Features **Pigeons**, **Stray Cats**, and **Cockroaches**.
+- **INDUSTRIAL**: High-tech factory environment with concrete floors, pulsing neon power cables, procedural steam vents, and complex industrial structures. Features **Rats**, **Micro-Drones**, and **Moths**.
+- **WETLAND**: Murky swamp land with dynamic water ripples, interactive **Dragonflies**, **Frogs**, and **Water Striders**. Features **Swamp Shack** structures, thick atmospheric mist, and fireflies.
+- **WASTELAND**: Post-apocalyptic terrain with radioactive pools, floating ash, and dynamic wind. Features **Mutated Crows**, **Scrap Beetles**, and **Radioactive Slugs**.
 - **WORLD BORDER**: The playable area is contained within a high-fidelity **Neon Energy Barrier** with pulsing corner accents and a subtle outer glow.
 - **QUICKSAND**: Created when Water hits Dirt. Features a high-fidelity **Swirling Vortex** animation and rising methane bubbles. Very high movement penalty.
-- **TUNDRA**: Frozen wasteland with snow hares, wind gusts, and slippery ice. Features a cold frost aesthetic.
 
 ### 2. Elemental Interactions (Alchemy)
 The environment is reactive:
@@ -385,14 +418,13 @@ To transition from a learning project to a **marketable product**, the following
     5.  **Engine Vapor**: Smoke/vapor puffs from tank chassit in cold air.
     6.  **Refined Ice Sheets**: Improved "Black Ice" ground details with sharp crack lines and reflections.
 - **Technical Note**: Added global `windVector` and `auroraPhase` to manage atmospheric animations.
-+
-+#### **ReferenceError: worldSize is not defined in drawZones**
-+- **Date**: 2026-05-09
-+- **Issue**: The game would crash in the `drawZones` function with `Uncaught ReferenceError: worldSize is not defined`.
-+- **Root Cause**: The `drawZones` function was using `worldSize` in a loop to draw road markings/grid lines, but the variable was not defined within the function's scope.
-+- **Fix**: Added `const worldSize = gameState.worldSize || 4000;` to the top of the `drawZones` function, consistent with other rendering functions like `drawGrid` and `drawMinimap`.
-+- **Verification**: Validated syntax and verified that the urban road markings render correctly without crashing.
 
+#### **ReferenceError: worldSize is not defined in drawZones**
+- **Date**: 2026-05-09
+- **Issue**: The game would crash in the `drawZones` function with `Uncaught ReferenceError: worldSize is not defined`.
+- **Root Cause**: The `drawZones` function was using `worldSize` in a loop to draw road markings/grid lines, but the variable was not defined within the function's scope.
+- **Fix**: Added `const worldSize = gameState.worldSize || 4000;` to the top of the `drawZones` function, consistent with other rendering functions like `drawGrid` and `drawMinimap`.
+- **Verification**: Validated syntax and verified that the urban road markings render correctly without crashing.
 
 #### **Wasteland "Scorched Earth" Visual Overhaul**
 - **Date**: 2026-05-09
@@ -418,6 +450,7 @@ To transition from a learning project to a **marketable product**, the following
     2.  **Vite Config**: Ändrat till `127.0.0.1` och ökat `timeout/proxyTimeout` till 60 sekunder.
     3.  **Backend Error Handling**: Lagt till explicit felhantering för `EADDRINUSE`.
 - **Felsökning**: Kontrollerat port-status med `netstat` och verifierat att anslutningen stabiliseras efter transport-bytet.
+
 #### **ReferenceError: Matter is not defined in server.js**
 - **Datum**: 2026-05-09
 - **Symptom**: Backend kraschar med 500-fel i webbläsaren när en spelare försöker byta chassis eller aktivera DEV-tanken via debug-menyn.
@@ -425,20 +458,22 @@ To transition from a learning project to a **marketable product**, the following
 - **Åtgärd**: Lagt till `import Matter from 'matter-js';` i `backend/server.js`.
 - **Verifiering**: Verifierat med `node -c` och manuell testning av chassis-byte i debug-menyn.
 
-
-
-
-
-#### **The "Polish & Logic" Update**
+#### **The "Nature & Neon" Expansion**
 - **Date**: 2026-05-09
-- **Goal**: Address identified gameplay gaps and enhance environmental immersion.
-- **Features Added**:
-    1.  **Bot Difficulty Scaling**: `botDifficulty` (Easy/Normal/Hard) now scales Aim Precision, Reaction Time, and Dodge Chance.
-    2.  **Strategic Bots**: Bots now pick appropriate weapons based on distance (e.g., Tesla for close, Sniper for far).
-    3.  **Neon World Border**: Replaced the invisible map edge with a pulsing neon energy barrier.
-    4.  **Environmental Life**: Implemented scurrying **Lizards** in the Desert and darting **Dragonflies** in the Wetland.
-    5.  **Quicksand V2**: Overhauled Quicksand rendering with a swirling vortex effect and methane bubbles.
-    6.  **Scoring Hardening**: Modified `LobbyManager.js` to award points to the opposing team for ALL deaths, eliminating tactical suicides.
+- **Goal**: Expand environmental immersion by adding 3 unique animal types per biome.
+- **Implementation**: 
+    - Added 18 unique animal types across 6 biomes.
+    - Implemented high-fidelity procedural animations: hopping (hares/frogs), flapping (birds), waddling/sliding (penguins), and skating (striders).
+    - Integrated "Flee Logic" where animals react to tank proximity.
+    - Optimized rendering with `isVisible` checks to maintain 60FPS.
+- **Species List**:
+    - **Desert**: Lizards, Scorpions, Vulture Shadows.
+    - **Urban**: Pigeons, Stray Cats, Cockroaches.
+    - **Industrial**: Rats, Micro-Drones, Moths.
+    - **Tundra**: Snow Hares, Penguins, Arctic Foxes.
+    - **Wetland**: Dragonflies, Frogs, Water Striders.
+    - **Wasteland**: Mutated Crows, Scrap Beetles, Radioactive Slugs.
+- **Scoring Hardening**: Modified `LobbyManager.js` to award points to the opposing team for ALL deaths, eliminating tactical suicides.
 
 #### **Turret Rotation Lag & Zero-Angle Snap Fix**
 - **Date**: 2026-05-09
