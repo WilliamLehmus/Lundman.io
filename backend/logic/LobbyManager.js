@@ -4,6 +4,7 @@ import { MATERIALS, MATERIAL_PROPERTIES, BIOMES, CHASSIS, WEAPON_MODULES } from 
 import { MapGenerator } from './MapGenerator.js';
 import { BotAI } from './BotAI.js';
 import { CombatEngine } from './CombatEngine.js';
+import { Navigation } from './Navigation.js';
 import { getPlayerData, savePlayers } from './Persistence.js';
 
 const { Engine, Bodies, Body, Composite, Vector, Query, Bounds } = Matter;
@@ -34,6 +35,7 @@ export class Lobby {
         this.walls = [];
 
         this.mapGenerator = new MapGenerator(this);
+        this.navGrid = new Navigation(this);
         this.botAI = new BotAI(this);
         this.combatEngine = new CombatEngine(this, io);
 
@@ -78,6 +80,7 @@ export class Lobby {
         Composite.add(this.engine.world, walls);
 
         this.mapGenerator.generateMap(forcedMapType);
+        this.navGrid.buildGrid();
     }
 
     getRandomSpawn(team) {
