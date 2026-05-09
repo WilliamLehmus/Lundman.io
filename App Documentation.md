@@ -189,6 +189,12 @@ npm run dev
 - **Debug Menu**: Enables bot/terrain spawning if `debugMode` is active.
 - **Security Check**: The server validates all critical actions. (See Security section).
 
+### 4. Backup Registry
+Manual snapshots are stored in the `/backups` directory for version control and recovery:
+- `2026-05-09_21-48`: Created at 21:48 (Pre-next-task snapshot).
+- `2026-05-09_19-28`: Stable state after wildlife expansion.
+- `pre_tank_overhaul_20260509_0037`: Baseline before procedural tank rendering.
+
 ---
 
 ## 🔐 Security & Hardening

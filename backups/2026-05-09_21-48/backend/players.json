@@ -1,0 +1,36 @@
+{
+  "Lundixz": {
+    "kills": 17,
+    "deaths": 74,
+    "scrap": 2372,
+    "lastSeen": 1778355981633,
+    "pin": "$2b$10$IaSvJHamYAanvmhYSgbqW.S7CYOysKppMQMstafJGtrUqQWzwzk/6"
+  },
+  "TestTank": {
+    "kills": 0,
+    "deaths": 0,
+    "scrap": 20,
+    "lastSeen": 1777392976927
+  },
+  "TestTestTank": {
+    "kills": 0,
+    "deaths": 0,
+    "scrap": 20,
+    "lastSeen": 1777798866835,
+    "pin": "$2b$10$O9nz60pPYDZe2cjniNjZYeJZtHzn3k2KLmngga1aqq6x1yiM4CjmW"
+  },
+  "Stroggo": {
+    "kills": 0,
+    "deaths": 11,
+    "scrap": 3,
+    "lastSeen": 1777740698548,
+    "pin": "$2b$10$p3vgsuddpQURaj8LBTqpXOQ1th9ubAEjX73EU6iEJCZKND6SMWJVi"
+  },
+  "Stroggo1": {
+    "kills": 0,
+    "deaths": 9,
+    "scrap": 90,
+    "lastSeen": 1777812950749,
+    "pin": "$2b$10$oP609sRXZZMUk8lq2J4VCuAC.ALHRpg1tw2uZx6uM4cBU16lifMdO"
+  }
+}
