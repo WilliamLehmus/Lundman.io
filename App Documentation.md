@@ -75,8 +75,8 @@ The core of the game engine lives on the **Node.js server**.
 Matches feature unique, randomly generated maps:
 - **DESERT**: Scorched sands with intense heat haze, volumetric sandstorms, oases (water pools), and ancient architecture. Features **Lizards**, **Scorpions**, and **Vulture Shadows**.
 - **TUNDRA**: Frozen wasteland with **Snow Hares**, **Penguins**, **Arctic Foxes**, wind gusts, and slippery ice. Features a cold frost aesthetic.
-- **URBAN**: Dense city grid with buildings, narrow streets, and neon signs. Features a **Two-Pass Rendering System** for perfect layering of details. Buildings include **Living Windows** with flickering neon colors and room silhouettes, and dynamic **Billboards** with cycling brand names (`NEO-GEN`, `LUMINA`, `VOID`, etc.). Street-level infrastructure includes high-fidelity **Manhole Covers** with radial patterns and NYC steam, prominent **Street Lamp Glows** with visible poles, and defined **Crosswalks**. Roof details include **AC Units**, **Water Towers**, and **Antennas**. Features **Pigeons**, **Stray Cats**, and **Cockroaches**.
-- **INDUSTRIAL**: High-tech factory environment with large megastructures, concrete floors, pulsing neon-cyan energy conduits, and procedural floor markings (SEC-XX). Features dynamic **Falling Sparks**, atmospheric **Heat Distortion** above vents, and **Emergency Beacons**. Environmental life includes **Rats**, **Micro-Drones**, and **Moths**.
+- **URBAN**: Dense neon city with a **Wet Asphalt** floor, procedural reflective puddles, and vibrant **Neon Crosswalks**. Buildings feature "Living Windows" with TV flicker, warm residential glows, and office lighting. Rooftops include AC units and water tanks. Features **Pigeons**, **Stray Cats**, and **Cockroaches**.
+- **INDUSTRIAL**: High-tech factory environment with a **Modular Panel** floor, pulsing energy tracks, and complex **Megastructure** complexes. Features animated gears, ventilation fans with motion blur, laser scanners, and flickering holographic sign projections. Periodic steam blowoff and furnace glows enhance the atmosphere. Features **Rats**, **Micro-Drones**, and **Moths**.
 - **WETLAND**: Murky swamp land with dynamic water ripples, interactive **Dragonflies**, **Frogs**, and **Water Striders**. Features **Swamp Shack** structures, thick atmospheric mist, and fireflies.
 - **WASTELAND**: Post-apocalyptic terrain with radioactive pools, floating ash, and dynamic wind. Features **Mutated Crows**, **Scrap Beetles**, and **Radioactive Slugs**.
 - **WORLD BORDER**: The playable area is contained within a high-fidelity **Neon Energy Barrier** with pulsing corner accents and a subtle outer glow.
@@ -188,12 +188,6 @@ npm run dev
 ### 3. Developer Tools (Hidden)
 - **Debug Menu**: Enables bot/terrain spawning if `debugMode` is active.
 - **Security Check**: The server validates all critical actions. (See Security section).
-
-### 4. Backup Registry
-Manual snapshots are stored in the `/backups` directory for version control and recovery:
-- `2026-05-09_21-48`: Created at 21:48 (Pre-next-task snapshot).
-- `2026-05-09_19-28`: Stable state after wildlife expansion.
-- `pre_tank_overhaul_20260509_0037`: Baseline before procedural tank rendering.
 
 ---
 
@@ -367,10 +361,15 @@ To transition from a learning project to a **marketable product**, the following
 - **Fix (The "Megastructure" Update)**: 
     1.  **Abolished City Grid**: Removed yellow dashed sidewalks and streets. Replaced with a unified **Facility Floor** using large concrete plates and hazard zones.
     2.  **Megastructures**: Increased building size and clustering. Buildings now overlap "streets" to create dense, interconnected factory complexes.
-    3.  **Industrial Detail System**:
-        - **Clipping**: All interior details are now clipped to the building shape (eliminating rectangular artifacts on silos).
-        - **Industrial Modules**: Replaced apartment windows with **Cooling Fins**, **Ventilation Fans** (animated), and **Support Girders**.
-        - **Volumetric Silos**: Circular buildings now feature radial shading for a 3D cylindrical look.
+        - **Industrial Detail System**:
+            - **Clipping**: All interior details are now clipped to the building shape.
+            - **Megastructure Aesthetic**: Buildings feature composite silhouettes with stacked modules and structural bulkheads.
+            - **Industrial Modules**: Rotating **Gears**, high-fidelity **Ventilation Fans** (with motion blur), and rotating **Laser Scanners**.
+            - **Holographic Signs**: Neon signs in the industrial biome use a flickering hologram effect with scanlines and glow.
+            - **Status LEDs**: Blinking red/green/yellow indicators on building corners and equipment.
+            - **Floor Overhaul**: Replaced plain concrete with a **Modular Panel** system featuring recessed pulsing energy tracks and "Caution" decals.
+            - **Atmosphere**: Subtle background furnace/energy glows and periodic steam blowoff from vents.
+            - **Volumetric Silos**: Circular buildings feature advanced cylindrical shading with metal highlights and rim shadows.
 ---
 
 ## 🛡️ Known Issues & Critical Fixes
@@ -405,6 +404,14 @@ To transition from a learning project to a **marketable product**, the following
     - Added a pulsing neon glow and a rotating dashed outer ring for a premium feel.
     - Synchronized with `gameState` for zero-latency visual feedback.
 - **Verification**: All syntax validated with `node -c`. Rendering stability confirmed across all biomes.
+- **Urban "Neon Metropolis" Overhaul**:
+    - **Wet Asphalt Floor**: Replaced plain black floor with a textured asphalt surface featuring procedural reflective puddles.
+    - **Neon Road Markings**: Upgraded to high-fidelity, pulsing Cyan/Magenta road lines and zebra-stripe crosswalks.
+    - **Living Windows**: Implemented logic for windows to show TV flicker, warm residential lamps, or cool office lighting.
+    - **Rooftop Details**: Added AC units with rotating fans and water tanks to building rooftops.
+    - **Sidewalk Upgrades**: Improved curbing with depth shadows and subtle yellow tactile paving details.
+    - **City Haze**: Added a purple/blue background ambient glow to simulate light pollution and urban atmosphere.
+    - **Street Steam**: Added wispy steam puffs rising from manholes.
 
 #### **Node.js API Leak in Browser (process is not defined)**
 - **Date**: 2026-05-09

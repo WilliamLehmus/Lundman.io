@@ -185,7 +185,6 @@ let radioactiveSlugs = []; // Wasteland slugs
 let ripples = []; // Surface disturbances
 let windStreaks = []; // Fast moving wind lines
 let ashParticles = []; // Atmospheric embers/ash for wasteland
-let urbanTrash = []; // Blowing paper/newspapers
 let groundDetails = []; // Cache for procedural cracks/stains
 let windIntensity = 1.0;
 let windPhase = 0;
@@ -1719,8 +1718,6 @@ function renderLoop(now) {
         ctx.rect(0, 0, wSize, wSize);
         ctx.clip();
 
-        const currentBiome = gameState.zones && gameState.zones[0] ? (gameState.zones[0].t || gameState.zones[0].type) : 'RANDOM';
-
         drawZones();
         drawGrid();
 
@@ -1742,13 +1739,6 @@ function renderLoop(now) {
         drawWorldBorders();
         drawEnvironmentalLife();
 
-        if (ENABLE_PREMIUM_VISUALS && currentBiome === 'INDUSTRIAL') {
-            drawIndustrialAtmosphere();
-        }
-        if (ENABLE_PREMIUM_VISUALS && currentBiome === 'URBAN') {
-            drawUrbanAtmosphere();
-        }
-
         drawElements();
         drawGuardians();
         updateBulletTrails();
@@ -1759,6 +1749,7 @@ function renderLoop(now) {
             drawTank(p);
             // NEW: Dust & Vapor particles when moving
             if (ENABLE_PREMIUM_VISUALS && renderTime % 4 < 1) { 
+                const currentBiome = gameState.zones && gameState.zones[0] ? (gameState.zones[0].t || gameState.zones[0].type) : 'RANDOM';
                 const isMoving = p.id === myId ? (keys.up || keys.down || keys.left || keys.right) : (Math.abs(p.vx||0) > 0.1 || Math.abs(p.vy||0) > 0.1); 
                 
                 if (currentBiome === 'TUNDRA') {
@@ -2272,115 +2263,33 @@ function drawZones() {
         ctx.restore();
     });
 
-    // Urban & Industrial Road/Floor Markings
-    if (currentBiome === 'URBAN' || currentBiome === 'INDUSTRIAL') {
+    // Urban Road Markings (Premium Neon Grid)
+    if (currentBiome === 'URBAN') {
         ctx.save();
-        const isInd = currentBiome === 'INDUSTRIAL';
-        ctx.strokeStyle = isInd ? 'rgba(0, 242, 255, 0.08)' : 'rgba(0, 242, 255, 0.05)';
-        ctx.lineWidth = 1;
+        const pulse = 0.6 + Math.sin(Date.now() * 0.001) * 0.2;
+        ctx.strokeStyle = `rgba(0, 242, 255, ${0.1 * pulse})`;
+        ctx.lineWidth = 2;
         
-        // Facility Floor Plates / Grid
-        for (let i = 0; i < worldSize; i += 400) {
-            ctx.beginPath();
-            ctx.moveTo(i, 0); ctx.lineTo(i, worldSize);
-            ctx.moveTo(0, i); ctx.lineTo(worldSize, i);
-            ctx.stroke();
+        const spacing = 400;
+        for (let i = 0; i < worldSize; i += spacing) {
+            if (i < camera.x - 100 || i > camera.x + canvas.width + 100) continue;
+            // Main Road Lines
+            ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, worldSize); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(worldSize, i); ctx.stroke();
             
-            if (isInd && ENABLE_PREMIUM_VISUALS) {
-                // 1. Energy Conduits (Pulsing neon lines along the grid)
-                const pulse = 0.3 + Math.sin(renderTime * 0.002 + i) * 0.2;
-                ctx.save();
-                ctx.strokeStyle = '#00f2ff';
-                ctx.globalAlpha = pulse;
-                ctx.lineWidth = 2;
-                ctx.shadowBlur = 10;
-                ctx.shadowColor = '#00f2ff';
-                
-                // Horizontal conduit
-                ctx.beginPath(); ctx.moveTo(0, i + 200); ctx.lineTo(worldSize, i + 200); ctx.stroke();
-                // Vertical conduit
-                ctx.beginPath(); ctx.moveTo(i + 200, 0); ctx.lineTo(i + 200, worldSize); ctx.stroke();
-                ctx.restore();
-
-                // 2. Facility Markings (Zone IDs, Arrows)
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
-                ctx.font = 'bold 24px Outfit';
-                ctx.textAlign = 'center';
-                for (let j = 0; j < worldSize; j += 800) {
-                    const zoneId = `SEC-${Math.floor(i/400).toString().padStart(2, '0')}-${Math.floor(j/800).toString().padStart(2, '0')}`;
-                    ctx.fillText(zoneId, i + 200, j + 200);
-                    
-                    // Directional Arrows
-                    ctx.save();
-                    ctx.translate(i + 100, j + 100);
-                    ctx.rotate(Math.PI / 4);
-                    ctx.beginPath();
-                    ctx.moveTo(0, -10); ctx.lineTo(10, 0); ctx.lineTo(0, 10); ctx.stroke();
-                    ctx.restore();
-                }
-            } else if (currentBiome === 'URBAN') {
-                // Urban Road Infrastructure (Grid intersections)
-                const gridStep = 400;
-                ctx.save();
-                
-                // 1. Manhole Covers
-                for (let j = 0; j < worldSize; j += 800) {
-                    const seed = i + j + 555;
-                    if (getStableRandom(seed) > 0.3) {
-                        const mx = i + 120; const my = j + 120;
-                        // Outer Ring
-                        ctx.fillStyle = '#1a1a1a'; ctx.beginPath(); ctx.arc(mx, my, 16, 0, Math.PI*2); ctx.fill();
-                        ctx.strokeStyle = '#333'; ctx.lineWidth = 2; ctx.stroke();
-                        // Inner Pattern
-                        ctx.strokeStyle = '#222'; ctx.lineWidth = 1;
-                        for(let r=0; r<8; r++) {
-                            const ang = r * Math.PI/4;
-                            ctx.beginPath(); ctx.moveTo(mx + Math.cos(ang)*4, my + Math.sin(ang)*4); 
-                            ctx.lineTo(mx + Math.cos(ang)*14, my + Math.sin(ang)*14); ctx.stroke();
-                        }
-                        // NYC Steam
-                        if (ENABLE_PREMIUM_VISUALS && Math.random() > 0.96) {
-                            particles.push({
-                                x: mx, y: my, vx: (Math.random()-0.5)*0.3, vy: -0.5 - Math.random()*0.5,
-                                life: 1.5, color: 'rgba(200, 200, 255, 0.2)', size: 8 + Math.random()*12,
-                                isSteam: true
-                            });
-                        }
-                    }
-                }
-
-                // 2. Street Lamp Posts (Visible Infrastructure)
-                if (ENABLE_PREMIUM_VISUALS) {
-                    for (let j = 0; j < worldSize; j += 400) {
-                        // The Base/Pole (Visible from top)
-                        ctx.fillStyle = '#0a0a0a'; ctx.beginPath(); ctx.arc(i, j, 10, 0, Math.PI*2); ctx.fill();
-                        ctx.strokeStyle = '#222'; ctx.lineWidth = 2; ctx.stroke();
-                        
-                        // The Lamp Core (Vibrant Neon)
-                        ctx.fillStyle = '#00f2ff'; ctx.shadowBlur = 15; ctx.shadowColor = '#00f2ff';
-                        ctx.beginPath(); ctx.arc(i, j, 5, 0, Math.PI*2); ctx.fill();
-                        ctx.shadowBlur = 0;
-                        
-                        // The Street Glow (Larger Area)
-                        const lGrad = ctx.createRadialGradient(i, j, 0, i, j, 180);
-                        lGrad.addColorStop(0, 'rgba(0, 242, 255, 0.12)');
-                        lGrad.addColorStop(0.6, 'rgba(0, 242, 255, 0.04)');
-                        lGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-                        ctx.fillStyle = lGrad;
-                        ctx.beginPath(); ctx.arc(i, j, 180, 0, Math.PI*2); ctx.fill();
-                    }
-                }
-
-                // 3. Crosswalks (Higher visibility)
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
-                for (let j = 0; j < worldSize; j += 800) {
-                    for (let k = 0; k < 6; k++) {
-                        ctx.fillRect(i + 140 + k*18, j + 380, 10, 45);
-                        ctx.fillRect(j + 380, i + 140 + k*18, 45, 10);
-                    }
-                }
-                ctx.restore();
+            // Neon Crosswalks
+            ctx.save();
+            ctx.strokeStyle = `rgba(255, 0, 255, ${0.08 * pulse})`;
+            ctx.lineWidth = 15;
+            for (let j = 0; j < worldSize; j += 800) {
+                if (j < camera.y - 100 || j > camera.y + canvas.height + 100) continue;
+                // Vertical Crosswalk
+                ctx.setLineDash([10, 15]);
+                ctx.beginPath(); ctx.moveTo(i, j + 350); ctx.lineTo(i, j + 450); ctx.stroke();
+                // Horizontal Crosswalk
+                ctx.beginPath(); ctx.moveTo(j + 350, i); ctx.lineTo(j + 450, i); ctx.stroke();
             }
+            ctx.restore();
         }
         ctx.restore();
     }
@@ -2401,7 +2310,6 @@ function drawGrid() {
         snowHares = []; penguins = []; arcticFoxes = [];
         dragonflies = []; frogs = []; waterStriders = [];
         mutatedCrows = []; scrapBeetles = []; radioactiveSlugs = [];
-        urbanTrash = [];
         environmentalObjects = [];
         lastBiome = currentBiome;
         lastWorldSize = worldSize;
@@ -2409,44 +2317,133 @@ function drawGrid() {
 
     if (currentBiome === 'URBAN' || currentBiome === 'INDUSTRIAL') {
         const isIndustrial = currentBiome === 'INDUSTRIAL';
+        const isUrban = currentBiome === 'URBAN';
         // 1. Base floor
-        ctx.fillStyle = isIndustrial ? '#1e1e24' : '#08080c';
+        ctx.fillStyle = isIndustrial ? '#1a1a20' : '#050508';
         ctx.fillRect(0, 0, worldSize, worldSize);
 
-        // 1.1 INDUSTRIAL Details
-        if (isIndustrial) {
-            // Diamond Plate Texture (Subtle)
-            ctx.strokeStyle = 'rgba(255,255,255,0.03)';
-            ctx.lineWidth = 1;
-            const plateSize = 250;
-            for (let x = 0; x < worldSize; x += plateSize) {
-                for (let y = 0; y < worldSize; y += plateSize) {
-                    ctx.beginPath();
-                    ctx.moveTo(x + 10, y + 10); ctx.lineTo(x + 30, y + 30);
-                    ctx.moveTo(x + 30, y + 10); ctx.lineTo(x + 10, y + 30);
-                    ctx.stroke();
+        // 1.1 URBAN: Wet Asphalt Texture
+        if (isUrban) {
+            ctx.save();
+            // A. Grainy Asphalt
+            ctx.fillStyle = 'rgba(255,255,255,0.015)';
+            for (let i = 0; i < 1000; i++) {
+                const seed = i * 13.5;
+                const rx = getStableRandom(seed) * worldSize;
+                const ry = getStableRandom(seed + 1) * worldSize;
+                if (rx > camera.x && rx < camera.x + canvas.width && ry > camera.y && ry < camera.y + canvas.height) {
+                    ctx.fillRect(rx, ry, 1.5, 1.5);
                 }
             }
-
-            // 1.2 Power Cables (Pulsing neon)
+            
+            // B. Reflective Puddles (Organic blobs)
             if (ENABLE_PREMIUM_VISUALS) {
-                const cablePulse = 0.05 + Math.sin(Date.now() * 0.0015) * 0.04;
-                ctx.save();
-                ctx.lineWidth = 5;
-                ctx.strokeStyle = `rgba(0, 242, 255, ${cablePulse})`;
-                ctx.shadowBlur = 12 * (cablePulse * 12);
-                ctx.shadowColor = '#00f2ff';
-                const spacing = 1000;
-                for (let g = 500; g < worldSize; g += spacing) {
-                    ctx.beginPath();
-                    ctx.moveTo(g, 0);
-                    for (let cy = 0; cy < worldSize; cy += 300) ctx.lineTo(g + Math.sin(cy/200 + g)*25, cy);
-                    ctx.stroke();
-                    ctx.beginPath();
-                    ctx.moveTo(0, g);
-                    for (let cx = 0; cx < worldSize; cx += 300) ctx.lineTo(cx, g + Math.cos(cx/250 + g)*25);
-                    ctx.stroke();
+                ctx.globalCompositeOperation = 'screen';
+                for (let i = 0; i < 20; i++) {
+                    const seed = i * 47.2;
+                    const px = getStableRandom(seed) * worldSize;
+                    const py = getStableRandom(seed + 1) * worldSize;
+                    if (px > camera.x - 200 && px < camera.x + canvas.width + 200 && py > camera.y - 200 && py < camera.y + canvas.height + 200) {
+                        const pGrad = ctx.createRadialGradient(px, py, 0, px, py, 60);
+                        pGrad.addColorStop(0, 'rgba(0, 242, 255, 0.05)');
+                        pGrad.addColorStop(1, 'rgba(0, 242, 255, 0)');
+                        ctx.fillStyle = pGrad;
+                        ctx.beginPath(); ctx.ellipse(px, py, 60, 30, getStableRandom(seed+2)*Math.PI, 0, Math.PI*2); ctx.fill();
+                    }
                 }
+            }
+            ctx.restore();
+        }
+
+        // 1.1 INDUSTRIAL Details (Modular Mega-Plate System)
+        if (isIndustrial) {
+            const panelSize = 400;
+            const seamSize = 4;
+            
+            // A. Panel Grid with chamfered seams
+            ctx.save();
+            for (let x = 0; x < worldSize; x += panelSize) {
+                if (x < camera.x - panelSize || x > camera.x + canvas.width + panelSize) continue;
+                for (let y = 0; y < worldSize; y += panelSize) {
+                    if (y < camera.y - panelSize || y > camera.y + canvas.height + panelSize) continue;
+                    
+                    // Panel Body
+                    ctx.fillStyle = '#1e1e24';
+                    ctx.fillRect(x + seamSize, y + seamSize, panelSize - seamSize*2, panelSize - seamSize*2);
+                    
+                    // Beveled edge highlights (Subtle)
+                    ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(x + seamSize, y + seamSize, panelSize - seamSize*2, panelSize - seamSize*2);
+
+                    // B. Rare Floor Details (Grates & Decals)
+                    const seed = x + y;
+                    const rand = getStableRandom(seed);
+                    if (rand > 0.92 && ENABLE_PREMIUM_VISUALS) {
+                        // Metal Grate
+                        ctx.fillStyle = '#0a0a0c';
+                        ctx.fillRect(x + 50, y + 50, 100, 100);
+                        ctx.strokeStyle = '#333'; ctx.lineWidth = 2;
+                        for (let gx = 60; gx < 150; gx += 10) {
+                            ctx.beginPath(); ctx.moveTo(x + gx, y + 50); ctx.lineTo(x + gx, y + 150); ctx.stroke();
+                        }
+                    } else if (rand > 0.88 && ENABLE_PREMIUM_VISUALS) {
+                        // Caution Decal
+                        ctx.save();
+                        ctx.translate(x + panelSize/2, y + panelSize/2);
+                        ctx.rotate(Math.floor(getStableRandom(seed+1)*4) * Math.PI/2);
+                        ctx.fillStyle = 'rgba(255, 204, 0, 0.15)';
+                        ctx.font = 'bold 24px Outfit';
+                        ctx.textAlign = 'center';
+                        const labels = ['ZONE A', 'CAUTION', 'REACTOR', 'CORE 01', 'DANGER'];
+                        ctx.fillText(labels[Math.floor(getStableRandom(seed+2)*labels.length)], 0, 0);
+                        ctx.restore();
+                    }
+                }
+            }
+            ctx.restore();
+
+            // C. Energy Tracks (Recessed pulsing lines along seams)
+            if (ENABLE_PREMIUM_VISUALS) {
+                const pulse = 0.3 + Math.sin(Date.now() * 0.002) * 0.2;
+                ctx.save();
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = `rgba(0, 242, 255, ${pulse * 0.4})`;
+                ctx.shadowBlur = 10 * pulse;
+                ctx.shadowColor = '#00f2ff';
+                
+                // Horizontal tracks
+                for (let y = 0; y <= worldSize; y += panelSize) {
+                    if (y < camera.y - 100 || y > camera.y + canvas.height + 100) continue;
+                    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(worldSize, y); ctx.stroke();
+                }
+                // Vertical tracks
+                for (let x = 0; x <= worldSize; x += panelSize) {
+                    if (x < camera.x - 100 || x > camera.x + canvas.width + 100) continue;
+                    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, worldSize); ctx.stroke();
+                }
+                
+                // D. Traveling Energy Pulses
+                ctx.save();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 3;
+                ctx.globalAlpha = 0.6;
+                const flowPos = (Date.now() * 0.4) % worldSize;
+                for (let i = 0; i < worldSize; i += 1200) {
+                    const px = (flowPos + i) % worldSize;
+                    if (px > camera.x - 200 && px < camera.x + canvas.width + 200) {
+                        for (let y = 0; y < worldSize; y += panelSize) {
+                            ctx.beginPath(); ctx.moveTo(px, y); ctx.lineTo(px + 40, y); ctx.stroke();
+                        }
+                    }
+                    const py = (flowPos + i) % worldSize;
+                    if (py > camera.y - 200 && py < camera.y + canvas.height + 200) {
+                        for (let x = 0; x < worldSize; x += panelSize) {
+                            ctx.beginPath(); ctx.moveTo(x, py); ctx.lineTo(x, py + 40); ctx.stroke();
+                        }
+                    }
+                }
+                ctx.restore();
                 ctx.restore();
             }
         }
@@ -2517,13 +2514,25 @@ function drawGrid() {
                     if (x < camera.x - 500 || x > camera.x + canvas.width + 500 || y < camera.y - 500 || y > camera.y + canvas.height + 500) continue;
 
                     // Sidewalk Base
-                    ctx.fillStyle = '#1a1a25';
+                    ctx.fillStyle = '#1a1a22';
                     ctx.beginPath();
-                    ctx.roundRect(x, y, blockSize + 20, blockSize + 20, 10);
+                    ctx.roundRect(x, y, blockSize + 20, blockSize + 20, 8);
                     ctx.fill();
                     
-                    ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+                    // Curb Shadow/Depth
+                    ctx.strokeStyle = '#050508'; ctx.lineWidth = 2;
                     ctx.strokeRect(x, y, blockSize + 20, blockSize + 20);
+                    
+                    // Tactile Paving (Subtle dots at corners)
+                    ctx.fillStyle = 'rgba(255, 200, 0, 0.05)';
+                    for (let dotX = x + 10; dotX < x + 30; dotX += 6) {
+                        for (let dotY = y + 10; dotY < y + 30; dotY += 6) {
+                            ctx.beginPath(); ctx.arc(dotX, dotY, 1.5, 0, Math.PI*2); ctx.fill();
+                        }
+                    }
+                    
+                    ctx.strokeStyle = 'rgba(255,255,255,0.02)'; ctx.lineWidth = 1;
+                    ctx.strokeRect(x + 2, y + 2, blockSize + 16, blockSize + 16);
                 }
             }
         }
@@ -3318,8 +3327,11 @@ const drawOrganicPath = (ctx, x, y, radius, id) => {
 function drawElements() {
     if (!gameState.elements) return;
     const currentBiome = gameState.zones && gameState.zones[0] ? gameState.zones[0].type : 'RANDOM';
+    const isWasteland = currentBiome === 'WASTELAND';
+    const isIndustrial = currentBiome === 'INDUSTRIAL';
+    const isWetland = currentBiome === 'WETLAND';
+    const isTundra = currentBiome === 'TUNDRA';
 
-    // PASS 1: Drawing Bodies & Foundations (Layer 0)
     gameState.elements.forEach(e => {
         ctx.save();
         const config = MATERIAL_PROPERTIES[e.t] || { color: '#fff' };
@@ -3332,22 +3344,32 @@ function drawElements() {
             const isUrban = currentBiome === 'URBAN';
             const isDesert = currentBiome === 'DESERT';
 
-            // 1. Building Shadow
+            // 1. Building Shadow (Deep Depth - Warmer for Desert)
             ctx.fillStyle = isDesert ? 'rgba(61, 43, 31, 0.6)' : 'rgba(0, 0, 0, 0.5)';
             ctx.beginPath();
             if (isIndustrial && e.sh === 'circle') ctx.ellipse(e.x + 10, e.y + 10, e.w/2, e.h/2, 0, 0, Math.PI * 2);
             else ctx.roundRect(e.x - e.w/2 + 8, e.y - e.h/2 + 8, e.w, e.h, 6);
             ctx.fill();
 
-            // 2. Main Building Body
+            // 2. Main Building Body with Gradient
             const bGradient = isIndustrial && e.sh === 'circle' ? 
                 ctx.createRadialGradient(e.x - e.w/4, e.y - e.h/4, 0, e.x, e.y, e.w/2) :
                 ctx.createLinearGradient(e.x, e.y - e.h/2, e.x, e.y + e.h/2);
 
             if (isWasteland) { bGradient.addColorStop(0, '#3a2a1a'); bGradient.addColorStop(1, '#1a100a'); }
             else if (isIndustrial) {
-                if (e.sh === 'circle') { bGradient.addColorStop(0, '#3a3a4a'); bGradient.addColorStop(0.6, '#1a1a25'); bGradient.addColorStop(1, '#020205'); }
-                else { bGradient.addColorStop(0, '#1a1a25'); bGradient.addColorStop(1, '#05050a'); }
+                if (e.sh === 'circle') { 
+                    // High-Fidelity Cylindrical Shading
+                    bGradient.addColorStop(0, '#4a4a5a'); 
+                    bGradient.addColorStop(0.3, '#2a2a35'); 
+                    bGradient.addColorStop(0.5, '#666'); // Metal Highlight
+                    bGradient.addColorStop(0.7, '#1a1a25');
+                    bGradient.addColorStop(1, '#020205'); 
+                }
+                else { 
+                    bGradient.addColorStop(0, '#2a2a35'); 
+                    bGradient.addColorStop(1, '#08080f'); 
+                }
             } else if (isUrban) { bGradient.addColorStop(0, '#10101a'); bGradient.addColorStop(1, '#020205'); }
             else if (isTundra) { bGradient.addColorStop(0, '#3a4a5a'); bGradient.addColorStop(1, '#050c12'); }
             else if (isDesert) { bGradient.addColorStop(0, '#c2b280'); bGradient.addColorStop(0.4, '#a68a64'); bGradient.addColorStop(1, '#7a5c43'); }
@@ -3358,13 +3380,35 @@ function drawElements() {
             ctx.strokeStyle = isWasteland ? 'rgba(150, 80, 50, 0.5)' : (isIndustrial ? '#333' : (isTundra ? 'rgba(200, 240, 255, 0.6)' : (isDesert ? '#5d4a37' : (isWetland ? '#1a2a1a' : 'rgba(0, 242, 255, 0.6)'))));
             ctx.lineWidth = 2;
             ctx.beginPath();
-            if (e.sh === 'pyramid') ctx.rect(e.x - e.w/2, e.y - e.h/2, e.w, e.h);
-            else if (e.sh === 'circle') ctx.ellipse(e.x, e.y, e.w/2, e.h/2, 0, 0, Math.PI * 2);
-            else ctx.roundRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h, 6);
+            if (e.sh === 'pyramid') {
+                ctx.rect(e.x - e.w/2, e.y - e.h/2, e.w, e.h);
+            } else if (e.sh === 'circle') {
+                if (isWasteland) {
+                    for (let i = 0; i < 16; i++) {
+                        const angle = (i / 16) * Math.PI * 2;
+                        const dist = (e.w/2) * (0.95 + getStableRandom(e.id + i) * 0.1);
+                        if (i === 0) ctx.moveTo(e.x + Math.cos(angle) * dist, e.y + Math.sin(angle) * dist);
+                        else ctx.lineTo(e.x + Math.cos(angle) * dist, e.y + Math.sin(angle) * dist);
+                    }
+                    ctx.closePath();
+                } else {
+                    ctx.ellipse(e.x, e.y, e.w/2, e.h/2, 0, 0, Math.PI * 2);
+                }
+            } else if (isWasteland) {
+                // Jagged Broken Building Shape
+                const seed = e.id;
+                ctx.moveTo(e.x - e.w/2 + getStableRandom(seed) * 15, e.y - e.h/2 + getStableRandom(seed + 1) * 15);
+                ctx.lineTo(e.x + e.w/2 - getStableRandom(seed + 2) * 15, e.y - e.h/2 + getStableRandom(seed + 3) * 15);
+                ctx.lineTo(e.x + e.w/2 - getStableRandom(seed + 4) * 15, e.y + e.h/2 - getStableRandom(seed + 5) * 15);
+                ctx.lineTo(e.x - e.w/2 + getStableRandom(seed + 6) * 15, e.y + e.h/2 - getStableRandom(seed + 7) * 15);
+                ctx.closePath();
+            } else {
+                ctx.roundRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h, 6);
+            }
             ctx.fill();
             ctx.stroke();
 
-            // Pyramid Facets
+            // Pyramid Facets (Visual only)
             if (e.sh === 'pyramid') {
                 ctx.strokeStyle = 'rgba(0,0,0,0.15)'; ctx.lineWidth = 1;
                 ctx.beginPath();
@@ -3372,7 +3416,465 @@ function drawElements() {
                 ctx.moveTo(e.x + e.w/2, e.y - e.h/2); ctx.lineTo(e.x - e.w/2, e.y + e.h/2);
                 ctx.stroke();
             }
+
+            // Internal Fire Glow (Wasteland)
+            if (isWasteland && ENABLE_PREMIUM_VISUALS) {
+                const firePulse = 0.4 + Math.sin(renderTime * 0.003 + e.id) * 0.3;
+                const fg = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, e.w * 0.7);
+                fg.addColorStop(0, `rgba(255, 100, 0, ${firePulse * 0.3})`);
+                fg.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.fillStyle = fg;
+                ctx.fill(); // Fill the same path again with glow
+            }
+
+            // 3. Interior Details (Clipped)
+            ctx.save();
+            ctx.beginPath();
+            if (e.sh === 'pyramid') {
+                ctx.rect(e.x - e.w/2, e.y - e.h/2, e.w, e.h);
+            } else if (e.sh === 'circle') {
+                if (isWasteland) {
+                    for (let i = 0; i < 16; i++) {
+                        const angle = (i / 16) * Math.PI * 2;
+                        const dist = (e.w/2) * (0.95 + getStableRandom(e.id + i) * 0.1);
+                        if (i === 0) ctx.moveTo(e.x + Math.cos(angle) * dist, e.y + Math.sin(angle) * dist);
+                        else ctx.lineTo(e.x + Math.cos(angle) * dist, e.y + Math.sin(angle) * dist);
+                    }
+                    ctx.closePath();
+                } else {
+                    ctx.ellipse(e.x, e.y, e.w/2, e.h/2, 0, 0, Math.PI * 2);
+                }
+            } else if (isWasteland) {
+                // Same jagged path for clipping
+                const seed = e.id;
+                ctx.moveTo(e.x - e.w/2, e.y - e.h/2);
+                if (getStableRandom(seed) > 0.3) { ctx.lineTo(e.x - e.w/4, e.y - e.h/2 + 5); ctx.lineTo(e.x, e.y - e.h/2 - 2); }
+                ctx.lineTo(e.x + e.w/2, e.y - e.h/2);
+                if (getStableRandom(seed + 1) > 0.5) { ctx.lineTo(e.x + e.w/2 - 5, e.y); }
+                ctx.lineTo(e.x + e.w/2, e.y + e.h/2);
+                ctx.lineTo(e.x - e.w/2, e.y + e.h/2);
+                if (getStableRandom(seed + 2) > 0.6) { ctx.lineTo(e.x - e.w/2 + 8, e.y + 10); }
+                ctx.closePath();
+            } else {
+                ctx.roundRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h, 4);
+            }
+            ctx.clip();
+
+            // A. Industrial Interior (Machinery, Pipes, Rivets)
+            if (isIndustrial && ENABLE_PREMIUM_VISUALS) {
+                // 1. Structural Bulkheads
+                ctx.strokeStyle = '#111'; ctx.lineWidth = 8;
+                ctx.beginPath(); ctx.moveTo(e.x - e.w/2, e.y); ctx.lineTo(e.x + e.w/2, e.y); ctx.stroke();
+                
+                // 2. Pipes & Rivets
+                ctx.strokeStyle = '#222'; ctx.lineWidth = 6;
+                const pipeX = e.sh === 'circle' ? e.x - e.w/3 : e.x - e.w/2 + 12;
+                ctx.beginPath(); ctx.moveTo(pipeX, e.y - e.h/2); ctx.lineTo(pipeX, e.y + e.h/2); ctx.stroke();
+                ctx.fillStyle = 'rgba(255,255,255,0.15)';
+                for (let ry = -e.h/2 + 20; ry < e.h/2; ry += 35) { ctx.beginPath(); ctx.arc(pipeX, e.y + ry, 2.5, 0, Math.PI*2); ctx.fill(); }
+
+                // 3. Rotating Gears (Visual Depth)
+                if (e.w > 80 && e.id % 2 === 0) {
+                    ctx.save(); ctx.translate(e.x - e.w/4, e.y + e.h/4); ctx.rotate(renderTime * 0.001);
+                    ctx.fillStyle = '#222'; ctx.strokeStyle = '#333'; ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    for(let i=0; i<12; i++) {
+                        const a = i * Math.PI/6;
+                        const r = i%2===0 ? 15 : 10;
+                        ctx.lineTo(Math.cos(a)*r, Math.sin(a)*r);
+                    }
+                    ctx.closePath(); ctx.fill(); ctx.stroke();
+                    ctx.restore();
+                }
+
+                // 4. Improved Ventilation Fans
+                if (e.w > 60) {
+                    ctx.save(); ctx.translate(e.x + e.w/4, e.y - e.h/4);
+                    // Fan Housing
+                    ctx.fillStyle = '#0a0a0c'; ctx.beginPath(); ctx.arc(0,0, 15, 0, Math.PI*2); ctx.fill();
+                    ctx.rotate(renderTime * 0.008);
+                    ctx.strokeStyle = '#666'; ctx.lineWidth = 4;
+                    for (let i=0; i<4; i++) { 
+                        ctx.rotate(Math.PI/2); 
+                        ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(12, 0); ctx.stroke(); 
+                        // Motion Blur
+                        ctx.globalAlpha = 0.3; ctx.lineWidth = 2;
+                        ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(14, 4); ctx.stroke();
+                        ctx.globalAlpha = 1.0; ctx.lineWidth = 4;
+                    }
+                    ctx.restore();
+                }
+
+                // 5. Cooling Fins
+                ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 1;
+                for (let fy = -e.h/2 + 20; fy < e.h/2 - 20; fy += 10) {
+                    ctx.beginPath(); ctx.moveTo(e.x - e.w/4, e.y + fy); ctx.lineTo(e.x + e.w/4, e.y + fy); ctx.stroke();
+                }
+
+                // 6. Laser Scanner (Rotating)
+                const laserAngle = renderTime * 0.002 + e.id;
+                ctx.strokeStyle = 'rgba(255, 0, 0, 0.4)'; ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(e.x + e.w/2, e.y - e.h/2);
+                ctx.lineTo(e.x + e.w/2 + Math.cos(laserAngle)*40, e.y - e.h/2 + Math.sin(laserAngle)*40);
+                ctx.stroke();
+                // Scanner Head
+                ctx.fillStyle = '#ff0000'; ctx.beginPath(); ctx.arc(e.x + e.w/2, e.y - e.h/2, 3, 0, Math.PI*2); ctx.fill();
+            }
+
+            // B. Urban Neon Windows
+            if (isUrban && ENABLE_PREMIUM_VISUALS) {
+                const winSize = 6; const spacing = 12;
+                const cols = Math.floor((e.w - 15) / spacing); const rows = Math.floor((e.h - 15) / spacing);
+                
+                ctx.save();
+                for (let r = 0; r < rows; r++) {
+                    for (let c = 0; c < cols; c++) {
+                        const seed = e.id + r * 13 + c * 7;
+                        const rand = getStableRandom(seed);
+                        if (rand > 0.4) {
+                            const wx = e.x - e.w/2 + 12 + c * spacing; const wy = e.y - e.h/2 + 12 + r * spacing;
+                            
+                            // Window Logic: 
+                            // 1. Office (White/Blue, stable)
+                            // 2. Residential (Warm Yellow, stable)
+                            // 3. TV (Flickering Blue)
+                            // 4. Empty (Dark)
+                            
+                            let winColor = '#000';
+                            let alpha = 0.8;
+                            let glow = 0;
+
+                            if (rand > 0.85) { // Office
+                                winColor = '#b0e0ff'; glow = 8;
+                            } else if (rand > 0.7) { // Residential
+                                winColor = '#ffcc66'; glow = 6;
+                            } else if (rand > 0.6) { // TV Glow
+                                const flicker = Math.sin(renderTime * 0.01 + seed) > 0 ? '#66ccff' : '#336699';
+                                winColor = flicker; glow = 12;
+                                alpha = 0.5 + Math.random() * 0.2;
+                            }
+
+                            if (winColor !== '#000') {
+                                ctx.globalAlpha = alpha;
+                                ctx.fillStyle = winColor;
+                                if (glow > 0) { ctx.shadowBlur = glow; ctx.shadowColor = winColor; }
+                                ctx.fillRect(wx, wy, winSize, winSize);
+                                ctx.shadowBlur = 0;
+                            }
+                        }
+                    }
+                }
+                ctx.restore();
+
+                // C. Urban Rooftop Modules (AC units, Water tanks)
+                if (e.w > 60 && e.h > 60) {
+                    const roofSeed = e.id * 1.5;
+                    ctx.save();
+                    // AC Unit
+                    ctx.fillStyle = '#222'; ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
+                    const acX = e.x + e.w/4; const acY = e.y + e.h/4;
+                    ctx.fillRect(acX - 10, acY - 10, 20, 20);
+                    ctx.strokeRect(acX - 10, acY - 10, 20, 20);
+                    // Fan on AC
+                    ctx.beginPath(); ctx.arc(acX, acY, 6, 0, Math.PI*2); ctx.stroke();
+                    
+                    // Water Tank (Visual circle)
+                    if (getStableRandom(roofSeed) > 0.6) {
+                        ctx.fillStyle = '#111'; ctx.strokeStyle = '#222';
+                        const tankX = e.x - e.w/4; const tankY = e.y - e.h/4;
+                        ctx.beginPath(); ctx.arc(tankX, tankY, 12, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                        ctx.beginPath(); ctx.moveTo(tankX - 12, tankY); ctx.lineTo(tankX + 12, tankY); ctx.stroke();
+                        ctx.beginPath(); ctx.moveTo(tankX, tankY - 12); ctx.lineTo(tankX, tankY + 12); ctx.stroke();
+                    }
+                    ctx.restore();
+                }
+            }
+
+            // C. Desert Adobe + Pyramid Interior Details
+            if (isDesert && ENABLE_PREMIUM_VISUALS) {
+                if (e.sh === 'pyramid') {
+                    // Pyramid Interior: Hieroglyphs & Stone Blocks
+                    // Stone block grid
+                    ctx.strokeStyle = 'rgba(0,0,0,0.12)'; ctx.lineWidth = 1;
+                    const blockH = 12;
+                    for (let by = e.y - e.h/2; by < e.y + e.h/2; by += blockH) {
+                        ctx.beginPath(); ctx.moveTo(e.x - e.w/2, by); ctx.lineTo(e.x + e.w/2, by); ctx.stroke();
+                        // Offset horizontal joints for brick pattern
+                        const offset = ((by / blockH) % 2 === 0) ? 0 : 15;
+                        for (let bx = e.x - e.w/2 + offset; bx < e.x + e.w/2; bx += 30) {
+                            ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx, by + blockH); ctx.stroke();
+                        }
+                    }
+                    // Hieroglyph symbols (simple geometric marks)
+                    ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.font = '10px monospace'; ctx.textAlign = 'center';
+                    const glyphs = ['|', '-', 'O', '+', '\\', '/'];
+                    for (let i = 0; i < 6; i++) {
+                        const seed = e.id + i * 17;
+                        const gx = e.x - e.w/3 + getStableRandom(seed) * (e.w * 0.66);
+                        const gy = e.y - e.h/3 + getStableRandom(seed + 1) * (e.h * 0.66);
+                        ctx.fillText(glyphs[i], gx, gy);
+                    }
+                    // Interior Gradient (Dark at top, warm at bottom)
+                    const pyIntGrad = ctx.createLinearGradient(e.x, e.y - e.h/2, e.x, e.y + e.h/2);
+                    pyIntGrad.addColorStop(0, 'rgba(0,0,0,0.2)');
+                    pyIntGrad.addColorStop(1, 'rgba(255, 150, 50, 0.05)');
+                    ctx.fillStyle = pyIntGrad;
+                    ctx.fillRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h);
+                } else {
+                    // Adobe Building Interior
+                    // 1. Sand-blasted Texture
+                    ctx.fillStyle = 'rgba(0,0,0,0.05)';
+                    for (let i = 0; i < 20; i++) {
+                        const seed = e.id + i * 19;
+                        const tx = e.x - e.w/2 + getStableRandom(seed) * e.w;
+                        const ty = e.y - e.h/2 + getStableRandom(seed + 1) * e.h;
+                        ctx.beginPath(); ctx.arc(tx, ty, 1.5, 0, Math.PI * 2); ctx.fill();
+                    }
+                    // 2. Adobe Windows (Small, dark, recessed)
+                    const winSize = 8; const spacing = 20;
+                    ctx.fillStyle = '#2a1a0f';
+                    for (let wy = e.y - e.h/2 + 20; wy < e.y + e.h/2 - 10; wy += spacing) {
+                        for (let wx = e.x - e.w/2 + 20; wx < e.x + e.w/2 - 10; wx += spacing) {
+                            const seed = wx + wy + e.id;
+                            if (getStableRandom(seed) > 0.4) {
+                                ctx.fillRect(wx, wy, winSize, winSize);
+                                ctx.fillStyle = 'rgba(0,0,0,0.3)';
+                                ctx.fillRect(wx, wy, winSize, 2);
+                                ctx.fillStyle = '#2a1a0f';
+                            }
+                        }
+                    }
+                    // 3. Wooden Vigas (Support beams)
+                    ctx.fillStyle = '#3d2b1f';
+                    const vigaSize = 4;
+                    for (let vx = e.x - e.w/2 + 10; vx < e.x + e.w/2 - 5; vx += 15) {
+                        ctx.beginPath(); ctx.arc(vx, e.y - e.h/2 + 10, vigaSize, 0, Math.PI * 2); ctx.fill();
+                        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+                        ctx.beginPath(); ctx.arc(vx, e.y - e.h/2 + 11, vigaSize, 0, Math.PI * 2); ctx.fill();
+                        ctx.fillStyle = '#3d2b1f';
+                    }
+                }
+            }
+
+            // D. Wasteland Scrap Ruins (Corrugated Metal, Rust, Scaffolding)
+            if (isWasteland && ENABLE_PREMIUM_VISUALS) {
+                // 1. Corrugated Metal Texture
+                ctx.strokeStyle = 'rgba(0,0,0,0.1)'; ctx.lineWidth = 1;
+                for (let i = 8; i < e.w; i += 8) {
+                    ctx.beginPath(); ctx.moveTo(e.x - e.w/2 + i, e.y - e.h/2); ctx.lineTo(e.x - e.w/2 + i, e.y + e.h/2); ctx.stroke();
+                }
+                
+                // 2. Rust patches
+                ctx.fillStyle = 'rgba(139, 69, 19, 0.2)';
+                for (let i = 0; i < 5; i++) {
+                    const seed = e.id + i;
+                    const rx = e.x - e.w/2 + getStableRandom(seed) * e.w;
+                    const ry = e.y - e.h/2 + getStableRandom(seed + 1) * e.h;
+                    ctx.beginPath(); ctx.arc(rx, ry, 10, 0, Math.PI * 2); ctx.fill();
+                }
+
+                // 3. Scaffolding / External Pipes
+                ctx.strokeStyle = '#333'; ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(e.x - e.w/2 - 2, e.y - e.h/2 + 10);
+                ctx.lineTo(e.x - e.w/2 - 2, e.y + e.h/2 - 10);
+                ctx.stroke();
+                // Rivets on pipes
+                ctx.fillStyle = '#555';
+                for (let py = -e.h/2 + 20; py < e.h/2 - 10; py += 30) {
+                    ctx.beginPath(); ctx.arc(e.x - e.w/2 - 2, e.y + py, 2, 0, Math.PI * 2); ctx.fill();
+                }
+
+                // 4. Exposed Rebar (Bent metal rods)
+                ctx.strokeStyle = '#444'; ctx.lineWidth = 1.5;
+                for (let i = 0; i < 2; i++) {
+                    const seed = e.id + i * 50;
+                    if (getStableRandom(seed) > 0.5) {
+                        const rx = e.x + (i === 0 ? -e.w/2 : e.w/2);
+                        const ry = e.y - e.h/2 + 15;
+                        ctx.beginPath();
+                        ctx.moveTo(rx, ry);
+                        ctx.quadraticCurveTo(rx + (i === 0 ? -10 : 10), ry - 10, rx + (i === 0 ? -5 : 5), ry - 20);
+                        ctx.stroke();
+                    }
+                }
+
+                // 5. Flickering Scrap Sign
+                if (e.w > 50 && e.id % 4 === 0) {
+                    const flick = Math.random() > 0.9 ? 0 : (0.4 + Math.sin(renderTime * 0.01 + e.id) * 0.3);
+                    if (flick > 0) {
+                        ctx.save();
+                        ctx.translate(e.x, e.y - e.h/4);
+                        ctx.fillStyle = '#222'; ctx.fillRect(-15, -8, 30, 16); 
+                        ctx.strokeStyle = '#444'; ctx.lineWidth = 1; ctx.strokeRect(-15, -8, 30, 16);
+                        ctx.fillStyle = `rgba(255, 100, 0, ${flick})`;
+                        ctx.shadowBlur = 10 * flick; ctx.shadowColor = '#ff6600';
+                        ctx.font = 'bold 8px Courier';
+                        ctx.textAlign = 'center';
+                        ctx.fillText('HOT', 0, 3);
+                        ctx.restore();
+                    }
+                }
+            }
+
+            // F. Wetland Swamp Shack Details (Moss, Vines, Stilts)
+            if (isWetland && ENABLE_PREMIUM_VISUALS) {
+                // 1. Moss Patches
+                ctx.fillStyle = 'rgba(40, 80, 40, 0.3)';
+                for (let i = 0; i < 4; i++) {
+                    const seed = e.id + i * 11;
+                    const mx = e.x - e.w/2 + getStableRandom(seed) * e.w;
+                    const my = e.y - e.h/2 + getStableRandom(seed + 1) * e.h;
+                    ctx.beginPath(); ctx.ellipse(mx, my, 12, 6, getStableRandom(seed + 2) * Math.PI, 0, Math.PI * 2); ctx.fill();
+                }
+
+                // 2. Hanging Vines
+                ctx.strokeStyle = 'rgba(60, 100, 60, 0.5)'; ctx.lineWidth = 2;
+                for (let i = 0; i < 3; i++) {
+                    const seed = e.id + i * 23;
+                    const vx = e.x - e.w/2 + 10 + getStableRandom(seed) * (e.w - 20);
+                    const vy = e.y - e.h/2;
+                    const vLen = 15 + getStableRandom(seed + 1) * 20;
+                    ctx.beginPath();
+                    ctx.moveTo(vx, vy);
+                    ctx.quadraticCurveTo(vx + Math.sin(renderTime * 0.002 + i) * 5, vy + vLen/2, vx, vy + vLen);
+                    ctx.stroke();
+                }
+
+                // 3. Wooden Stilts (Corner support beams)
+                ctx.fillStyle = '#1a0d05';
+                const stiltW = 6;
+                ctx.fillRect(e.x - e.w/2 - 2, e.y - e.h/2, stiltW, e.h); // Left stilt
+                ctx.fillRect(e.x + e.w/2 - stiltW + 2, e.y - e.h/2, stiltW, e.h); // Right stilt
+                
+                // Horizontal reinforcement
+                ctx.fillRect(e.x - e.w/2, e.y + e.h/4, e.w, 4);
+            }
+
+            // G. Fallback Windows (Tundra, Default)
+            if (!isIndustrial && !isUrban && !isDesert && !isWasteland && !isWetland) {
+                const winSpacingX = 15; const winSpacingY = 18;
+                for (let wx = e.x - e.w/2 + 15; wx < e.x + e.w/2 - 10; wx += winSpacingX) {
+                    for (let wy = e.y - e.h/2 + 15; wy < e.y + e.h/2 - 10; wy += winSpacingY) {
+                        if ((Math.floor(wx * 0.7 + wy * 1.3 + e.id)) % 6 > (isWasteland ? 5 : 4)) {
+                            ctx.fillStyle = isTundra ? 'rgba(150, 220, 255, 0.3)' : (isWasteland ? 'rgba(255, 150, 50, 0.2)' : 'rgba(255, 240, 150, 0.3)');
+                            ctx.fillRect(wx, wy, 6, 6);
+                        }
+                    }
+                }
+            }
+            ctx.restore(); // END CLIPPING
+
+            // 4. Exterior Details (Drawn outside clipping)
+            // Neon Signs
+            if (e.id % 5 === 0 && !isWetland) {
+                let neonColors = ['#ff00ff', '#00f2ff', '#ffff00', '#ff0000'];
+                let texts = ['HOTEL', 'BAR', 'CLUB', 'REPAIR', 'TANK', 'NEON'];
+                if (isWasteland) { neonColors = ['#ff5500', '#ff0000', '#aa6600']; texts = ['DEAD', 'LOST', 'VOID', 'RUST']; }
+                else if (isIndustrial) { neonColors = ['#00f2ff', '#ffff00', '#55ff00']; texts = ['REACTOR', 'CORE', 'POWER']; }
+                else if (isDesert) { neonColors = ['#ff8800', '#ffff00', '#ff0000']; texts = ['OASIS', 'SALOON', 'DUST', 'MIRAGE']; }
+                const nColor = neonColors[e.id % neonColors.length]; const text = texts[e.id % texts.length];
+                ctx.save(); ctx.translate(e.x, e.y - e.h/2);
+                // Draw Support Pole for the sign
+                ctx.strokeStyle = '#333'; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -15); ctx.stroke();
+                
+                const flicker = isWasteland ? (Math.random() > 0.2 ? (Math.sin(renderTime * 0.05 + e.id) > 0 ? 1 : 0) : 0) : 1;
+                if (flicker) { 
+                    if (isIndustrial) {
+                        // Holographic Projection Effect
+                        ctx.globalAlpha = 0.4 + Math.sin(renderTime * 0.01) * 0.2;
+                        ctx.shadowBlur = 15; ctx.shadowColor = nColor;
+                        ctx.fillStyle = nColor; ctx.font = 'bold 16px Courier';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(text, 0, -20);
+                        // Scanlines
+                        ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1;
+                        for(let sy = -30; sy < -10; sy += 3) {
+                            ctx.beginPath(); ctx.moveTo(-20, sy); ctx.lineTo(20, sy); ctx.stroke();
+                        }
+                    } else {
+                        ctx.shadowBlur = 10; ctx.shadowColor = nColor; 
+                        ctx.fillStyle = nColor; ctx.font = 'bold 14px Outfit'; 
+                        ctx.textAlign = 'center'; 
+                        ctx.fillText(text, 0, -20); 
+                    }
+                }
+                ctx.restore();
+            }
+
+            // Hazard Stripes (Industrial)
+            if (isIndustrial && ENABLE_PREMIUM_VISUALS) {
+                ctx.save(); ctx.beginPath();
+                if (e.sh === 'circle') ctx.ellipse(e.x, e.y + e.h/2 - 6, e.w/2 + 4, 12, 0, 0, Math.PI * 2);
+                else ctx.rect(e.x - e.w/2 - 4, e.y + e.h/2 - 12, e.w + 8, 12);
+                ctx.clip();
+                for (let sx = e.x - e.w/2 - 40; sx < e.x + e.w/2 + 40; sx += 30) {
+                    ctx.fillStyle = '#ffcc00'; ctx.beginPath(); ctx.moveTo(sx, e.y + e.h/2 - 20); ctx.lineTo(sx + 15, e.y + e.h/2 - 20); ctx.lineTo(sx + 5, e.y + e.h/2 + 10); ctx.lineTo(sx - 10, e.y + e.h/2 + 10); ctx.fill();
+                    ctx.fillStyle = '#111'; ctx.beginPath(); ctx.moveTo(sx + 15, e.y + e.h/2 - 20); ctx.lineTo(sx + 30, e.y + e.h/2 - 20); ctx.lineTo(sx + 20, e.y + e.h/2 + 10); ctx.lineTo(sx + 5, e.y + e.h/2 + 10); ctx.fill();
+                }
+                ctx.restore();
+            }
+
+            // Desert Roof Details (AC units, Vents)
+            if (isDesert && ENABLE_PREMIUM_VISUALS) {
+                ctx.save();
+                ctx.fillStyle = '#5d4a37'; // Dusty metallic
+                const unitSize = 10;
+                // Add a small AC unit on the roof
+                const ux = e.x + e.w/4; const uy = e.y - e.h/4;
+                ctx.fillRect(ux - unitSize/2, uy - unitSize/2, unitSize, unitSize);
+                // AC Unit Grille
+                ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 1;
+                for(let i=0; i<3; i++) { ctx.beginPath(); ctx.moveTo(ux - 4, uy - 3 + i*3); ctx.lineTo(ux + 4, uy - 3 + i*3); ctx.stroke(); }
+                ctx.restore();
+            }
+
+            // Tundra Snow & Icicles
+            if (isTundra && ENABLE_PREMIUM_VISUALS) {
+                ctx.save(); ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.3;
+                // Snow on top
+                ctx.beginPath(); ctx.roundRect(e.x - e.w/2 + 5, e.y - e.h/2 + 5, e.w - 10, 15, 5); ctx.fill();
+                
+                // Icicles hanging from edges
+                ctx.strokeStyle = 'rgba(200, 240, 255, 0.8)';
+                ctx.lineWidth = 2;
+                ctx.lineCap = 'round';
+                const icicleCount = Math.floor(e.w / 15);
+                for (let i = 0; i < icicleCount; i++) {
+                    const ix = e.x - e.w/2 + 10 + i * 15 + getStableRandom(e.id + i) * 5;
+                    const iy = e.y + e.h/2; // Bottom edge
+                    const iLen = 5 + getStableRandom(e.id + i * 2) * 15;
+                    ctx.beginPath();
+                    ctx.moveTo(ix, iy);
+                    ctx.lineTo(ix, iy + iLen);
+                    ctx.stroke();
+                    // Glint on icicle
+                    if (Math.sin(renderTime * 0.003 + i) > 0.8) {
+                        ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.8;
+                        ctx.beginPath(); ctx.arc(ix, iy + iLen, 1.5, 0, Math.PI * 2); ctx.fill();
+                    }
+                }
+                
+                for (let i = 0; i < 3; i++) {
+                    const sx = e.x + Math.sin(e.id + i) * (e.w * 0.3); const sy = e.y + Math.cos(e.id + i) * (e.h * 0.3);
+                    ctx.beginPath(); ctx.arc(sx, sy, 8, 0, Math.PI * 2); ctx.fill();
+                }
+                ctx.restore();
+            }
+
+            // Smoke & Sparks
+            if ((isWasteland || isIndustrial) && ENABLE_PREMIUM_VISUALS) {
+                if (e.id % 2 === 0 && Math.random() > 0.94) {
+                    particles.push({ x: e.x + (Math.random()-0.5)*20, y: e.y - e.h/2 + 20, vx: (Math.random()-0.5)*0.5 + (windIntensity||0), vy: -1.5 - Math.random()*2, life: 1.2, color: 'rgba(70,70,70,0.4)', size: 8 + Math.random()*12 });
+                }
+                if (e.id % 3 === 0 && Math.random() > 0.97) {
+                    spawnParticles(e.x + (Math.random()-0.5)*e.w, e.y - e.h/2, '#ffffaa', 3, 0.8);
+                }
+            }
         } else if (e.t === MATERIALS.SCRAP) {
+            // Draw Scrap as a rotating gold gear/nut
             ctx.translate(e.x, e.y);
             ctx.rotate(Date.now() / 1000);
             ctx.fillStyle = config.color;
@@ -3382,147 +3884,410 @@ function drawElements() {
                 const r = i % 2 === 0 ? 12 : 8;
                 ctx.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
             }
-            ctx.closePath(); ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke();
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 1;
+            ctx.stroke();
         } else if (e.t === MATERIALS.BARREL_EXPLOSIVE || e.t === MATERIALS.BARREL_OIL) {
             ctx.translate(e.x, e.y);
-            ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.beginPath(); ctx.ellipse(5, 5, e.w/2 + 2, e.h/2 + 2, 0, 0, Math.PI*2); ctx.fill();
+            // Deep Shadow (Cylindrical)
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            ctx.beginPath();
+            ctx.ellipse(5, 5, e.w/2 + 2, e.h/2 + 2, 0, 0, Math.PI*2);
+            ctx.fill();
+
+            // Main Cylinder Body
             const bGrad = ctx.createLinearGradient(-e.w/2, 0, e.w/2, 0);
-            bGrad.addColorStop(0, config.color); bGrad.addColorStop(0.5, 'rgba(255,255,255,0.5)'); bGrad.addColorStop(1, '#000');
-            ctx.fillStyle = bGrad; ctx.strokeStyle = '#111'; ctx.lineWidth = 2;
-            ctx.beginPath(); ctx.roundRect(-e.w/2, -e.h/2, e.w, e.h, 4); ctx.fill(); ctx.stroke();
+            bGrad.addColorStop(0, config.color);
+            bGrad.addColorStop(0.3, config.color);
+            bGrad.addColorStop(0.5, 'rgba(255,255,255,0.5)'); // Central Highlight
+            bGrad.addColorStop(0.7, config.color);
+            bGrad.addColorStop(1, '#000'); // Shadow side
+            
+            ctx.fillStyle = bGrad;
+            ctx.strokeStyle = '#111';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.roundRect(-e.w/2, -e.h/2, e.w, e.h, 4);
+            ctx.fill();
+            ctx.stroke();
+
+            // Reinforcing Rings (Doom style)
+            ctx.fillStyle = 'rgba(0,0,0,0.4)';
+            const ringH = 4;
+            ctx.fillRect(-e.w/2, -e.h/2 + 8, e.w, ringH); // Top ring
+            ctx.fillRect(-e.w/2, -ringH/2, e.w, ringH);   // Middle ring
+            ctx.fillRect(-e.w/2, e.h/2 - 12, e.w, ringH); // Bottom ring
+
+            // Metallic Cap (Top)
+            ctx.fillStyle = 'rgba(255,255,255,0.15)';
+            ctx.beginPath();
+            ctx.ellipse(0, -e.h/2 + 2, e.w/2 - 2, 3, 0, 0, Math.PI*2);
+            ctx.fill();
+
+            // Symbol
+            ctx.save();
+            ctx.translate(0, 4);
+            if (e.t === MATERIALS.BARREL_EXPLOSIVE) {
+                // Draw Flame Symbol with Glow
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#fff';
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.moveTo(0, -14);
+                ctx.bezierCurveTo(-10, -6, -12, 6, 0, 10);
+                ctx.bezierCurveTo(12, 6, 10, -6, 0, -14);
+                ctx.fill();
+                ctx.shadowBlur = 0; // Reset
+                
+                // Inner flame
+                ctx.fillStyle = '#ff4444';
+                ctx.beginPath();
+                ctx.moveTo(0, -8);
+                ctx.bezierCurveTo(-6, -3, -7, 3, 0, 6);
+                ctx.bezierCurveTo(7, 3, 6, -3, 0, -8);
+                ctx.fill();
+            } else {
+                // Draw Oil Drop Symbol
+                ctx.fillStyle = '#000';
+                ctx.beginPath();
+                ctx.moveTo(0, -12);
+                ctx.bezierCurveTo(-8, -4, -10, 8, 0, 8);
+                ctx.bezierCurveTo(10, 8, 8, -4, 0, -12);
+                ctx.fill();
+                // Highlight on drop
+                ctx.fillStyle = 'rgba(255,255,255,0.4)';
+                ctx.beginPath();
+                ctx.arc(-3, -2, 2, 0, Math.PI*2);
+                ctx.fill();
+            }
+            ctx.restore();
         } else if (e.t === MATERIALS.CRATE) {
             ctx.translate(e.x, e.y);
-            ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fillRect(-e.w/2 + 5, -e.h/2 + 5, e.w, e.h);
-            ctx.fillStyle = config.color; ctx.strokeStyle = '#222'; ctx.lineWidth = 2;
-            ctx.beginPath(); ctx.roundRect(-e.w/2, -e.h/2, e.w, e.h, 3); ctx.fill(); ctx.stroke();
+            // Shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.4)';
+            ctx.fillRect(-e.w/2 + 5, -e.h/2 + 5, e.w, e.h);
+            // Body
+            ctx.fillStyle = config.color;
+            ctx.strokeStyle = '#222';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.roundRect(-e.w/2, -e.h/2, e.w, e.h, 3);
+            ctx.fill();
+            ctx.stroke();
+            // Wood Grain / Cross boards
+            ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+            ctx.beginPath();
+            ctx.moveTo(-e.w/2+5, -e.h/2+5); ctx.lineTo(e.w/2-5, e.h/2-5);
+            ctx.moveTo(e.w/2-5, -e.h/2+5); ctx.lineTo(-e.w/2+5, e.h/2-5);
+            ctx.stroke();
+            ctx.strokeRect(-e.w/2 + 8, -e.h/2 + 8, e.w - 16, e.h - 16);
         } else {
             const isLiquid = [MATERIALS.WATER, MATERIALS.OIL, MATERIALS.DIRT, MATERIALS.ELECTRIC, MATERIALS.ICE, MATERIALS.ACID, MATERIALS.FIRE, MATERIALS.QUICKSAND].includes(e.t);
             const isCloud = [MATERIALS.GAS, MATERIALS.STEAM].includes(e.t);
-            const drawRadius = e.w * 0.5 * (1.0 + Math.sin(renderTime * 0.002 + e.id) * 0.03);
+            const isProp = [MATERIALS.CACTUS, MATERIALS.PALM].includes(e.t);
+            const baseRadius = e.w * 0.5;
+            const pulse = (1.0 + Math.sin(renderTime * 0.002 + e.id) * 0.03);
 
             if (isLiquid) {
-                ctx.fillStyle = config.color;
-                drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id); ctx.fill();
-            } else if (isCloud) {
-                ctx.save();
-                ctx.fillStyle = config.color; ctx.globalAlpha = 0.4;
-                drawOrganicPath(ctx, e.x, e.y, drawRadius * 1.2, e.id); ctx.fill();
-                ctx.restore();
-            }
-        }
-        ctx.restore();
-    });
+                const drawRadius = baseRadius * pulse;
+                if (e.t === MATERIALS.WATER && ENABLE_PREMIUM_VISUALS && waterPatterns.length > 0) {
+                    ctx.fillStyle = 'rgba(0, 40, 150, 0.4)'; drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id); ctx.fill();
+                    ctx.save();
+                    const p = waterPatterns[e.id % 9];
+                    const flowX = (renderTime * 0.02) % WATER_TILE_SIZE;
+                    p.setTransform(new DOMMatrix().translate(flowX, flowX * 0.5));
+                    ctx.fillStyle = p; ctx.globalAlpha = 0.8; ctx.shadowBlur = 15; ctx.shadowColor = 'rgba(0, 242, 255, 0.6)';
+                    drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id); ctx.fill();
+                    // Water Bubbles
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+                    for (let i = 0; i < 3; i++) {
+                        const seed = e.id + i * 15;
+                        const phase = renderTime * 0.0015 + seed;
+                        const bx = e.x + Math.cos(phase) * drawRadius * 0.5;
+                        const by = e.y + Math.sin(phase) * drawRadius * 0.5;
+                        ctx.beginPath(); ctx.arc(bx, by, 2, 0, Math.PI * 2); ctx.fill();
+                    }
+                    ctx.restore();
+                } else if (e.t === MATERIALS.OIL && ENABLE_PREMIUM_VISUALS && oilPatterns.length > 0) {
+                    ctx.fillStyle = 'rgba(15, 15, 20, 0.95)'; drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id); ctx.fill();
+                    ctx.save();
+                    const p = oilPatterns[e.id % 9];
+                    const flowX = -(renderTime * 0.01) % OIL_TILE_SIZE;
+                    p.setTransform(new DOMMatrix().translate(flowX, flowX * 0.5));
+                    ctx.fillStyle = p; ctx.globalAlpha = 0.9;
+                    drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id); ctx.fill();
+                    // Oil Bubbles
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+                    for (let i = 0; i < 3; i++) {
+                        const seed = e.id + i * 10;
+                        const phase = renderTime * 0.001 + seed;
+                        const bx = e.x + Math.cos(phase) * drawRadius * 0.4;
+                        const by = e.y + Math.sin(phase) * drawRadius * 0.4;
+                        ctx.beginPath(); ctx.arc(bx, by, 2 + (i%2), 0, Math.PI * 2); ctx.fill();
+                    }
+                    ctx.restore();
+                } else if (e.t === MATERIALS.ACID && ENABLE_PREMIUM_VISUALS && acidPatterns.length > 0) {
+                    ctx.fillStyle = 'rgba(0, 80, 0, 0.5)'; drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id); ctx.fill();
+                    ctx.save();
+                    const p = acidPatterns[e.id % 9];
+                    const flowX = (renderTime * 0.015) % ACID_TILE_SIZE;
+                    p.setTransform(new DOMMatrix().translate(flowX, flowX * 0.5));
+                    ctx.fillStyle = p; ctx.shadowBlur = 12; ctx.shadowColor = 'rgba(0, 255, 100, 0.8)';
+                    drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id); ctx.fill();
+                    // Acid Bubbles
+                    ctx.fillStyle = 'rgba(100, 255, 100, 0.3)';
+                    for (let i = 0; i < 4; i++) {
+                        const seed = e.id + i * 12;
+                        const phase = renderTime * 0.002 + seed;
+                        const bx = e.x + Math.cos(phase) * drawRadius * 0.6;
+                        const by = e.y + Math.sin(phase) * drawRadius * 0.6;
+                        const r = 1.5 + Math.sin(phase * 2) * 2;
+                        if (r > 0.5) { ctx.beginPath(); ctx.arc(bx, by, r, 0, Math.PI * 2); ctx.fill(); }
+                    }
+                    ctx.restore();
+                } else if (e.t === MATERIALS.ELECTRIC && ENABLE_PREMIUM_VISUALS && electricPatterns.length > 0) {
+                    ctx.fillStyle = 'rgba(0, 50, 150, 0.4)'; drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id); ctx.fill();
+                    ctx.save();
+                    const p = electricPatterns[e.id % 9];
+                    const flowX = (renderTime * 0.1) % ELECTRIC_TILE_SIZE;
+                    p.setTransform(new DOMMatrix().translate(flowX, -flowX * 0.5));
+                    ctx.fillStyle = p; ctx.shadowBlur = 15; ctx.shadowColor = '#00f2ff';
+                    drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id); ctx.fill();
+                    ctx.restore();
+                } else if (e.t === MATERIALS.DIRT && ENABLE_PREMIUM_VISUALS) {
+                    const drawRadiusDirt = drawRadius;
+                    // 1. Base Shadow
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                    drawOrganicPath(ctx, e.x + 5, e.y + 5, drawRadiusDirt, e.id);
+                    ctx.fill();
 
-    // PASS 2: Drawing Surface Details (Layer 1)
-    gameState.elements.forEach(e => {
-        if (e.t !== MATERIALS.BUILDING) return;
-        
-        ctx.save();
-        const isIndustrial = currentBiome === 'INDUSTRIAL';
-        const isUrban = currentBiome === 'URBAN';
-        const isDesert = currentBiome === 'DESERT';
-        const isWasteland = currentBiome === 'WASTELAND';
-        const isWetland = currentBiome === 'WETLAND';
-        const isTundra = currentBiome === 'TUNDRA';
+                    // 2. Main Earth Body (Radial Gradient for Volume)
+                    const dirtGrad = ctx.createRadialGradient(e.x - drawRadiusDirt * 0.2, e.y - drawRadiusDirt * 0.2, 0, e.x, e.y, drawRadiusDirt);
+                    dirtGrad.addColorStop(0, '#6b4f3a'); // Lighter center
+                    dirtGrad.addColorStop(1, '#3d2b1f'); // Darker edges
+                    ctx.fillStyle = dirtGrad;
+                    drawOrganicPath(ctx, e.x, e.y, drawRadiusDirt, e.id);
+                    ctx.fill();
 
-        // Internal Clipping Pass
-        ctx.save();
-        ctx.beginPath();
-        if (e.sh === 'pyramid') ctx.rect(e.x - e.w/2, e.y - e.h/2, e.w, e.h);
-        else if (e.sh === 'circle') ctx.ellipse(e.x, e.y, e.w/2, e.h/2, 0, 0, Math.PI * 2);
-        else ctx.roundRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h, 6);
-        ctx.clip();
-
-        if (isIndustrial && ENABLE_PREMIUM_VISUALS) {
-            ctx.strokeStyle = '#222'; ctx.lineWidth = 6;
-            const pipeX = e.sh === 'circle' ? e.x - e.w/3 : e.x - e.w/2 + 8;
-            ctx.beginPath(); ctx.moveTo(pipeX, e.y - e.h/2); ctx.lineTo(pipeX, e.y + e.h/2); ctx.stroke();
-            if (e.w > 60) {
-                ctx.save(); ctx.translate(e.x + e.w/4, e.y - e.h/4); ctx.rotate(renderTime * 0.005);
-                ctx.strokeStyle = '#444'; ctx.lineWidth = 3;
-                for (let i=0; i<3; i++) { ctx.rotate(Math.PI*2/3); ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(10, 0); ctx.stroke(); }
-                ctx.restore();
-            }
-        }
-
-        if (isUrban && ENABLE_PREMIUM_VISUALS) {
-            // Windows (Sparse & Living)
-            const winSize = 6; const spacing = 12;
-            const cols = Math.floor((e.w - 10) / spacing); const rows = Math.floor((e.h - 10) / spacing);
-            if (cols > 0 && rows > 0) {
-                const winCount = 5 + Math.floor(getStableRandom(e.id) * 7); // 5-12 windows per building
-                for (let i = 0; i < winCount; i++) {
-                    const seed = e.id + i * 37;
-                    const r = Math.floor(getStableRandom(seed) * rows);
-                    const c = Math.floor(getStableRandom(seed + 1) * cols);
+                    // 3. Texture (Grit/Pebbles)
+                    ctx.save();
+                    ctx.clip(); // Keep texture inside the mound
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                    for (let i = 0; i < 8; i++) {
+                        const seed = e.id + i * 77;
+                        const px = e.x + (getStableRandom(seed) - 0.5) * drawRadiusDirt * 1.5;
+                        const py = e.y + (getStableRandom(seed + 1) - 0.5) * drawRadiusDirt * 1.5;
+                        const ps = 2 + getStableRandom(seed + 2) * 4;
+                        ctx.beginPath(); ctx.arc(px, py, ps, 0, Math.PI * 2); ctx.fill();
+                    }
+                    // Highlight on top edges
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath(); ctx.arc(e.x, e.y, drawRadiusDirt * 0.8, -2, -0.5); ctx.stroke();
+                    ctx.restore();
+                } else if (e.t === MATERIALS.ICE && ENABLE_PREMIUM_VISUALS) {
+                    const drawRadiusIce = baseRadius;
                     
-                    const wx = e.x - e.w/2 + 10 + c * spacing; const wy = e.y - e.h/2 + 10 + r * spacing;
-                    const colors = ['#00f2ff', '#ff00ff', '#ffff00', '#ffffff', '#ffcc00'];
-                    const winColor = colors[Math.floor(getStableRandom(seed + 2) * colors.length)];
+                    // 1. Drop Shadow
+                    ctx.save();
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+                    drawOrganicPath(ctx, e.x + 8, e.y + 8, drawRadiusIce, e.id);
+                    ctx.fill();
+                    ctx.restore();
+
+                    // 2. Main Body with Vibrant Blue Gradient
+                    const iceGrad = ctx.createRadialGradient(
+                        e.x - drawRadiusIce * 0.35, e.y - drawRadiusIce * 0.35, 0,
+                        e.x, e.y, drawRadiusIce
+                    );
+                    iceGrad.addColorStop(0, '#eefaff'); // Bright white center
+                    iceGrad.addColorStop(0.3, '#9bdfff'); // Soft light blue
+                    iceGrad.addColorStop(0.7, '#4fa9ff'); // Vibrant blue
+                    iceGrad.addColorStop(1, '#3078cc');   // Darker rim blue
                     
-                    // Slower, more atmospheric flicker
-                    const flicker = Math.sin(renderTime * 0.001 + seed) * 0.5 + 0.5;
-                    const isOff = getStableRandom(seed + 5) < 0.2 && flicker < 0.3;
-                    
-                    if (!isOff) {
-                        ctx.globalAlpha = 0.4 + flicker * 0.4;
-                        ctx.fillStyle = winColor;
-                        ctx.shadowBlur = 10 * flicker; ctx.shadowColor = winColor;
-                        ctx.fillRect(wx, wy, winSize, winSize);
-                        
-                        // Interior silhouette (Distant room feel)
-                        if (flicker > 0.5) {
-                            ctx.fillStyle = 'rgba(0,0,0,0.5)';
-                            ctx.fillRect(wx + 1, wy + 3, winSize - 2, 2);
+                    ctx.fillStyle = iceGrad;
+                    drawOrganicPath(ctx, e.x, e.y, drawRadiusIce, e.id);
+                    ctx.fill();
+
+                    // 3. Inner "Crack" Lines (Recreating the sharp lines in image)
+                    ctx.save();
+                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    for (let i = 0; i < 3; i++) {
+                        const angle = (e.id * 1.3 + i * 2.1) % (Math.PI * 2);
+                        const len = drawRadiusIce * (0.4 + getStableRandom(e.id + i) * 0.4);
+                        ctx.moveTo(e.x, e.y);
+                        ctx.lineTo(e.x + Math.cos(angle) * len, e.y + Math.sin(angle) * len);
+                        // Sub-cracks
+                        if (getStableRandom(e.id + i + 10) > 0.5) {
+                            const subAngle = angle + (getStableRandom(e.id + i + 20) - 0.5) * 1.5;
+                            const subLen = len * 0.5;
+                            ctx.moveTo(e.x + Math.cos(angle) * (len * 0.6), e.y + Math.sin(angle) * (len * 0.6));
+                            ctx.lineTo(e.x + Math.cos(angle) * (len * 0.6) + Math.cos(subAngle) * subLen, e.y + Math.sin(angle) * (len * 0.6) + Math.sin(subAngle) * subLen);
                         }
                     }
+                    ctx.stroke();
+                    ctx.restore();
+
+                    // 4. Highlight Arc (Glistening edge)
+                    ctx.save();
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 4;
+                    ctx.lineCap = 'round';
+                    ctx.globalAlpha = 0.6;
+                    ctx.beginPath();
+                    ctx.arc(e.x, e.y, drawRadiusIce * 0.85, -2.4, -0.6);
+                    ctx.stroke();
+                    ctx.restore();
+
+                    // 5. Twinkling Sparkles
+                    ctx.fillStyle = '#fff';
+                    for (let i = 0; i < 4; i++) {
+                        const sparkleSeed = e.id + i * 117;
+                        const sparkleTwinkle = Math.sin(renderTime * 0.01 + sparkleSeed) * 0.5 + 0.5;
+                        if (sparkleTwinkle > 0.6) {
+                            const sx = e.x + (getStableRandom(sparkleSeed) - 0.5) * drawRadiusIce * 1.2;
+                            const sy = e.y + (getStableRandom(sparkleSeed + 1) - 0.5) * drawRadiusIce * 1.2;
+                            ctx.globalAlpha = (sparkleTwinkle - 0.6) * 2;
+                            ctx.beginPath(); ctx.arc(sx, sy, 1.5, 0, Math.PI * 2); ctx.fill();
+                        }
+                    }
+                    ctx.globalAlpha = 1.0;
+                } else if (e.t === MATERIALS.FIRE && ENABLE_PREMIUM_VISUALS && firePatterns.length > 0) {
+                    const auraRad = drawRadius * 2.2;
+                    const g = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, auraRad);
+                    g.addColorStop(0, 'rgba(255, 100, 0, 0.4)'); g.addColorStop(1, 'rgba(150, 0, 0, 0)');
+                    ctx.fillStyle = g; drawOrganicPath(ctx, e.x, e.y, auraRad, e.id); ctx.fill();
+                    ctx.save();
+                    const p = firePatterns[e.id % 9];
+                    const flowY = -(renderTime * 0.08) % FIRE_TILE_SIZE;
+                    p.setTransform(new DOMMatrix().translate(0, flowY));
+                    ctx.fillStyle = p; ctx.shadowBlur = 25; ctx.shadowColor = '#ff6600';
+                    drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id); ctx.fill();
+                    ctx.restore();
+                } else if (e.t === MATERIALS.QUICKSAND && ENABLE_PREMIUM_VISUALS) {
+                    // 1. Thick Mud Base
+                    ctx.fillStyle = '#3d2a14';
+                    drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
+                    ctx.fill();
+                    
+                    // 2. Swirling Vortex Effect
+                    ctx.save();
+                    ctx.clip(); // Keep swirl inside the organic path
+                    ctx.translate(e.x, e.y);
+                    ctx.rotate(renderTime * 0.0006 + e.id);
+                    
+                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+                    ctx.lineWidth = 5;
+                    for (let i = 0; i < 3; i++) {
+                        const r = drawRadius * (0.3 + i * 0.25);
+                        ctx.beginPath();
+                        ctx.arc(0, 0, r, 0, Math.PI * 1.6);
+                        ctx.stroke();
+                    }
+                    
+                    // 3. Rising Methane Bubbles
+                    if (Math.random() > 0.96) {
+                        particles.push({
+                            x: e.x + (Math.random()-0.5) * drawRadius,
+                            y: e.y + (Math.random()-0.5) * drawRadius,
+                            vx: (Math.random()-0.5)*0.2, vy: -0.1,
+                            life: 0.8, color: '#2a1a0f', size: 3 + Math.random()*5
+                        });
+                    }
+                    ctx.restore();
+                } else {
+                    ctx.fillStyle = config.color;
+                    drawOrganicPath(ctx, e.x, e.y, baseRadius, e.id); ctx.fill();
+                }
+            } else if (isCloud) {
+                if (e.t === MATERIALS.GAS && ENABLE_PREMIUM_VISUALS && gasPatterns.length > 0) {
+                    ctx.save();
+                    const drawRadius = e.w * 0.65;
+                    const p = gasPatterns[e.id % 9];
+                    const flowX = (renderTime * 0.008) % GAS_TILE_SIZE;
+                    p.setTransform(new DOMMatrix().translate(flowX, flowX * 0.2));
+                    ctx.fillStyle = p; ctx.globalAlpha = 0.5; ctx.shadowBlur = 40; ctx.shadowColor = 'rgba(150, 200, 0, 0.3)';
+                    drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id); ctx.fill();
+                    ctx.restore();
+                } else if (e.t === MATERIALS.STEAM) {
+                    ctx.save();
+                    const baseRadiusSteam = e.w * 0.45;
+                    ctx.globalAlpha = 0.7;
+                    for (let i = 0; i < 5; i++) {
+                        const seed = e.id + i * 137;
+                        const angle = (getStableRandom(seed) * Math.PI * 2) + (renderTime * 0.0004);
+                        const px = e.x + Math.cos(angle) * (baseRadiusSteam * 0.5);
+                        const py = e.y + Math.sin(angle) * (baseRadiusSteam * 0.5);
+                        ctx.fillStyle = 'rgba(240, 245, 255, 0.8)';
+                        drawOrganicPath(ctx, px, py, baseRadiusSteam, seed); ctx.fill();
+                    }
+                    ctx.restore();
+                }
+            } else if (isProp) {
+                if (e.t === MATERIALS.CACTUS) {
+                    // Saguaro Cactus (True Premium)
+                    ctx.save();
+                    ctx.translate(e.x, e.y);
+                    const drawRadius = baseRadius * pulse;
+                    // Shadow
+                    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+                    ctx.beginPath(); ctx.ellipse(8, 8, drawRadius * 0.4, drawRadius * 0.9, 0, 0, Math.PI * 2); ctx.fill();
+                    // Main Stem
+                    const cGrad = ctx.createLinearGradient(-drawRadius/2, 0, drawRadius/2, 0);
+                    cGrad.addColorStop(0, '#2d5a27'); cGrad.addColorStop(0.5, '#4a7c44'); cGrad.addColorStop(1, '#1a3a17');
+                    ctx.fillStyle = cGrad;
+                    ctx.beginPath(); ctx.roundRect(-8, -drawRadius, 16, drawRadius * 2, 8); ctx.fill();
+                    // Arms
+                    ctx.beginPath();
+                    ctx.roundRect(-drawRadius * 0.7, -drawRadius * 0.2, drawRadius * 0.6, 12, 6); // Left arm base
+                    ctx.roundRect(-drawRadius * 0.7, -drawRadius * 0.6, 12, drawRadius * 0.5, 6); // Left arm up
+                    ctx.roundRect(drawRadius * 0.2, 0, drawRadius * 0.6, 12, 6); // Right arm base
+                    ctx.roundRect(drawRadius * 0.7, -drawRadius * 0.4, 12, drawRadius * 0.5, 6); // Right arm up
+                    ctx.fill();
+                    // Spines (Detail)
+                    ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    for(let i=0; i<10; i++) {
+                        const sy = -drawRadius + (i * drawRadius * 0.2);
+                        ctx.moveTo(-4, sy); ctx.lineTo(-6, sy - 2);
+                        ctx.moveTo(4, sy); ctx.lineTo(6, sy + 2);
+                    }
+                    ctx.stroke();
+                    ctx.restore();
+                } else if (e.t === MATERIALS.PALM) {
+                    // Desert Palm (True Premium)
+                    ctx.save();
+                    ctx.translate(e.x, e.y);
+                    const drawRadius = baseRadius * pulse;
+                    // Trunk (Segmented)
+                    ctx.fillStyle = '#5d4037';
+                    for(let i=0; i<5; i++) {
+                        ctx.beginPath(); ctx.roundRect(-6 + i, 10 - i*6, 12 - i*2, 8, 2); ctx.fill();
+                    }
+                    // Fronds (Leaves)
+                    ctx.fillStyle = '#2d5a27';
+                    const leafCount = 6;
+                    for(let i=0; i<leafCount; i++) {
+                        const ang = (i / leafCount) * Math.PI * 2 + renderTime * 0.0005;
+                        ctx.save();
+                        ctx.rotate(ang);
+                        ctx.beginPath();
+                        ctx.ellipse(drawRadius * 0.6, 0, drawRadius * 0.6, 6, 0, 0, Math.PI * 2);
+                        ctx.fill();
+                        // Leaf spine
+                        ctx.strokeStyle = 'rgba(0,0,0,0.2)'; ctx.lineWidth = 1;
+                        ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(drawRadius, 0); ctx.stroke();
+                        ctx.restore();
+                    }
+                    ctx.restore();
                 }
             }
-            // Billboards
-            if (e.w > 80 && e.id % 4 === 0) {
-                const bTexts = ['NEO-GEN', 'LUMINA', 'VOID', 'SENS-IX', 'CORE', 'GLOW', 'VIRTUA'];
-                const bText = bTexts[e.id % bTexts.length];
-                const bColors = ['#00f2ff', '#ff00ff', '#ffff00'];
-                const bColor = bColors[Math.floor(renderTime * 0.0005) % 3];
-                ctx.save();
-                ctx.fillStyle = '#111'; ctx.fillRect(e.x - e.w/3, e.y - 15, e.w/1.5, 30);
-                ctx.strokeStyle = bColor; ctx.lineWidth = 1; ctx.strokeRect(e.x - e.w/3, e.y - 15, e.w/1.5, 30);
-                ctx.fillStyle = bColor; ctx.shadowBlur = 10; ctx.shadowColor = bColor;
-                ctx.globalAlpha = 0.5 + Math.sin(renderTime * 0.01) * 0.2;
-                ctx.font = 'bold 10px Courier'; ctx.textAlign = 'center';
-                ctx.fillText(bText, e.x, e.y + 4);
-                ctx.restore();
-            }
         }
-        ctx.restore(); // End clipping
-
-        // Exterior
-        if (isUrban && ENABLE_PREMIUM_VISUALS) {
-            if (e.h > 90 || e.id % 7 === 0) {
-                ctx.strokeStyle = '#222'; ctx.lineWidth = 2;
-                ctx.beginPath(); ctx.moveTo(e.x, e.y - e.h/2); ctx.lineTo(e.x, e.y - e.h/2 - 20); ctx.stroke();
-                if (Math.sin(renderTime * 0.006 + e.id) > 0.4) {
-                    ctx.fillStyle = '#ff0000'; ctx.shadowBlur = 12; ctx.shadowColor = '#f00';
-                    ctx.beginPath(); ctx.arc(e.x, e.y - e.h/2 - 20, 3, 0, Math.PI*2); ctx.fill();
-                }
-            }
-        }
-
-        // Neon Sign Poles
-        if (e.id % 5 === 0 && !isWetland) {
-            let neonColors = ['#ff00ff', '#00f2ff', '#ffff00', '#ff0000'];
-            let texts = ['HOTEL', 'BAR', 'CLUB', 'REPAIR', 'TANK', 'NEON'];
-            const nColor = neonColors[e.id % neonColors.length]; const text = texts[e.id % texts.length];
-            ctx.save(); ctx.translate(e.x, e.y - e.h/2);
-            ctx.strokeStyle = '#333'; ctx.lineWidth = 2;
-            ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -15); ctx.stroke();
-            ctx.shadowBlur = 10; ctx.shadowColor = nColor; 
-            ctx.fillStyle = nColor; ctx.font = 'bold 14px Outfit'; ctx.textAlign = 'center'; 
-            ctx.fillText(text, 0, -20); 
-            ctx.restore();
-        }
-
-        ctx.restore();
+        ctx.restore(); // Final balance for ctx.save() at top of forEach
     });
 }
 
@@ -3943,30 +4708,6 @@ function updateAtmosphere(dt) {
         p.life -= 0.005 * dt;
         if (p.life <= 0 || p.y < -100) ashParticles.splice(i, 1);
     });
-
-    // 3. Urban Trash (Blowing papers)
-    if (currentBiome === 'URBAN' && ENABLE_PREMIUM_VISUALS && urbanTrash.length < 15) {
-        if (Math.random() > 0.95) {
-            urbanTrash.push({
-                x: camera.x + (Math.random() > 0.5 ? -40 : canvas.width + 40),
-                y: camera.y + Math.random() * canvas.height,
-                vx: 3 + Math.random() * 5,
-                vy: (Math.random() - 0.5) * 2,
-                life: 1.0,
-                rotation: Math.random() * Math.PI * 2,
-                rotSpeed: (Math.random() - 0.5) * 0.1,
-                size: 8 + Math.random() * 8
-            });
-        }
-    }
-
-    urbanTrash.forEach((p, i) => {
-        p.x += p.vx * dt;
-        p.y += p.vy * dt;
-        p.rotation += p.rotSpeed * dt;
-        p.life -= 0.002 * dt;
-        if (p.life <= 0 || p.x > worldSize + 200 || p.x < -200) urbanTrash.splice(i, 1);
-    });
 }
 
 function updateEnvironmentalObjects(dt) {
@@ -4068,45 +4809,7 @@ function drawGlobalTint() {
 }
 
 function drawAtmosphere() {
-    const currentBiome = gameState.zones && gameState.zones[0] ? gameState.zones[0].type : 'RANDOM';
-    const worldSize = gameState.worldSize || 4000;
     ctx.save();
-    
-    // Industrial Ground Vents
-    if (currentBiome === 'INDUSTRIAL' && ENABLE_PREMIUM_VISUALS) {
-        for (let i = 0; i < 30; i++) {
-            const seed = i * 111;
-            const vx = getStableRandom(seed) * worldSize;
-            const vy = getStableRandom(seed + 1) * worldSize;
-            
-            if (vx > camera.x - 50 && vx < camera.x + canvas.width + 50 &&
-                vy > camera.y - 50 && vy < camera.y + canvas.height + 50) {
-                // Draw Vent Plate
-                ctx.fillStyle = '#111115';
-                ctx.beginPath(); ctx.arc(vx, vy, 12, 0, Math.PI*2); ctx.fill();
-                ctx.strokeStyle = '#222228'; ctx.lineWidth = 2; ctx.stroke();
-                // Grille lines
-                ctx.beginPath(); ctx.moveTo(vx - 8, vy - 4); ctx.lineTo(vx + 8, vy - 4);
-                ctx.moveTo(vx - 8, vy); ctx.lineTo(vx + 8, vy);
-                ctx.moveTo(vx - 8, vy + 4); ctx.lineTo(vx + 8, vy + 4);
-                ctx.stroke();
-                
-                // Occasional Steam Puff
-                if (Math.random() > 0.985) {
-                    particles.push({
-                        x: vx, y: vy,
-                        vx: (Math.random() - 0.5) * 0.4,
-                        vy: -1.2 - Math.random() * 0.8,
-                        life: 1.2,
-                        color: 'rgba(240, 245, 255, 0.4)',
-                        size: 8 + Math.random() * 12,
-                        isSteam: true
-                    });
-                }
-            }
-        }
-    }
-
     atmosphereParticles.forEach(p => {
         if (p.x > camera.x - 50 && p.x < camera.x + canvas.width + 50 &&
             p.y > camera.y - 50 && p.y < camera.y + canvas.height + 50) {
@@ -4158,40 +4861,83 @@ function drawAtmosphere() {
         }
     });
 
-    // Draw Urban Trash
-    urbanTrash.forEach(p => {
-        if (p.x > camera.x - 50 && p.x < camera.x + canvas.width + 50 &&
-            p.y > camera.y - 50 && p.y < camera.y + canvas.height + 50) {
-            ctx.save();
-            ctx.translate(p.x, p.y);
-            ctx.rotate(p.rotation);
-            ctx.fillStyle = 'rgba(200, 200, 200, 0.4)';
-            ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size * 0.7);
-            // "Text" lines on paper
-            ctx.strokeStyle = 'rgba(0,0,0,0.1)'; ctx.lineWidth = 1;
-            ctx.beginPath(); ctx.moveTo(-p.size/3, -2); ctx.lineTo(p.size/3, -2);
-            ctx.moveTo(-p.size/3, 2); ctx.lineTo(p.size/3, 2); ctx.stroke();
-            ctx.restore();
-        }
-    });
+    // 4. INDUSTRIAL: Background Ambient Glow (Furnace/Energy)
+    const currentBiome = gameState.zones && gameState.zones[0] ? (gameState.zones[0].t || gameState.zones[0].type) : 'RANDOM';
+    if (currentBiome === 'INDUSTRIAL' && ENABLE_PREMIUM_VISUALS) {
+        ctx.save();
+        const pulse = 0.5 + Math.sin(Date.now() * 0.001) * 0.5;
+        const grad = ctx.createRadialGradient(canvas.width/2, canvas.height/2, 0, canvas.width/2, canvas.height/2, canvas.width);
+        grad.addColorStop(0, `rgba(255, 100, 0, ${pulse * 0.03})`); // Warm furnace glow
+        grad.addColorStop(1, `rgba(0, 242, 255, ${pulse * 0.02})`); // Cool energy glow
+        ctx.fillStyle = grad;
+        ctx.globalCompositeOperation = 'screen';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.restore();
 
+        // Periodic Steam Blowoff from Buildings
+        gameState.elements.forEach(e => {
+            if (e.t === MATERIALS.BUILDING && e.id % 4 === 0) {
+                if (Math.random() > 0.992) {
+                    for (let i = 0; i < 5; i++) {
+                        particles.push({
+                            x: e.x + (Math.random()-0.5)*e.w, 
+                            y: e.y - e.h/2, 
+                            vx: (Math.random()-0.5)*1.5, 
+                            vy: -2.5 - Math.random()*2, 
+                            life: 1.5, 
+                            color: 'rgba(230, 235, 255, 0.3)', 
+                            size: 15 + Math.random()*20,
+                            isSteam: true
+                        });
+                    }
+                }
+            }
+        });
+    }
+
+    // 5. URBAN: City Ambient Glow (Light Pollution)
+    if (currentBiome === 'URBAN' && ENABLE_PREMIUM_VISUALS) {
+        ctx.save();
+        const pulse = 0.7 + Math.sin(Date.now() * 0.0008) * 0.3;
+        const cityGrad = ctx.createRadialGradient(canvas.width/2, canvas.height, 0, canvas.width/2, canvas.height, canvas.height * 1.5);
+        cityGrad.addColorStop(0, `rgba(80, 0, 255, ${pulse * 0.04})`); // Purple/Magenta haze
+        cityGrad.addColorStop(0.5, `rgba(0, 100, 255, ${pulse * 0.02})`); // Cyan haze
+        cityGrad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = cityGrad;
+        ctx.globalCompositeOperation = 'screen';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.restore();
+
+        // Wispy Street Steam (Manholes)
+        if (Math.random() > 0.98) {
+            const rx = camera.x + Math.random() * canvas.width;
+            const ry = camera.y + Math.random() * canvas.height;
+            for (let i = 0; i < 3; i++) {
+                particles.push({
+                    x: rx + (Math.random()-0.5)*20, 
+                    y: ry + (Math.random()-0.5)*20, 
+                    vx: (Math.random()-0.5)*0.5, 
+                    vy: -0.5 - Math.random(), 
+                    life: 2.0, 
+                    color: 'rgba(255, 255, 255, 0.15)', 
+                    size: 10 + Math.random()*15,
+                    isSteam: true
+                });
+            }
+        }
+    }
     ctx.restore();
 }
 
 function spawnParticles(x, y, color, count = 10, sizeMult = 1) {
-    const currentBiome = gameState.zones && gameState.zones[0] ? gameState.zones[0].type : 'RANDOM';
-    const isIndustrial = currentBiome === 'INDUSTRIAL';
-    
     for (let i = 0; i < count; i++) {
-        const isIndSpark = isIndustrial && Math.random() > 0.6;
         particles.push({
             x, y,
-            vx: (Math.random() - 0.5) * 10,
-            vy: (Math.random() - 0.5) * 10,
-            life: 1.0 + Math.random() * 0.5,
-            color: isIndSpark ? '#00f2ff' : color,
-            size: (Math.random() * 3 + 1) * sizeMult,
-            isIndustrialSpark: isIndSpark
+            vx: (Math.random() - 0.5) * 8,
+            vy: (Math.random() - 0.5) * 8,
+            life: 1.0,
+            color,
+            size: (Math.random() * 4 + 2) * sizeMult
         });
     }
 }
@@ -4218,11 +4964,6 @@ function updateParticles(dt) {
             p.life -= 0.005 * dt; // Fade very slowly
             p.size *= 0.995;
         }
-        if (p.isIndustrialSpark) {
-            p.vx *= 0.98; // Drag
-            p.vy += 0.12 * dt; // Gravity
-            p.life -= 0.012 * dt;
-        }
     });
     particles = particles.filter(p => p.life > 0);
 }
@@ -4231,99 +4972,12 @@ function drawParticles() {
     ctx.save();
     particles.forEach(p => {
         ctx.globalAlpha = p.life;
-        if (p.isIndustrialSpark) {
-            ctx.shadowBlur = 8;
-            ctx.shadowColor = '#00f2ff';
-            ctx.fillStyle = '#fff';
-            ctx.fillRect(p.x - 1, p.y - 1, 2, 2);
-            ctx.strokeStyle = '#00f2ff';
-            ctx.lineWidth = 1;
-            ctx.globalAlpha = p.life * 0.4;
-            ctx.beginPath();
-            ctx.moveTo(p.x, p.y);
-            ctx.lineTo(p.x - p.vx * 1.5, p.y - p.vy * 1.5);
-            ctx.stroke();
-            ctx.shadowBlur = 0;
-        } else {
-            ctx.fillStyle = p.color;
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-            ctx.fill();
-        }
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
     });
     ctx.restore();
-}
-
-function drawIndustrialAtmosphere() {
-    // 1. Falling Industrial Sparks (Simulating overhead infrastructure)
-    if (Math.random() > 0.94) {
-        particles.push({
-            x: camera.x + Math.random() * canvas.width,
-            y: camera.y - 20,
-            vx: (Math.random() - 0.5) * 2,
-            vy: 4 + Math.random() * 4,
-            life: 1.2,
-            color: '#00f2ff',
-            size: 2,
-            isIndustrialSpark: true
-        });
-    }
-
-    // 2. Heat Distortion near Vents (Procedural shimmering)
-    const elements = gameState.elements.filter(e => e.t === MATERIALS.BUILDING && e.w > 60);
-    elements.forEach(e => {
-        if (e.x > camera.x - 100 && e.x < camera.x + canvas.width + 100 &&
-            e.y > camera.y - 100 && e.y < camera.y + canvas.height + 100) {
-            
-            ctx.save();
-            ctx.globalCompositeOperation = 'screen';
-            const shimmer = Math.sin(renderTime * 0.01 + e.id) * 5;
-            const hGrad = ctx.createRadialGradient(e.x + e.w/4, e.y - e.h/4, 0, e.x + e.w/4, e.y - e.h/4, 40);
-            hGrad.addColorStop(0, 'rgba(255, 255, 255, 0.05)');
-            hGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-            ctx.fillStyle = hGrad;
-            ctx.translate(shimmer, 0);
-            ctx.beginPath();
-            ctx.arc(e.x + e.w/4, e.y - e.h/4, 45, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
-        }
-    });
-}
-
-function drawUrbanAtmosphere() {
-    // 1. Sweeping Searchlights (Distant high-altitude beams)
-    const worldSize = gameState.worldSize || 4000;
-    const time = renderTime * 0.001;
-    
-    [[0,0], [worldSize, 0], [0, worldSize], [worldSize, worldSize]].forEach(([bx, by], idx) => {
-        const ang = time * 0.2 + idx * Math.PI/2;
-        const beamLen = 1200;
-        const targetX = bx + Math.cos(ang) * beamLen;
-        const targetY = by + Math.sin(ang) * beamLen;
-        
-        ctx.save();
-        ctx.globalCompositeOperation = 'screen';
-        const beamGrad = ctx.createLinearGradient(bx, by, targetX, targetY);
-        beamGrad.addColorStop(0, 'rgba(0, 242, 255, 0.15)');
-        beamGrad.addColorStop(0.5, 'rgba(0, 242, 255, 0.05)');
-        beamGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        
-        ctx.strokeStyle = beamGrad;
-        ctx.lineWidth = 60 + Math.sin(time * 2) * 20;
-        ctx.beginPath();
-        ctx.moveTo(bx, by);
-        ctx.lineTo(targetX, targetY);
-        ctx.stroke();
-        ctx.restore();
-    });
-
-    // 2. Sky Glow / City Silhouette (Subtle overlay)
-    const grad = ctx.createLinearGradient(0, worldSize, 0, worldSize - 200);
-    grad.addColorStop(0, 'rgba(0, 200, 255, 0.05)');
-    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, worldSize - 200, worldSize, 200);
 }
 
 function drawPopups(dt) {
