@@ -1592,314 +1592,263 @@ function drawTank(p) {
     if (p.hid && p.id !== myId) return;
 
     const teamColor = p.t === 'blue' ? '#00f2ff' : '#ff00ff';
+    const isPremium = ENABLE_PREMIUM_VISUALS;
     
     ctx.save();
     if (p.hid && p.id === myId) ctx.globalAlpha = 0.5;
+
+    // 1. DYNAMIC DROP SHADOW (Grounding)
+    if (isPremium) {
+        ctx.save();
+        ctx.translate(p.x + 6, p.y + 6);
+        ctx.rotate(p.a);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+        ctx.beginPath();
+        // Simplified shadow shape
+        ctx.roundRect(-TANK_WIDTH/2 - 2, -TANK_HEIGHT/2 - 2, TANK_WIDTH + 4, TANK_HEIGHT + 4, 10);
+        ctx.fill();
+        ctx.restore();
+    }
     
-    // Burning Glow Effect
-    if (p.brn) {
-        ctx.shadowBlur = 15 + Math.sin(Date.now() * 0.01) * 5;
-        ctx.shadowColor = '#ff4400';
+    ctx.translate(p.x, p.y);
+
+    // 2. STATUS EFFECTS V2 (Floating above tank)
+    if (p.stunned || p.slowed || p.burning || p.scrap >= 100) {
+        ctx.save();
+        ctx.translate(0, -TANK_HEIGHT - 45);
+        ctx.textAlign = 'center';
+        let yOff = 0;
+        if (p.stunned) { ctx.fillStyle = '#ffff00'; ctx.font = '900 14px Outfit'; ctx.fillText('⚡ STUNNED', 0, yOff); yOff -= 18; }
+        if (p.slowed)  { ctx.fillStyle = '#00aaff'; ctx.font = '900 14px Outfit'; ctx.fillText('❄️ SLOWED', 0, yOff); yOff -= 18; }
+        if (p.burning) { ctx.fillStyle = '#ff4400'; ctx.font = '900 14px Outfit'; ctx.fillText('🔥 BURNING', 0, yOff); yOff -= 18; }
+        ctx.restore();
     }
 
-    ctx.translate(p.x, p.y);
+    // --- BASE ROTATION (Tracks & Hull) ---
     ctx.save();
     ctx.rotate(p.a);
 
-    // --- TRACKS (Industrial Metallic Look) ---
-    ctx.fillStyle = '#0a0a0a';
-    ctx.strokeStyle = '#151515';
-    ctx.lineWidth = 1;
+    // 3. TRACKS (Volumetric & Dynamic)
+    let trackW = TANK_WIDTH + 6;
+    let trackH = 12;
+    let trackGap = TANK_HEIGHT/2 - 2;
     
-    let trackW = TANK_WIDTH + 4;
-    let trackH = 10;
-    let trackOffset = TANK_HEIGHT/2 - 2;
+    if (p.ch === 'BRAWLER') { trackH = 16; trackGap = TANK_HEIGHT/2 - 4; }
+    else if (p.ch === 'SCOUT') { trackW = TANK_WIDTH - 2; trackH = 10; }
+    else if (p.ch === 'ARTILLERY') { trackW = TANK_WIDTH + 14; trackH = 10; }
 
-    if (p.ch === 'BRAWLER') {
-        trackH = 14;
-        trackOffset = TANK_HEIGHT/2 - 4;
-    } else if (p.ch === 'SCOUT') {
-        trackW = TANK_WIDTH - 4;
-        trackH = 8;
-    } else if (p.ch === 'ARTILLERY') {
-        trackW = TANK_WIDTH + 12;
-        trackH = 8;
-    }
-
-    const drawTrack = (y) => {
+    const drawPremiumTrack = (ySide) => {
+        // Track Shadow/Inner
+        ctx.fillStyle = '#050505';
         ctx.beginPath();
-        ctx.roundRect(-trackW/2, y - trackH/2, trackW, trackH, 3);
+        ctx.roundRect(-trackW/2, ySide - trackH/2, trackW, trackH, 4);
         ctx.fill();
-        ctx.stroke();
-        
-        // Track Segments (Subtle Texture)
-        ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+
+        // Track Tread Pattern
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
         ctx.lineWidth = 1;
-        for (let x = -trackW/2 + 4; x < trackW/2; x += 6) {
+        const scroll = (p.id === myId && (keys.up || keys.down)) ? (Date.now() * 0.02) % 10 : 0;
+        for (let tx = -trackW/2 + 5; tx < trackW/2; tx += 8) {
+            const xPos = tx + scroll;
+            if (xPos < trackW/2 - 2) {
+                ctx.beginPath();
+                ctx.moveTo(xPos, ySide - trackH/2 + 2);
+                ctx.lineTo(xPos, ySide + trackH/2 - 2);
+                ctx.stroke();
+            }
+        }
+        
+        // Side Skirts (Brawler Only)
+        if (p.ch === 'BRAWLER' && isPremium) {
+            ctx.fillStyle = '#1a1a25';
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.moveTo(x, y - trackH/2 + 1);
-            ctx.lineTo(x, y + trackH/2 - 1);
-            ctx.stroke();
+            ctx.roundRect(-trackW/2 - 2, ySide - trackH/2 - 2, trackW + 4, 5, 2);
+            ctx.fill(); ctx.stroke();
         }
     };
+    drawPremiumTrack(-trackGap);
+    drawPremiumTrack(trackGap);
 
-    drawTrack(-trackOffset); // Left
-    drawTrack(trackOffset);  // Right
-
-    // --- BODY (True Premium Volumetric Design) ---
-    // 1. Shaded Base Gradient (Top-down lighting)
-    const bodyGrad = ctx.createLinearGradient(0, -TANK_HEIGHT/2, 0, TANK_HEIGHT/2);
-    bodyGrad.addColorStop(0, '#333355'); // Highlighted top plate
-    bodyGrad.addColorStop(0.5, '#1a1a2e'); // Mid base
-    bodyGrad.addColorStop(1, '#050510'); // Deep under-shadow
-    
-    ctx.fillStyle = bodyGrad;
-    
-    // NO HARD TEAM OUTLINE - Use a very dark definition stroke instead
+    // 4. MAIN HULL (Layered Armor)
+    // Layer A: Lower Base
+    const hullBaseGrad = ctx.createLinearGradient(0, -TANK_HEIGHT/2, 0, TANK_HEIGHT/2);
+    hullBaseGrad.addColorStop(0, '#151520');
+    hullBaseGrad.addColorStop(1, '#05050a');
+    ctx.fillStyle = hullBaseGrad;
     ctx.strokeStyle = '#000';
-    ctx.lineWidth = 1;
-    
-    // Soft Ambient Team Glow (Identification)
-    ctx.shadowBlur = ENABLE_PREMIUM_VISUALS ? 15 : 8;
-    ctx.shadowColor = teamColor;
+    ctx.lineWidth = 1.5;
+
+    // Soft Ambient Identification Glow
+    if (isPremium) {
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = teamColor;
+    }
 
     ctx.beginPath();
     if (p.ch === 'SCOUT') {
-        ctx.roundRect(-TANK_WIDTH/2 + 4, -TANK_HEIGHT/2 + 2, TANK_WIDTH - 4, TANK_HEIGHT - 4, 15);
+        ctx.roundRect(-TANK_WIDTH/2 + 2, -TANK_HEIGHT/2 + 4, TANK_WIDTH - 2, TANK_HEIGHT - 8, 18);
     } else if (p.ch === 'BRAWLER') {
-        ctx.roundRect(-TANK_WIDTH/2, -TANK_HEIGHT/2, TANK_WIDTH, TANK_HEIGHT, 4);
-    } else if (p.ch === 'ARTILLERY') {
-        ctx.roundRect(-TANK_WIDTH/2 - 5, -TANK_HEIGHT/2 + 6, TANK_WIDTH + 10, TANK_HEIGHT - 12, 6);
+        ctx.roundRect(-TANK_WIDTH/2 - 2, -TANK_HEIGHT/2 - 1, TANK_WIDTH + 4, TANK_HEIGHT + 2, 5);
     } else {
-        ctx.roundRect(-TANK_WIDTH/2, -TANK_HEIGHT/2, TANK_WIDTH, TANK_HEIGHT, 8);
+        ctx.roundRect(-TANK_WIDTH/2, -TANK_HEIGHT/2 + 4, TANK_WIDTH, TANK_HEIGHT - 8, 8);
     }
     ctx.fill();
-    ctx.shadowBlur = 0; // Disable shadow for internal details
     ctx.stroke();
+    ctx.shadowBlur = 0;
 
-    // 2. Interior Rim Highlight (Simulates 3D edges)
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    // Highlight the top-forward edge
-    ctx.moveTo(-TANK_WIDTH/2 + 8, -TANK_HEIGHT/2 + 3);
-    ctx.lineTo(TANK_WIDTH/2 - 8, -TANK_HEIGHT/2 + 3);
-    ctx.stroke();
+    // Layer B: Upper Plate (Volumetric Highlight)
+    if (isPremium) {
+        const plateGrad = ctx.createLinearGradient(0, -TANK_HEIGHT/3, 0, TANK_HEIGHT/3);
+        plateGrad.addColorStop(0, 'rgba(255, 255, 255, 0.08)');
+        plateGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.02)');
+        plateGrad.addColorStop(1, 'rgba(0, 0, 0, 0.2)');
+        ctx.fillStyle = plateGrad;
+        ctx.beginPath();
+        if (p.ch === 'SCOUT') ctx.roundRect(-TANK_WIDTH/2 + 8, -TANK_HEIGHT/2 + 8, TANK_WIDTH - 20, TANK_HEIGHT - 16, 12);
+        else ctx.roundRect(-TANK_WIDTH/2 + 5, -TANK_HEIGHT/2 + 5, TANK_WIDTH - 10, TANK_HEIGHT - 10, 4);
+        ctx.fill();
+    }
 
-    // 3. Mechanical Details (Subtle Armor Paneling)
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
+    // 5. MECHANICAL DETAILS (Panel lines, rivets, vents)
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
     ctx.lineWidth = 1;
-    // Cross-body panel split
     ctx.beginPath();
-    ctx.moveTo(0, -TANK_HEIGHT/2 + 2);
-    ctx.lineTo(0, TANK_HEIGHT/2 - 2);
+    // Armor seams
+    ctx.moveTo(-TANK_WIDTH/4, -TANK_HEIGHT/2 + 5); ctx.lineTo(-TANK_WIDTH/4, TANK_HEIGHT/2 - 5);
+    ctx.moveTo(TANK_WIDTH/4, -TANK_HEIGHT/2 + 5); ctx.lineTo(TANK_WIDTH/4, TANK_HEIGHT/2 - 5);
     ctx.stroke();
 
-    // Rivets (Very subtle armor bolts)
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
-    const rivets = [
-        [-TANK_WIDTH/2 + 6, -TANK_HEIGHT/2 + 6], [TANK_WIDTH/2 - 6, -TANK_HEIGHT/2 + 6],
-        [-TANK_WIDTH/2 + 6, TANK_HEIGHT/2 - 6], [TANK_WIDTH/2 - 6, TANK_HEIGHT/2 - 6]
-    ];
-    rivets.forEach(([rx, ry]) => {
+    // Rivets (Metallic bolts)
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+    const rivetPos = [[-TANK_WIDTH/3, -TANK_HEIGHT/3], [TANK_WIDTH/3, -TANK_HEIGHT/3], [-TANK_WIDTH/3, TANK_HEIGHT/3], [TANK_WIDTH/3, TANK_HEIGHT/3]];
+    rivetPos.forEach(([rx, ry]) => {
         ctx.beginPath(); ctx.arc(rx, ry, 0.8, 0, Math.PI * 2); ctx.fill();
     });
 
-    // Front Indicators (Headlights with Bloom)
-    ctx.fillStyle = '#fffabb';
-    if (ENABLE_PREMIUM_VISUALS) {
-        ctx.shadowBlur = 12;
-        ctx.shadowColor = '#ffffaa';
+    // Integrated Neon Trim (Identification V2)
+    if (isPremium) {
+        ctx.strokeStyle = teamColor;
+        ctx.lineWidth = 1.5;
+        ctx.globalAlpha = 0.4 + Math.sin(Date.now() * 0.003) * 0.2;
+        ctx.beginPath();
+        if (p.ch === 'SCOUT') {
+            ctx.moveTo(-10, -TANK_HEIGHT/2 + 6); ctx.lineTo(10, -TANK_HEIGHT/2 + 6);
+            ctx.moveTo(-10, TANK_HEIGHT/2 - 6); ctx.lineTo(10, TANK_HEIGHT/2 - 6);
+        } else {
+            ctx.moveTo(-TANK_WIDTH/2 + 10, -TANK_HEIGHT/2 + 4); ctx.lineTo(-TANK_WIDTH/2 + 10, TANK_HEIGHT/2 - 4);
+        }
+        ctx.stroke();
+        ctx.globalAlpha = 1.0;
     }
-    let headLightX = TANK_WIDTH/2 - 6;
-    if (p.ch === 'ARTILLERY') headLightX += 4;
-    
-    ctx.beginPath(); ctx.arc(headLightX, -TANK_HEIGHT/4, 2.5, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(headLightX, TANK_HEIGHT/4, 2.5, 0, Math.PI * 2); ctx.fill();
+
+    // Headlights (With Bloom)
+    ctx.fillStyle = '#fffabb';
+    if (isPremium) { ctx.shadowBlur = 10; ctx.shadowColor = '#ffffaa'; }
+    ctx.beginPath(); ctx.arc(TANK_WIDTH/2 - 6, -10, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(TANK_WIDTH/2 - 6, 10, 2.5, 0, Math.PI * 2); ctx.fill();
     ctx.shadowBlur = 0;
 
-    // Back Indicators (Engine Vents)
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-    ctx.lineWidth = 2;
-    let ventX = -TANK_WIDTH/2 + 8;
-    if (p.ch === 'ARTILLERY') ventX -= 4;
-    
-    ctx.beginPath();
-    ctx.moveTo(ventX, -8); ctx.lineTo(ventX, 8);
-    ctx.moveTo(ventX + 4, -8); ctx.lineTo(ventX + 4, 8);
-    ctx.stroke();
-    
-    ctx.restore();
+    // 6. DYNAMIC ACCESSORIES (Antennas)
+    if (isPremium) {
+        const sway = Math.sin(Date.now() * 0.005 + p.x * 0.01) * 4;
+        ctx.strokeStyle = '#444';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-TANK_WIDTH/2 + 10, 0);
+        ctx.lineTo(-TANK_WIDTH/2 + 5 + sway/2, sway);
+        ctx.stroke();
+        // Antenna tip
+        ctx.fillStyle = teamColor;
+        ctx.beginPath(); ctx.arc(-TANK_WIDTH/2 + 5 + sway/2, sway, 1.5, 0, Math.PI * 2); ctx.fill();
+    }
 
-    // --- TURRET (Separate Rotation) ---
+    ctx.restore(); // End base rotation
+
+    // 7. TURRET (Independent Rotation)
     ctx.save();
     ctx.rotate(p.aa || p.a);
-    
-    // Turret Base Dome (Deep Radial Shading)
-    const turretRadius = 14;
-    const turretGrad = ctx.createRadialGradient(-5, -5, 2, 0, 0, turretRadius);
-    turretGrad.addColorStop(0, '#4a4a7e');
-    turretGrad.addColorStop(0.6, '#1a1a2e');
-    turretGrad.addColorStop(1, '#050510');
-    
-    ctx.fillStyle = turretGrad;
+
+    // Turret Base (Volumetric Dome)
+    const tRad = p.ch === 'BRAWLER' ? 17 : 14;
+    const tGrad = ctx.createRadialGradient(-4, -4, 2, 0, 0, tRad);
+    tGrad.addColorStop(0, '#4a4a6e');
+    tGrad.addColorStop(1, '#080812');
+    ctx.fillStyle = tGrad;
     ctx.strokeStyle = '#000';
-    ctx.lineWidth = 1;
-    if (ENABLE_PREMIUM_VISUALS) {
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = teamColor;
-    }
+    ctx.lineWidth = 1.5;
     
+    if (isPremium) { ctx.shadowBlur = 12; ctx.shadowColor = teamColor; }
     ctx.beginPath();
-    ctx.arc(0, 0, turretRadius, 0, Math.PI * 2);
+    if (p.ch === 'BRAWLER') ctx.roundRect(-tRad, -tRad, tRad*2, tRad*2, 4);
+    else ctx.arc(0, 0, tRad, 0, Math.PI * 2);
     ctx.fill();
     ctx.shadowBlur = 0;
     ctx.stroke();
 
-    // Turret Rim Highlight
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
-    ctx.beginPath();
-    ctx.arc(0, 0, turretRadius - 2, Math.PI * 1.1, Math.PI * 1.6);
-    ctx.stroke();
-
-    // --- BARREL ---
-    const weaponType = p.sl && p.sl[p.cs];
-    let barrelLen = 30;
-    let barrelWidth = 10;
-    let muzzleBrake = true;
-
-    if (weaponType === 'HEAVY_GUN') {
-        barrelLen = 42;
-        barrelWidth = 14;
-    } else if (weaponType === 'FLAMETHROWER') {
-        barrelLen = 25;
-        barrelWidth = 8;
-        muzzleBrake = false;
-    } else if (weaponType === 'TESLA') {
-        barrelLen = 35;
-        barrelWidth = 6;
+    // Turret Rim Highlight (Sharp edge)
+    if (isPremium) {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(0, 0, tRad - 2, -Math.PI*0.8, -Math.PI*0.2);
+        ctx.stroke();
     }
 
-    // Volumetric Barrel Shading
-    const barrelGrad = ctx.createLinearGradient(turretRadius, -barrelWidth/2, turretRadius, barrelWidth/2);
-    barrelGrad.addColorStop(0, '#3a3a5e');
-    barrelGrad.addColorStop(0.3, '#1a1a2e');
-    barrelGrad.addColorStop(1, '#050510');
-    
-    ctx.fillStyle = barrelGrad;
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 1;
-    
+    // Barrel (Industrial Shading)
+    const weaponType = p.sl && p.sl[p.cs];
+    let bLen = 32; let bWid = 10;
+    if (weaponType === 'HEAVY_GUN') { bLen = 45; bWid = 15; }
+    else if (weaponType === 'FLAMETHROWER') { bLen = 22; bWid = 12; }
+    else if (weaponType === 'TESLA') { bLen = 38; bWid = 7; }
+
+    const bGrad = ctx.createLinearGradient(tRad, -bWid/2, tRad, bWid/2);
+    bGrad.addColorStop(0, '#2a2a3e');
+    bGrad.addColorStop(0.5, '#151525');
+    bGrad.addColorStop(1, '#050510');
+    ctx.fillStyle = bGrad;
     ctx.beginPath();
-    ctx.roundRect(turretRadius - 2, -barrelWidth/2, barrelLen, barrelWidth, 2);
+    ctx.roundRect(tRad - 2, -bWid/2, bLen, bWid, 2);
     ctx.fill();
     ctx.stroke();
 
-    // Muzzle Brake or Details
-    if (muzzleBrake) {
-        ctx.beginPath();
-        ctx.roundRect(turretRadius + barrelLen - 6, -barrelWidth/2 - 2, 8, barrelWidth + 4, 2);
-        ctx.fill();
-        ctx.stroke();
-    }
-
-    // Tesla Coil effect (Glowing)
-    if (weaponType === 'TESLA') {
+    // Muzzle / Specialized details
+    if (weaponType === 'TESLA' && isPremium) {
         ctx.strokeStyle = teamColor;
-        ctx.lineWidth = 1;
-        ctx.shadowBlur = 8;
-        ctx.shadowColor = teamColor;
-        for (let i = 0; i < 4; i++) {
-            ctx.beginPath();
-            ctx.moveTo(turretRadius + 5 + i*7, -barrelWidth/2 - 2);
-            ctx.lineTo(turretRadius + 5 + i*7, barrelWidth/2 + 2);
-            ctx.stroke();
+        ctx.shadowBlur = 8; ctx.shadowColor = teamColor;
+        for(let i=0; i<4; i++) {
+            ctx.beginPath(); ctx.moveTo(tRad + 8 + i*7, -bWid/2 - 2); ctx.lineTo(tRad + 8 + i*7, bWid/2 + 2); ctx.stroke();
         }
         ctx.shadowBlur = 0;
+    } else {
+        // Standard Muzzle Brake
+        ctx.fillStyle = '#111';
+        ctx.beginPath(); ctx.roundRect(tRad + bLen - 6, -bWid/2 - 2, 8, bWid + 4, 1); ctx.fill(); ctx.stroke();
     }
 
-    ctx.restore();
+    ctx.restore(); // End turret rotation
 
-    // Username
-    ctx.restore();
+    // 8. USERNAME & HP (Final Overlay)
     ctx.save();
-    ctx.translate(p.x, p.y);
     ctx.fillStyle = 'white';
-    ctx.font = '700 12px Outfit';
+    ctx.font = '900 13px Outfit';
     ctx.textAlign = 'center';
-    const labelY = -TANK_HEIGHT - 10 - (p.labelYOffset || 0);
-    const nameLabel = (p.username || p.u || 'PLAYER').toUpperCase();
-    ctx.fillText(nameLabel, 0, labelY);
+    ctx.shadowBlur = 4; ctx.shadowColor = 'black';
+    const name = (p.username || p.u || 'PLAYER').toUpperCase();
+    ctx.fillText(name, 0, -TANK_HEIGHT - 12);
+    
+    // HP Bar Mini (Optional but premium)
+    if (isPremium && p.id !== myId) {
+        const hpW = 40;
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(-hpW/2, -TANK_HEIGHT - 8, hpW, 4);
+        ctx.fillStyle = teamColor;
+        ctx.fillRect(-hpW/2, -TANK_HEIGHT - 8, hpW * (p.hp / 100), 4);
+    }
     ctx.restore();
 
-    // Shield / Invulnerability
-    if (p.invulnerable) {
-        ctx.save();
-        ctx.translate(p.x, p.y);
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-        ctx.lineWidth = 3;
-        ctx.setLineDash([8, 4]);
-        ctx.lineDashOffset = -renderTime * 0.15;
-        ctx.beginPath();
-        ctx.arc(0, 0, TANK_WIDTH * 0.75, 0, Math.PI * 2);
-        ctx.stroke();
-        
-        // Inner glow
-        ctx.globalAlpha = 0.2 + Math.sin(renderTime * 0.01) * 0.1;
-        ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.arc(0, 0, TANK_WIDTH * 0.7, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-    }
-
-    // Status Icons
-    if (p.stunned || p.slowed || p.burning || p.scrap >= 100) {
-        ctx.save();
-        ctx.translate(p.x, p.y - TANK_HEIGHT - 35);
-        ctx.textAlign = 'center';
-        
-        let yOffset = 0;
-        if (p.stunned) {
-            ctx.fillStyle = '#ffff00';
-            ctx.font = '700 16px Outfit';
-            ctx.fillText('\u26A1 STUNNED', 0, yOffset);
-            yOffset -= 20;
-        }
-        if (p.slowed) {
-            ctx.fillStyle = '#00aaff';
-            ctx.font = '700 16px Outfit';
-            ctx.fillText('\u2744\uFE0F SLOWED', 0, yOffset);
-            yOffset -= 20;
-        }
-        if (p.burning) {
-            ctx.fillStyle = '#ff4400';
-            ctx.font = '700 16px Outfit';
-            ctx.fillText('\uD83D\uDD25 BURNING', 0, yOffset);
-            yOffset -= 20;
-        }
-        if (p.wet) {
-            ctx.fillStyle = '#0088ff';
-            ctx.font = '700 16px Outfit';
-            ctx.fillText('\uD83D\uDCA7 WET', 0, yOffset);
-            yOffset -= 20;
-        }
-        
-        // Show buff level only if not stunned (to keep UI clean)
-        if (p.scrap >= 100 && !p.stunned && !p.slowed && !p.burning && !p.wet) {
-            const buffLevel = Math.floor(p.scrap / 100);
-            if (buffLevel >= 5) {
-                ctx.fillStyle = '#ffcc00';
-                ctx.font = '900 16px Outfit';
-                ctx.fillText('\u2B50 MAX BUFF', 0, yOffset);
-            } else if (buffLevel >= 1) {
-                ctx.fillStyle = '#00ffaa';
-                ctx.font = '700 14px Outfit';
-                ctx.fillText(`\uD83D\uDD33 LVL ${buffLevel} BUFF`, 0, yOffset);
-            }
-        }
-        ctx.restore();
-    }
+    ctx.restore(); // Final global restore
 }
 
 function drawCrosshair() {
