@@ -594,15 +594,17 @@ function updateSteamPattern(time) {
         const ctx = steamContexts[p];
         ctx.clearRect(0, 0, STEAM_TILE_SIZE, STEAM_TILE_SIZE);
         
-        for (let i = 0; i < 5; i++) {
-            const seed = p * 12 + i;
+        // Denser, more volumetric puffs
+        for (let i = 0; i < 8; i++) {
+            const seed = p * 15 + i;
             const sx = (getStableRandom(seed) * STEAM_TILE_SIZE + time * 0.02) % STEAM_TILE_SIZE;
             const sy = (getStableRandom(seed + 1) * STEAM_TILE_SIZE - time * 0.04) % STEAM_TILE_SIZE;
-            const r = 25 + getStableRandom(seed + 2) * 35;
+            const r = 30 + getStableRandom(seed + 2) * 40;
             
             const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, r);
-            g.addColorStop(0, 'rgba(255, 255, 255, 0.15)');
-            g.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            g.addColorStop(0, 'rgba(230, 235, 255, 0.45)'); // Thicker, whiter core
+            g.addColorStop(0.4, 'rgba(230, 235, 255, 0.2)');
+            g.addColorStop(1, 'rgba(230, 235, 255, 0)');
             ctx.fillStyle = g;
             ctx.beginPath();
             ctx.arc(sx, sy, r, 0, Math.PI * 2);
@@ -2137,18 +2139,6 @@ function drawGrid() {
                 }
             }
 
-            // Concrete Plate Lines
-            ctx.strokeStyle = 'rgba(255,255,255,0.04)';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            for (let x = 0; x < worldSize; x += plateSize) {
-                ctx.moveTo(x, 0); ctx.lineTo(x, worldSize);
-            }
-            for (let y = 0; y < worldSize; y += plateSize) {
-                ctx.moveTo(0, y); ctx.lineTo(worldSize, y);
-            }
-            ctx.stroke();
-
             // 1.2 Power Cables (Pulsing neon)
             if (ENABLE_PREMIUM_VISUALS) {
                 const cablePulse = 0.05 + Math.sin(Date.now() * 0.0015) * 0.04;
@@ -2212,43 +2202,16 @@ function drawGrid() {
             for (let i=0; i<worldSize; i+=200) {
                 for (let j=0; j<worldSize; j+=200) {
                     if (i < camera.x - 200 || i > camera.x + canvas.width + 200) continue;
-                    if (Math.random() > 0.7) {
+                    if (getStableRandom(i + j) > 0.7) {
                         ctx.beginPath();
-                        ctx.moveTo(i + Math.random()*200, j + Math.random()*200);
-                        ctx.lineTo(i + Math.random()*200, j + Math.random()*200);
+                        ctx.moveTo(i + getStableRandom(i)*200, j + getStableRandom(j)*200);
+                        ctx.lineTo(i + getStableRandom(i+1)*200, j + getStableRandom(j+1)*200);
                         ctx.stroke();
                     }
                 }
             }
             ctx.restore();
 
-            // Large Industrial Plate Lines (Heavier & Rusted)
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
-            ctx.lineWidth = 3;
-            for (let g = 0; g < worldSize; g += 500) {
-                ctx.beginPath(); ctx.moveTo(g, 0); ctx.lineTo(g, worldSize); ctx.stroke();
-                ctx.beginPath(); ctx.moveTo(0, g); ctx.lineTo(worldSize, g); ctx.stroke();
-            }
-
-            // Procedural Industrial Pipes on floor (Slightly more organic)
-            ctx.save();
-            ctx.strokeStyle = '#050508'; ctx.lineWidth = 14;
-            const pipeStep = 600;
-            for (let px = 0; px < worldSize; px += pipeStep) {
-                if (px < camera.x - 200 || px > camera.x + canvas.width + 200) continue;
-                ctx.beginPath();
-                ctx.moveTo(px + 150, 0); ctx.lineTo(px + 150, worldSize);
-                ctx.stroke();
-                // Pipe highlights & Rust
-                ctx.strokeStyle = 'rgba(255,255,255,0.04)'; ctx.lineWidth = 2;
-                ctx.beginPath(); ctx.moveTo(px + 146, 0); ctx.lineTo(px + 146, worldSize); ctx.stroke();
-                ctx.strokeStyle = 'rgba(100, 50, 0, 0.05)'; ctx.lineWidth = 4;
-                ctx.beginPath(); ctx.moveTo(px + 154, 0); ctx.lineTo(px + 154, worldSize); ctx.stroke();
-                ctx.strokeStyle = '#050508'; ctx.lineWidth = 14;
-            }
-            ctx.restore();
-
-            // Hazard Zones (Just subtle stains)
             gameState.elements.forEach(e => {
                 if ([MATERIALS.OIL, MATERIALS.ACID, MATERIALS.FIRE].includes(e.t)) {
                     if (e.x < camera.x - 200 || e.x > camera.x + canvas.width + 200) return;
@@ -3606,22 +3569,23 @@ function drawElements() {
             ctx.restore();
         }
 
-        // Steam clouds (Soft volumetric puffs)
+        // Steam clouds (Graphic volumetric puffs)
         if (e.t === MATERIALS.STEAM) {
             ctx.save();
             const baseRadius = e.w * 0.45;
             const p = (steamPatterns && steamPatterns.length > 0) ? steamPatterns[e.id % 9] : null;
             
-            ctx.globalAlpha = ENABLE_PREMIUM_VISUALS ? 0.35 : 0.5;
+            // Higher global opacity for visibility
+            ctx.globalAlpha = ENABLE_PREMIUM_VISUALS ? 0.7 : 0.85;
             
-            // Draw 5-6 overlapping puffs to create a "cloud" look
-            for (let i = 0; i < 6; i++) {
+            // Draw overlapping puffs to create a "cloud" look
+            for (let i = 0; i < 7; i++) {
                 const seed = e.id + i * 137;
-                const offsetDist = baseRadius * 0.6;
+                const offsetDist = baseRadius * 0.7;
                 const angle = (getStableRandom(seed) * Math.PI * 2) + (renderTime * 0.0004);
                 const px = e.x + Math.cos(angle) * offsetDist;
                 const py = e.y + Math.sin(angle) * offsetDist;
-                const pRadius = baseRadius * (0.9 + getStableRandom(seed + 1) * 0.6);
+                const pRadius = baseRadius * (1.0 + getStableRandom(seed + 1) * 0.7);
                 
                 ctx.save();
                 if (p && ENABLE_PREMIUM_VISUALS) {
@@ -3629,14 +3593,24 @@ function drawElements() {
                     const matrix = new DOMMatrix().translate(flowX, -flowX * 0.15);
                     p.setTransform(matrix);
                     ctx.fillStyle = p;
-                    ctx.shadowBlur = 25;
-                    ctx.shadowColor = 'rgba(255, 255, 255, 0.4)';
+                    ctx.shadowBlur = 30;
+                    ctx.shadowColor = 'rgba(255, 255, 255, 0.5)';
                 } else {
-                    ctx.fillStyle = 'rgba(240, 240, 255, 0.6)';
+                    ctx.fillStyle = 'rgba(240, 245, 255, 0.8)';
                 }
                 
+                // Draw volumetric puff
                 drawOrganicPath(ctx, px, py, pRadius, seed);
                 ctx.fill();
+                
+                // Add a brighter inner "core" for graphic pop
+                if (ENABLE_PREMIUM_VISUALS) {
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+                    ctx.beginPath();
+                    ctx.arc(px, py, pRadius * 0.5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                
                 ctx.restore();
             }
             ctx.restore();

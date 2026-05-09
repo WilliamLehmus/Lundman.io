@@ -47,7 +47,7 @@ The environment is reactive:
 - **Acid**: Corrosive green pools that damage tanks over time. Reacts with FIRE to create GAS.
 - **Gas**: Toxic cloud created by chemical reactions. Causes area-denial damage.
 - **Electric**: Stuns tanks, spreads through WATER pools. **Reveals** tanks hidden in STEAM.
-- **Ice**: Reduces friction significantly, created by FROST_GUN or freezing WATER. Found naturally in **TUNDRA** biome.
+- **Ice**: Reduces friction significantly. Can be found naturally in the **TUNDRA** biome or created when **WATER** freezes (in Tundra). No longer created directly by the FROST_GUN.
 - **Dirt**: Acts as an **insulator**, blocking ELECTRIC arcs.
 - **Scrap**: Provides linear automated scaling (+100% damage per 100 Scrap, -50% reload per 200 Scrap).
 - **Scrap Shop (Upgrades)**: Manual upgrades accessible via the `B` key during matches. Players can spend collected Scrap on:

@@ -1064,9 +1064,6 @@ class Lobby {
                 }
                 if ((element.type === MATERIALS.ICE || element.type === MATERIALS.OIL)) p.statusEffects.slip = now + 1000;
                 
-                // Self-Immunity Check: Don't take damage/effects from things you created yourself
-                if (p.id === element.ownerId) return;
-
                 // Burning tanks melt ice
                 if (element.type === MATERIALS.ICE && now < p.statusEffects.burn) {
                     this.destroyElement(element.id);
@@ -1107,10 +1104,7 @@ class Lobby {
         Object.values(this.players).forEach(p => {
             const dist = Vector.magnitude(Vector.sub(p.body.position, pos));
             if (dist < radius) {
-                // Friendly Fire & Self-Immunity Check for Explosions
-                if (p.id === ownerId) return;
-                if (attacker && p.team === attacker.team) return;
-
+                // Explosion Damage applies to EVERYONE (Tactical Hazards)
                 const damage = (1 - dist/radius) * 70;
                 p.hp -= damage;
                 if (p.hp <= 0) this.respawn(p, ownerId, 'EXPLOSION');
@@ -1872,19 +1866,6 @@ class Lobby {
         
         if (weapon.type === MATERIALS.DIRT) {
             this.spawnElement(pos, MATERIALS.DIRT, 10000, weapon.hp);
-        }
-        if (weapon.type === MATERIALS.FIRE) {
-            // Spawn fire elements slightly ahead to avoid immediate collision
-            this.spawnElement({
-                x: pos.x + Math.cos(aimAngle) * 20,
-                y: pos.y + Math.sin(aimAngle) * 20
-            }, MATERIALS.FIRE, 1500, undefined, p.id);
-        }
-        if (weapon.type === MATERIALS.ICE) {
-            this.spawnElement({
-                x: pos.x + Math.cos(aimAngle) * 20,
-                y: pos.y + Math.sin(aimAngle) * 20
-            }, MATERIALS.ICE, 2000, undefined, p.id);
         }
     }
 
