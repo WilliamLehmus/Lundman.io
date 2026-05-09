@@ -14,3 +14,5 @@ Are the feature for multiplayer in place?
 - [x] Also, add a Quick Match feature on the main page alongside with host and join. When a user clicks and there are no available servers, the player automatically becomes the host with the default game settings. Any subsequent player hitting the Quick Match button will automatically search and find that game and join it. 
 
 - [x] While in the lobby - show a 'waiting for players' text and hide the start game button until there are at least 2 players in the lobby.  
+- [x] Implement a "READY" button for players in the lobby. The game can only be started when all human players are ready.
+

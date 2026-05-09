@@ -78,6 +78,7 @@ The environment is reactive:
     - Bots can be added to specific teams by clicking the "+ ADD BOT" button in an empty slot.
     - Individual bot difficulty can be adjusted on-the-fly from the lobby.
     - A game can be started with **bots only** (at least 1 player total required, which includes the host).
+- **Ready Status**: All human players must toggle their "READY" status before the host can start the match. Bots are always considered ready. The "START GAME" button is only functional when everyone is ready.
 - **Lobby State**: Managed in-memory on the server for low-latency physics.
 - **Server Browser**: Synchronized with MongoDB (`MONGO_URL`). 
     - Lobbies are added to DB on creation.

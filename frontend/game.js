@@ -113,6 +113,7 @@ const hostBtn = document.getElementById('host-btn');
 const joinBtn = document.getElementById('join-btn');
 const quickMatchBtn = document.getElementById('quick-match-btn');
 const startGameBtn = document.getElementById('start-game-btn');
+const readyBtn = document.getElementById('ready-btn');
 
 const serverBrowser = document.getElementById('server-browser');
 const serverList = document.getElementById('server-list');
@@ -1178,7 +1179,7 @@ function updateLobbyUI(id, players) {
                 info.className = 'slot-info';
                 info.innerHTML = `
                     <div class="slot-name">${player.u.toUpperCase()} ${player.isBot ? '(BOT)' : ''}</div>
-                    <div class="slot-chassis">${player.ch}</div>
+                    <div class="slot-chassis">${player.ch} ${player.ready ? '<span class="ready-status">READY</span>' : '<span class="not-ready-status">WAITING</span>'}</div>
                 `;
                 slot.appendChild(info);
 
@@ -1252,6 +1253,15 @@ function updateLobbyUI(id, players) {
         } else {
             lobbyStatus.innerText = `WAITING FOR HOST TO START (${totalCount}/10)`;
             lobbyStatus.style.color = '#00f2ff';
+        }
+    }
+
+    // Update Ready Button
+    if (readyBtn) {
+        const myPlayer = players.find(p => p.id === myId);
+        if (myPlayer) {
+            readyBtn.innerText = myPlayer.ready ? 'NOT READY' : 'READY';
+            readyBtn.classList.toggle('ready-active', myPlayer.ready);
         }
     }
 }
@@ -1358,6 +1368,12 @@ const leaveLobbyBtn = document.getElementById('leave-lobby-btn');
 if (leaveLobbyBtn) {
     leaveLobbyBtn.onclick = () => {
         location.reload();
+    };
+}
+
+if (readyBtn) {
+    readyBtn.onclick = () => {
+        socket.emit('toggle-ready');
     };
 }
 

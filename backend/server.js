@@ -248,7 +248,8 @@ class Lobby {
             ch: p.chassis,
             sl: p.slots,
             isBot: !!p.isBot,
-            botDifficulty: p.botDifficulty 
+            botDifficulty: p.botDifficulty,
+            ready: p.isBot ? true : !!p.ready // Bots are always ready
         }));
     }
 
@@ -302,7 +303,8 @@ class Lobby {
             inputs: { up: false, down: false, left: false, right: false, shoot: false, aimAngle: 0 },
             lastInputSeq: 0,
             lastBuffLevel: 0,
-            upgrades: { health: 0, speed: 0, power: 0 }
+            upgrades: { health: 0, speed: 0, power: 0 },
+            ready: false
         };
         this.syncToDB();
     }
@@ -378,7 +380,8 @@ class Lobby {
             path: [], // For pathfinding
             lastPathUpdate: 0,
             lastBuffLevel: 0,
-            upgrades: { health: 0, speed: 0, power: 0 }
+            upgrades: { health: 0, speed: 0, power: 0 },
+            ready: true
         };
         this.syncToDB();
     }
@@ -2020,7 +2023,10 @@ class Lobby {
         Object.keys(this.elements).forEach(id => this.destroyElement(id));
         Object.keys(this.guardians).forEach(id => this.destroyGuardian(id));
         
-        Object.values(this.players).forEach(p => this.respawn(p));
+        Object.values(this.players).forEach(p => {
+            this.respawn(p);
+            p.ready = !!p.isBot;
+        });
         
         this.generateMap();
         
@@ -2298,8 +2304,29 @@ io.on('connection', (socket) => {
     socket.on('start-game', (data) => {
         const lobby = lobbies[socket.lobbyId];
         if (lobby && Object.keys(lobby.players).length >= MIN_PLAYERS) {
-            lobby.startGame(data?.mapType);
-            io.to(lobby.id).emit('game-started');
+            // Check if all human players are ready
+            const humanPlayers = Object.values(lobby.players).filter(p => !p.isBot);
+            const allReady = humanPlayers.every(p => p.ready);
+            
+            if (allReady) {
+                lobby.startGame(data?.mapType);
+                io.to(lobby.id).emit('game-started');
+            } else {
+                socket.emit('player-event', { text: 'WAITING FOR ALL PLAYERS TO BE READY!', color: '#ffcc00' });
+            }
+        }
+    });
+
+    socket.on('toggle-ready', () => {
+        const lobby = lobbies[socket.lobbyId];
+        if (lobby && lobby.players[socket.id]) {
+            const p = lobby.players[socket.id];
+            p.ready = !p.ready;
+            
+            io.to(lobby.id).emit('lobby-update', {
+                id: lobby.id,
+                players: lobby.mapLobbyPlayers()
+            });
         }
     });
 
