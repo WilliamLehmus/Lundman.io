@@ -237,7 +237,7 @@ export class Lobby {
         const padding = 10;
         if (pos.x - w/2 < padding || pos.x + w/2 > this.worldSize - padding || pos.y - h/2 < padding || pos.y + h/2 > this.worldSize - padding) return;
         const id = ++this.lastElementId;
-        const body = Bodies.rectangle(pos.x, pos.y, w, h, { label: 'element', isStatic: true, isSensor: false });
+        const body = Bodies.rectangle(pos.x, pos.y, w, h, { label: 'element', isStatic: true, isSensor: false, friction: 0, frictionStatic: 0 });
         body.elementId = id;
         this.elements[id] = { id, body, type: MATERIALS.BUILDING, hp: 800, w, h, shape: shape };
         Composite.add(this.engine.world, body);
@@ -280,7 +280,10 @@ export class Lobby {
         } else {
             this.io.to(this.id).emit('kill-feed', { killer: killerId?.startsWith('guardian') ? 'GUARDIAN' : 'WORLD', victim: player.username, weapon: weaponType, killerTeam: 'neutral', victimTeam: player.team });
         }
-        if (isOpponentKill && !this.gameOver) { this.scores[player.team === 'blue' ? 'pink' : 'blue']++; this.checkMatchEnd(); }
+        if (!this.gameOver) { 
+            this.scores[player.team === 'blue' ? 'pink' : 'blue']++; 
+            this.checkMatchEnd(); 
+        }
         player.invulnerableUntil = Date.now() + 3000;
         for (let i = 0; i < 5; i++) this.spawnElement({ x: player.body.position.x + (Math.random()-0.5)*60, y: player.body.position.y + (Math.random()-0.5)*60 }, MATERIALS.SCRAP, 30000);
         player.hp = CHASSIS[player.chassis].hp; player.scrap = Math.floor(player.scrap / 2);
@@ -332,7 +335,7 @@ export class Lobby {
                 const speedBonus = 1 + (p.upgrades.speed * 0.15), slowMult = p.statusEffects.slow > now ? 0.5 : (p.statusEffects.quicksand > now ? 0.3 : 1.0);
                 const moveSpeed = config.speed * biome.speedMult * slowMult * speedBonus, turnSpeed = config.turnSpeed * (p.statusEffects.slow > now ? 0.6 : (p.statusEffects.quicksand > now ? 0.4 : 1.0)) * speedBonus;
                 const targetAngularVel = p.inputs.left ? -turnSpeed : (p.inputs.right ? turnSpeed : 0);
-                Body.setAngularVelocity(p.body, p.body.angularVelocity + (targetAngularVel - p.body.angularVelocity) * 0.15);
+                Body.setAngularVelocity(p.body, p.body.angularVelocity + (targetAngularVel - p.body.angularVelocity) * 0.3);
                 if (p.inputs.up) Body.applyForce(p.body, p.body.position, { x: Math.cos(p.body.angle) * moveSpeed, y: Math.sin(p.body.angle) * moveSpeed });
                 if (p.inputs.down) Body.applyForce(p.body, p.body.position, { x: -Math.cos(p.body.angle) * moveSpeed, y: -Math.sin(p.body.angle) * moveSpeed });
                 if (p.inputs.shoot && p.hp > 0) this.playerShoot(p);
@@ -372,7 +375,8 @@ export class Lobby {
             zones: this.zones.map(z => ({ ...z, color: BIOMES[z.type].color })),
             players: Object.values(this.players).map(p => ({
                 id: p.id, u: p.username, t: p.team, x: +p.body.position.x.toFixed(1), y: +p.body.position.y.toFixed(1), a: +p.body.angle.toFixed(3),
-                aa: +(p.inputs.aimAngle ?? p.body.angle).toFixed(3), h: p.hp, mh: p.maxHp, w: p.slots[p.currentSlot], cs: p.currentSlot,
+                aa: +(p.inputs.aimAngle ?? p.body.angle).toFixed(3), v: [+p.body.velocity.x.toFixed(2), +p.body.velocity.y.toFixed(2), +p.body.angularVelocity.toFixed(3)],
+                h: p.hp, mh: p.maxHp, w: p.slots[p.currentSlot], cs: p.currentSlot,
                 sl: p.slots, s: p.scrap, hid: p.hidden, up: p.upgrades, ch: p.chassis, st: p.statusEffects.stun > now,
                 slw: p.statusEffects.slow > now, brn: p.statusEffects.burn > now, wt: p.statusEffects.wet > now,
                 c: (() => { const w = WEAPON_MODULES[p.slots[p.currentSlot]]; return w ? Math.min(100, Math.floor((now-p.lastShot)/(w.reload/(1+p.scrap/200+p.upgrades.power*0.1))*100)) : 100; })(),

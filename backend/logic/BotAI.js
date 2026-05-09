@@ -28,16 +28,24 @@ export class BotAI {
                 return;
             }
 
-            // 0. Dodge Logic
+            // --- DIFFICULTY SETTINGS ---
+            const diff = bot.botDifficulty || 'NORMAL';
+            const settings = {
+                'EASY':   { aimError: 0.35, dodgeChance: 0.2, reactionMs: 1200, chaseDist: 400 },
+                'NORMAL': { aimError: 0.12, dodgeChance: 0.5, reactionMs: 600,  chaseDist: 600 },
+                'HARD':   { aimError: 0.03, dodgeChance: 0.85, reactionMs: 250, chaseDist: 800 }
+            }[diff] || { aimError: 0.12, dodgeChance: 0.5, reactionMs: 600, chaseDist: 600 };
+
+            // 0. Dodge Logic (Difficulty-aware)
             if (now > (bot.evadeUntil || 0)) {
                 const nearbyBullets = Object.values(this.lobby.bullets).filter(b => {
                     if (b.customData.ownerId === bot.id) return false;
                     const d = Vector.magnitude(Vector.sub(b.position, bot.body.position));
-                    return d < 250;
+                    return d < (diff === 'HARD' ? 350 : 250);
                 });
 
-                if (nearbyBullets.length > 0) {
-                    bot.evadeUntil = now + 500 + Math.random() * 300;
+                if (nearbyBullets.length > 0 && Math.random() < settings.dodgeChance) {
+                    bot.evadeUntil = now + settings.reactionMs + Math.random() * 300;
                     bot.evadeDir = Math.random() > 0.5 ? 1 : -1;
                 }
             }
@@ -45,8 +53,9 @@ export class BotAI {
             // 1. Objective Selection
             let target = null;
             let objectivePos = null;
-            let minDist = 1500;
+            let minDist = settings.chaseDist;
 
+            // Find nearest enemy
             Object.values(this.lobby.players).forEach(p => {
                 if (p.id !== bot.id && p.team !== bot.team && p.hp > 0 && !p.hidden) {
                     const d = Vector.magnitude(Vector.sub(p.body.position, bot.body.position));
@@ -57,9 +66,11 @@ export class BotAI {
                 }
             });
 
-            if (!target) {
+            // If no target or bot is low on scrap/healthy, look for scrap
+            const needsScrap = bot.scrap < 200 || (!target && bot.scrap < 500);
+            if (needsScrap) {
                 const scrap = Object.values(this.lobby.elements).filter(e => e.type === MATERIALS.SCRAP);
-                let minScrapDist = 800;
+                let minScrapDist = target ? 200 : 1000; // Only deviate for very close scrap if fighting
                 scrap.forEach(s => {
                     const d = Vector.magnitude(Vector.sub(s.body.position, bot.body.position));
                     if (d < minScrapDist) {
@@ -67,10 +78,13 @@ export class BotAI {
                         objectivePos = s.body.position;
                     }
                 });
-            } else {
+            }
+
+            if (target && !objectivePos) {
                 objectivePos = target.body.position;
             }
 
+            // Idle target if nothing to do
             if (!objectivePos) {
                 if (Math.random() > 0.98 || !bot.idleTarget) {
                     bot.idleTarget = {
@@ -94,8 +108,8 @@ export class BotAI {
             const isFacing = Math.abs(angleDiff) < 0.8;
             const isEvading = now < bot.evadeUntil;
             
-            bot.inputs.up = isFacing && dist > (target ? 250 : 50);
-            bot.inputs.down = !isFacing && dist < 150;
+            bot.inputs.up = isFacing && dist > (target ? 200 : 50);
+            bot.inputs.down = !isFacing && dist < 120;
 
             if (isEvading) {
                 bot.inputs.left = bot.evadeDir > 0;
@@ -103,16 +117,30 @@ export class BotAI {
                 bot.inputs.up = true;
             }
 
-            // 3. Combat Logic
+            // 3. Combat & Weapon Logic
             if (target) {
-                bot.inputs.aimAngle = angleToTarget + (Math.random() - 0.5) * 0.1;
-                const canSee = this.canSee(bot.body.position, target.body.position, obstacles);
-                bot.inputs.shoot = canSee && dist < 600;
-                
-                if (now > bot.nextWeaponSwap) {
-                    bot.currentSlot = (bot.currentSlot + 1) % bot.slots.length;
-                    bot.nextWeaponSwap = now + 3000 + Math.random() * 5000;
+                // Better weapon selection based on distance
+                if (now > (bot.nextWeaponSwap || 0)) {
+                    const targetDist = Vector.magnitude(Vector.sub(target.body.position, bot.body.position));
+                    
+                    // Logic: Pick weapon best for current distance
+                    let bestSlot = bot.currentSlot;
+                    bot.slots.forEach((mod, idx) => {
+                        const weapon = WEAPON_MODULES[mod];
+                        if (!weapon) return;
+                        
+                        // Scoring weapons (simplified)
+                        if (targetDist < 250 && (mod === 'TESLA' || mod === 'FLAMETHROWER' || mod === 'SHOTGUN')) bestSlot = idx;
+                        else if (targetDist > 400 && (mod === 'HEAVY_GUN' || mod === 'SNIPER')) bestSlot = idx;
+                    });
+                    
+                    bot.currentSlot = bestSlot;
+                    bot.nextWeaponSwap = now + 2000 + Math.random() * 3000;
                 }
+
+                bot.inputs.aimAngle = angleToTarget + (Math.random() - 0.5) * settings.aimError;
+                const canSee = this.canSee(bot.body.position, target.body.position, obstacles);
+                bot.inputs.shoot = canSee && dist < settings.chaseDist;
             } else {
                 bot.inputs.shoot = false;
                 bot.inputs.aimAngle = bot.body.angle;

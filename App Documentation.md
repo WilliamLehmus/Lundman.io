@@ -24,7 +24,7 @@ The core of the game engine lives on the **Node.js server**.
 - **`backend/logic/LobbyManager.js`**: Core `Lobby` class. Manages player lifecycle, teams, and match state.
 - **`backend/logic/CombatEngine.js`**: Physics interactions, bullet collisions, damage, status effects, and AI Guardians.
 - **`backend/logic/MapGenerator.js`**: Biome-aware procedural map generation.
-- **`backend/logic/BotAI.js`**: Decision making and movement logic for bots.
+- **`backend/logic/BotAI.js`**: Decision making and movement logic for bots. Features **Difficulty Scaling** (Easy/Normal/Hard) and distance-based weapon strategy.
 - **`backend/logic/Persistence.js`**: JSON-based player statistics and PIN authentication.
 - **`backend/gameConfig.js`**: Shared source of truth for weapon and chassis data.
 
@@ -45,6 +45,8 @@ Matches feature unique, randomly generated maps:
 - **Wetland (Swamp Shacks)**: Murky swamp with dragonflies, procedural lily pads, mossy rocks, and wet logs.
 - **INDUSTRIAL**: High-tech factory environment with concrete floors, pulsing neon power cables, procedural steam vents, and complex industrial structures like **Silos** and **Refineries**. Features circular and rectangular building clusters with hazard-striped bases and vertical piping.
 - **WETLAND**: Murky swamp land with dynamic water ripples, interactive **Dragonflies**, and detailed lily pads featuring procedural blooms (white/pink). Features **Swamp Shack** structures (stilt houses with moss and vines), thick atmospheric mist, fireflies with trailing glow, and rising gas bubbles. Reduced movement speed.
+- **WORLD BORDER**: The playable area is contained within a high-fidelity **Neon Energy Barrier** with pulsing corner accents and a subtle outer glow.
+- **QUICKSAND**: Created when Water hits Dirt. Features a high-fidelity **Swirling Vortex** animation and rising methane bubbles. Very high movement penalty.
 - **TUNDRA**: Frozen wasteland with snow hares, wind gusts, and slippery ice. Features a cold frost aesthetic.
 
 ### 2. Elemental Interactions (Alchemy)
@@ -104,8 +106,8 @@ The environment is reactive:
 - **Rewards**: Destroying a guardian yields high-density SCRAP drops.
 
 ### 5. Match Rules & Scoring
-- **Point Conditions**: Points are ONLY awarded for kills on players of the **opposing team**.
-- **Neutral Deaths**: Deaths caused by AI Guardians, World Hazards (Acid/Fire), or Self-Damage do NOT grant points to the other team.
+- **Point Conditions**: Points are awarded to the **opposing team** whenever a player dies, regardless of the cause (Combat, Hazard, or Self-Damage). This prevents "Suicide Exploits".
+- **Neutral Deaths**: Deaths caused by AI Guardians or World Hazards (Acid/Fire) grant a point to the enemy team.
 - **Kill Feed Labels**:
     - `GUARDIAN`: Indicates death by a defensive drone.
     - `WORLD`: Indicates death by environmental hazards.
@@ -426,3 +428,45 @@ To transition from a learning project to a **marketable product**, the following
 
 
 
+
+#### **The "Polish & Logic" Update**
+- **Date**: 2026-05-09
+- **Goal**: Address identified gameplay gaps and enhance environmental immersion.
+- **Features Added**:
+    1.  **Bot Difficulty Scaling**: `botDifficulty` (Easy/Normal/Hard) now scales Aim Precision, Reaction Time, and Dodge Chance.
+    2.  **Strategic Bots**: Bots now pick appropriate weapons based on distance (e.g., Tesla for close, Sniper for far).
+    3.  **Neon World Border**: Replaced the invisible map edge with a pulsing neon energy barrier.
+    4.  **Environmental Life**: Implemented scurrying **Lizards** in the Desert and darting **Dragonflies** in the Wetland.
+    5.  **Quicksand V2**: Overhauled Quicksand rendering with a swirling vortex effect and methane bubbles.
+    6.  **Scoring Hardening**: Modified `LobbyManager.js` to award points to the opposing team for ALL deaths, eliminating tactical suicides.
+
+#### **Turret Rotation Lag & Zero-Angle Snap Fix**
+- **Date**: 2026-05-09
+- **Issue**: Turret rotation felt laggy, jittery, and would occasionally "snap" to the hull's angle.
+- **Root Causes**:
+    1. **Property Mismatch**: `interpolateState` used `p.aimAngle` while `drawTank` used `p.aa` (server value), causing visual lag.
+    2. **Falsy Zero Bug**: `ctx.rotate(p.aa || p.a)` caused the turret to use the hull angle (`a`) whenever the aim angle (`aa`) was exactly `0`.
+    3. **Input Flooding**: Excessive network packets from high-frequency mouse moves were hitting server rate limits.
+    4. **Async Jitter**: Mouse-to-world conversion was happening outside the main render sync.
+- **Fix**:
+    1. **Unified Properties**: Updated all logic to use `a` and `aa` for smoothed/predicted rotation.
+    2. **Safe Rotation Check**: Replaced falsy check with `(p.aa !== undefined ? p.aa : p.a)`.
+    3. **Synchronized Calculation**: Moved aim calculation into `renderLoop` for perfect frame sync.
+    4. **Input Throttling**: Limited network updates to 60Hz.
+    5. **Layout Optimization**: Cached `canvas.getBoundingClientRect()` to prevent layout thrashing.
+- **Verification**: Smooth turret movement confirmed for local and remote players.
+
+#### **Steering Responsiveness & Collision Smoothing**
+- **Date**: 2026-05-09
+- **Issue**: Steering felt "sluggish" and "choppy," and tanks would get stuck when turning against buildings.
+- **Root Causes**:
+    1. **Physics Mismatch**: The client's prediction model was linear, while the server used a force/acceleration model with dampening. This caused constant "snap-backs" during movement.
+    2. **Friction Lock**: High friction on building bodies caused tanks to stick to walls when applying forward force, preventing rotation.
+    3. **Aggressive Reconciliation**: A stiff interpolation factor (0.9) made even minor prediction errors look like jittery "teleportation."
+- **Fix**:
+    1. **Synced Physics Model**: Rewrote the client's prediction loop to match the server's force and angular velocity acceleration logic exactly.
+    2. **Velocity Broadcasting**: Added linear and angular velocity to the server state packets to improve prediction accuracy.
+    3. **Zero Friction Walls**: Set building friction to `0`, allowing tanks to "slide" along surfaces while turning.
+    4. **Snappier Steering**: Increased the server's angular velocity lerp factor from `0.15` to `0.3`.
+    5. **Softer Smoothing**: Reduced reconciliation stiffness to `0.4` to hide minor sync offsets.
+- **Verification**: Steering now feels responsive and collisions are smooth without visual jitter.

@@ -178,6 +178,8 @@ let lastWorldSize = 0;
 let lastAtmoBiome = null;
 let playerEvents = []; // { text, color, time }
 let mousePos = { x: 0, y: 0 };
+let canvasRect = null;
+let lastInputSent = 0;
 let renderTime = 0;
 
 // Liquid Patterns (9 Variations each for variety)
@@ -1033,10 +1035,12 @@ function init() {
     }, 100);
 
     window.addEventListener('resize', resize);
+    resize(); // Ensure rect is cached
+
     window.addEventListener('mousemove', e => {
         mousePos.x = e.clientX;
         mousePos.y = e.clientY;
-        updateAimAngle();
+        // Calculation moved to renderLoop for sync
     });
 
 
@@ -1044,21 +1048,27 @@ function init() {
 }
 
 function updateAimAngle() {
-    if (!gameActive || !myId) return;
+    if (!gameActive || !myId || !canvasRect) return;
     const me = gameState.players.find(p => p.id === myId);
     if (!me) return;
     
-    const rect = canvas.getBoundingClientRect();
-    const canvasMouseX = mousePos.x - rect.left;
-    const canvasMouseY = mousePos.y - rect.top;
+    const canvasMouseX = mousePos.x - canvasRect.left;
+    const canvasMouseY = mousePos.y - canvasRect.top;
 
     const worldMouseX = canvasMouseX + camera.x;
     const worldMouseY = canvasMouseY + camera.y;
     const aimAngle = Math.atan2(worldMouseY - me.y, worldMouseX - me.x);
     
-    if (isNaN(keys.aimAngle) || Math.abs(aimAngle - keys.aimAngle) > 0.01) {
+    // Smooth check + Rate limiting (Max 60Hz input packets)
+    const now = Date.now();
+    const changed = isNaN(keys.aimAngle) || Math.abs(aimAngle - keys.aimAngle) > 0.005;
+    
+    if (changed || now - lastInputSent > 200) { // Keep alive every 200ms
         keys.aimAngle = aimAngle;
-        sendInput();
+        if (now - lastInputSent > 16.6) { // Throttle to ~60Hz
+            sendInput();
+            lastInputSent = now;
+        }
     }
 }
 
@@ -1079,6 +1089,7 @@ function showActionButtons() {
 function resize() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
+    canvasRect = canvas.getBoundingClientRect();
 }
 
 function drawScreenFrost() {
@@ -1670,7 +1681,7 @@ function renderLoop(now) {
             // CRITICAL: Recalculate aim angle AFTER interpolation to avoid jitter
             updateAimAngle();
             // Apply it immediately to the rendered state
-            me.aimAngle = keys.aimAngle;
+            me.aa = keys.aimAngle;
         }
 
         if (shake.intensity > 0) {
@@ -1705,13 +1716,13 @@ function renderLoop(now) {
             updateSteamPattern(renderTime);
             updateAtmosphere(dt);
             updateEnvironmentalObjects(dt);
+            updateEnvironmentalLife(dt);
             drawAtmosphere();
             drawEnvironmentalObjects();
         }
 
-        ctx.strokeStyle = 'rgba(0, 242, 255, 0.5)';
-        ctx.lineWidth = 5;
-        ctx.strokeRect(0, 0, gameState.worldSize, gameState.worldSize);
+        drawWorldBorders();
+        drawEnvironmentalLife();
 
         drawElements();
         drawGuardians();
@@ -1970,7 +1981,7 @@ function drawTank(p) {
 
     // 7. TURRET (Independent Rotation)
     ctx.save();
-    ctx.rotate(p.aa || p.a);
+    ctx.rotate(p.aa !== undefined ? p.aa : p.a);
 
     // Turret Base (Volumetric Dome)
     const tRad = p.ch === 'BRAWLER' ? 17 : 14;
@@ -3066,7 +3077,7 @@ function interpolateState(dt) {
     gameState.zones     = serverState.zones ? serverState.zones.map(z => ({ ...z, type: z.t || z.type })) : [];
     gameState.worldSize = serverState.worldSize || 4000;
 
-    const P_POS = 1 - Math.pow(0.1, dt); // Stiff interpolation for CSP reconciliation
+    const P_POS = 1 - Math.pow(0.4, dt); // Softer interpolation to hide minor jitter
     gameState.players = serverState.players.map(sp => {
         // Map short keys to descriptive keys for rendering logic
         if (sp.u) sp.username = sp.u;
@@ -3082,44 +3093,58 @@ function interpolateState(dt) {
             pendingInputs = pendingInputs.filter(i => i.seq > sp.seq);
             
             // 2. Start from server authoritative state
-            let predictedX = sp.x;
-            let predictedY = sp.y;
-            let predictedAngle = sp.a;
+            let pX = sp.x;
+            let pY = sp.y;
+            let pA = sp.a;
+            let pVx = sp.v ? sp.v[0] : 0;
+            let pVy = sp.v ? sp.v[1] : 0;
+            let pAv = sp.v ? sp.v[2] : 0;
             
-            // 3. Re-apply all pending inputs
-            // Note: This is a simplified simulation of the server physics
+            // 3. Re-apply all pending inputs using server's force model
             const config = CHASSIS[sp.ch] || CHASSIS.SCOUT;
-            const zone = (serverState.zones && serverState.zones[0]) || { t: 'URBAN' };
-            const biome = BIOMES[zone.t] || BIOMES.URBAN;
-            
-            // Use a fixed timestep for prediction consistency (matches server TICK_RATE)
-            const tickDt = 1.0; 
+            const zone = (serverState.zones && serverState.zones[0]) || { type: 'URBAN' };
+            const biome = BIOMES[zone.type] || BIOMES.URBAN;
             
             pendingInputs.forEach(input => {
-                const moveSpeed = config.speed * biome.speedMult * 60; // 60 is for force normalization
-                const turnSpeed = config.turnSpeed * biome.speedMult;
+                const speedBonus = 1 + ((sp.up?.speed || 0) * 0.15);
+                const slowMult = sp.slw ? 0.5 : (sp.qs ? 0.3 : 1.0);
+                const moveSpeed = config.speed * (biome.speedMult || 1.0) * slowMult * speedBonus;
+                const turnSpeed = config.turnSpeed * (sp.slw ? 0.6 : (sp.qs ? 0.4 : 1.0)) * speedBonus;
                 
-                // Rotation
-                if (input.left) predictedAngle -= turnSpeed * tickDt;
-                if (input.right) predictedAngle += turnSpeed * tickDt;
-                
-                // Movement (Forward/Back)
+                // Rotation (Acceleration model - matches server 0.3 lerp)
+                const targetAv = input.left ? -turnSpeed : (input.right ? turnSpeed : 0);
+                pAv += (targetAv - pAv) * 0.3;
+                pA += pAv;
+
+                // Movement (Force model)
+                let fx = 0, fy = 0;
                 if (input.up) {
-                    predictedX += Math.cos(predictedAngle) * moveSpeed * tickDt;
-                    predictedY += Math.sin(predictedAngle) * moveSpeed * tickDt;
+                    fx += Math.cos(pA) * moveSpeed;
+                    fy += Math.sin(pA) * moveSpeed;
                 }
                 if (input.down) {
-                    predictedX -= Math.cos(predictedAngle) * moveSpeed * tickDt;
-                    predictedY -= Math.sin(predictedAngle) * moveSpeed * tickDt;
+                    fx -= Math.cos(pA) * moveSpeed;
+                    fy -= Math.sin(pA) * moveSpeed;
                 }
+                
+                // Apply force & friction (Simplified Matter.js integration)
+                pVx += fx / (config.mass || 1);
+                pVy += fy / (config.mass || 1);
+                
+                const friction = 1 - (biome.friction || 0.15);
+                pVx *= friction;
+                pVy *= friction;
+
+                pX += pVx;
+                pY += pVy;
             });
 
             return {
                 ...sp,
-                x: lerp(gp.x, predictedX, P_POS),
-                y: lerp(gp.y, predictedY, P_POS),
-                angle: lerpAngle(gp.angle, predictedAngle, P_POS),
-                aimAngle: keys.aimAngle // Instant local turret (Zero smoothing)
+                x: lerp(gp.x, pX, P_POS),
+                y: lerp(gp.y, pY, P_POS),
+                a: lerpAngle(gp.a, pA, P_POS),
+                aa: keys.aimAngle // Instant local turret (Zero smoothing)
             };
         } else {
             // Standard Interpolation for other players
@@ -3128,8 +3153,8 @@ function interpolateState(dt) {
                 ...sp,
                 x: lerp(gp.x, sp.x, P_OTHER),
                 y: lerp(gp.y, sp.y, P_OTHER),
-                angle: lerpAngle(gp.angle, sp.a, P_OTHER),
-                aimAngle: lerpAngle(gp.aimAngle || sp.aa || sp.a, sp.aa || sp.a, P_OTHER)
+                a: lerpAngle(gp.a, sp.a, P_OTHER),
+                aa: lerpAngle(gp.aa !== undefined ? gp.aa : gp.a, sp.aa !== undefined ? sp.aa : sp.a, P_OTHER)
             };
         }
     });
@@ -3903,9 +3928,36 @@ function drawElements() {
                     drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id); ctx.fill();
                     ctx.restore();
                 } else if (e.t === MATERIALS.QUICKSAND && ENABLE_PREMIUM_VISUALS) {
-                    const mudGrad = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, drawRadius * 1.2);
-                    mudGrad.addColorStop(0, '#3d2a14'); mudGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-                    ctx.fillStyle = mudGrad; drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id); ctx.fill();
+                    // 1. Thick Mud Base
+                    ctx.fillStyle = '#3d2a14';
+                    drawOrganicPath(ctx, e.x, e.y, drawRadius, e.id);
+                    ctx.fill();
+                    
+                    // 2. Swirling Vortex Effect
+                    ctx.save();
+                    ctx.clip(); // Keep swirl inside the organic path
+                    ctx.translate(e.x, e.y);
+                    ctx.rotate(renderTime * 0.0006 + e.id);
+                    
+                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+                    ctx.lineWidth = 5;
+                    for (let i = 0; i < 3; i++) {
+                        const r = drawRadius * (0.3 + i * 0.25);
+                        ctx.beginPath();
+                        ctx.arc(0, 0, r, 0, Math.PI * 1.6);
+                        ctx.stroke();
+                    }
+                    
+                    // 3. Rising Methane Bubbles
+                    if (Math.random() > 0.96) {
+                        particles.push({
+                            x: e.x + (Math.random()-0.5) * drawRadius,
+                            y: e.y + (Math.random()-0.5) * drawRadius,
+                            vx: (Math.random()-0.5)*0.2, vy: -0.1,
+                            life: 0.8, color: '#2a1a0f', size: 3 + Math.random()*5
+                        });
+                    }
+                    ctx.restore();
                 } else {
                     ctx.fillStyle = config.color;
                     drawOrganicPath(ctx, e.x, e.y, baseRadius, e.id); ctx.fill();
@@ -4904,4 +4956,137 @@ if (closeBrowserBtn) {
     closeBrowserBtn.onclick = () => {
         serverBrowser.style.display = 'none';
     };
+}
+
+function updateEnvironmentalLife(dt) {
+    const currentBiome = gameState.zones && gameState.zones[0] ? (gameState.zones[0].t || gameState.zones[0].type) : 'RANDOM';
+    const worldSize = gameState.worldSize || 4000;
+    const me = gameState.players.find(p => p.id === myId);
+
+    // 1. DESERT LIZARDS
+    if (currentBiome === 'DESERT') {
+        if (lizards.length === 0) {
+            for (let i = 0; i < 15; i++) lizards.push({ 
+                x: Math.random() * worldSize, y: Math.random() * worldSize, 
+                angle: Math.random() * Math.PI * 2, state: 'idle', timer: 0 
+            });
+        }
+        lizards.forEach(l => {
+            l.timer -= dt;
+            if (me) {
+                const dist = Math.hypot(me.x - l.x, me.y - l.y);
+                if (dist < 150) {
+                    l.state = 'fleeing';
+                    const angle = Math.atan2(l.y - me.y, l.x - me.x);
+                    l.angle = angle;
+                    l.x += Math.cos(l.angle) * 4 * dt;
+                    l.y += Math.sin(l.angle) * 4 * dt;
+                } else if (l.state === 'fleeing') {
+                    l.state = 'idle';
+                }
+            }
+            if (l.state === 'idle' && l.timer <= 0) {
+                l.angle += (Math.random() - 0.5) * 1.5;
+                l.timer = 100 + Math.random() * 200;
+            }
+        });
+    }
+
+    // 2. WETLAND DRAGONFLIES
+    if (currentBiome === 'WETLAND') {
+        if (dragonflies.length === 0) {
+            for (let i = 0; i < 20; i++) dragonflies.push({ 
+                x: Math.random() * worldSize, y: Math.random() * worldSize, 
+                vx: (Math.random()-0.5)*2, vy: (Math.random()-0.5)*2, 
+                phase: Math.random() * Math.PI * 2 
+            });
+        }
+        dragonflies.forEach(d => {
+            d.phase += 0.05 * dt;
+            d.vx += Math.sin(d.phase) * 0.2 * dt;
+            d.vy += Math.cos(d.phase) * 0.2 * dt;
+            d.x += d.vx * dt; d.y += d.vy * dt;
+            d.vx *= 0.98; d.vy *= 0.98;
+            
+            // Stay near water (pseudo)
+            if (Math.random() > 0.98) {
+                d.vx += (Math.random()-0.5) * 4;
+                d.vy += (Math.random()-0.5) * 4;
+            }
+        });
+    }
+}
+
+function drawEnvironmentalLife() {
+    const currentBiome = gameState.zones && gameState.zones[0] ? (gameState.zones[0].t || gameState.zones[0].type) : 'RANDOM';
+    
+    if (currentBiome === 'DESERT') {
+        lizards.forEach(l => {
+            if (l.x > camera.x - 20 && l.x < camera.x + canvas.width + 20 && 
+                l.y > camera.y - 20 && l.y < camera.y + canvas.height + 20) {
+                ctx.save();
+                ctx.translate(l.x, l.y);
+                ctx.rotate(l.angle);
+                ctx.fillStyle = '#8a8d4a';
+                ctx.beginPath();
+                ctx.ellipse(0, 0, 6, 3, 0, 0, Math.PI * 2);
+                ctx.fill();
+                // Tail
+                ctx.strokeStyle = '#8a8d4a'; ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.moveTo(-6, 0); ctx.quadraticCurveTo(-10, Math.sin(renderTime*0.01)*3, -15, 0); ctx.stroke();
+                ctx.restore();
+            }
+        });
+    }
+
+    if (currentBiome === 'WETLAND') {
+        dragonflies.forEach(d => {
+            if (d.x > camera.x - 20 && d.x < camera.x + canvas.width + 20 && 
+                d.y > camera.y - 20 && d.y < camera.y + canvas.height + 20) {
+                ctx.save();
+                ctx.translate(d.x, d.y);
+                ctx.rotate(Math.atan2(d.vy, d.vx));
+                // Body
+                ctx.fillStyle = '#00f2ff';
+                ctx.fillRect(-4, -1, 8, 2);
+                // Wings
+                const wingW = Math.sin(renderTime * 0.5) * 8;
+                ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+                ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(2, wingW); ctx.moveTo(0,0); ctx.lineTo(2, -wingW); ctx.stroke();
+                ctx.restore();
+            }
+        });
+    }
+}
+
+function drawWorldBorders() {
+    const ws = gameState.worldSize || 4000;
+    const pulse = 0.8 + Math.sin(renderTime * 0.002) * 0.2;
+    
+    ctx.save();
+    // 1. Outer Glow
+    ctx.strokeStyle = 'rgba(0, 242, 255, 0.15)';
+    ctx.lineWidth = 30 * pulse;
+    ctx.strokeRect(-15, -15, ws + 30, ws + 30);
+    
+    // 2. Main Energy Line
+    ctx.strokeStyle = '#00f2ff';
+    ctx.lineWidth = 4;
+    ctx.shadowBlur = 20 * pulse;
+    ctx.shadowColor = '#00f2ff';
+    ctx.strokeRect(0, 0, ws, ws);
+    
+    // 3. Corner Accents
+    ctx.lineWidth = 12;
+    const len = 120;
+    // TL
+    ctx.beginPath(); ctx.moveTo(0, len); ctx.lineTo(0, 0); ctx.lineTo(len, 0); ctx.stroke();
+    // TR
+    ctx.beginPath(); ctx.moveTo(ws - len, 0); ctx.lineTo(ws, 0); ctx.lineTo(ws, len); ctx.stroke();
+    // BL
+    ctx.beginPath(); ctx.moveTo(0, ws - len); ctx.lineTo(0, ws); ctx.lineTo(len, ws); ctx.stroke();
+    // BR
+    ctx.beginPath(); ctx.moveTo(ws - len, ws); ctx.lineTo(ws, ws); ctx.lineTo(ws, ws - len); ctx.stroke();
+    
+    ctx.restore();
 }
