@@ -40,6 +40,9 @@ The core of the game engine lives on the **Node.js server**.
 Matches feature unique, randomly generated maps:
 - **URBAN**: Dense city grid with buildings and narrow streets.
 - **WASTELAND**: Post-apocalyptic terrain with radioactive pools, floating ash, and dynamic wind.
+- **DESERT**: Scorched sands with intense heat haze, volumetric sandstorms, oases (water pools), and ancient architecture.
+- **Tundra (Deep Freeze)**: Arctic environment with auroras, blizzards, screen frost, frozen rocks, and ice shards.
+- **Wetland (Swamp Shacks)**: Murky swamp with dragonflies, procedural lily pads, mossy rocks, and wet logs.
 - **INDUSTRIAL**: High-tech factory environment with concrete floors, pulsing neon power cables, procedural steam vents, and complex industrial structures like **Silos** and **Refineries**. Features circular and rectangular building clusters with hazard-striped bases and vertical piping.
 - **WETLAND**: Murky swamp land with dynamic water ripples, interactive **Dragonflies**, and detailed lily pads featuring procedural blooms (white/pink). Features **Swamp Shack** structures (stilt houses with moss and vines), thick atmospheric mist, fireflies with trailing glow, and rising gas bubbles. Reduced movement speed.
 - **TUNDRA**: Frozen wasteland with snow hares, wind gusts, and slippery ice. Features a cold frost aesthetic.
@@ -400,3 +403,26 @@ To transition from a learning project to a **marketable product**, the following
     5.  **Varied Footprints**: Implemented L-shaped, T-shaped, and Plus-shaped building complexes for organic, non-grid layouts.
     6.  **Glowing Embers**: Upgraded ash particles into high-fidelity glowing coals with inner white-hot cores.
 - **Technical Note**: Fixed a critical brace imbalance in the biome rendering loop and updated the `MapGenerator` to support procedural composite building shapes.
+
+#### **WebSocket Connection Failure (Vite Proxy & EADDRINUSE)**
+- **Datum**: 2026-05-09
+- **Symptom**: Webbläsarkonsolen visar `WebSocket connection to 'ws://localhost:5173/socket.io/... failed` och spelet fastnar i "Game Initializing...".
+- **Root Cause**: 
+    1.  **Port-konflikt**: Backend-servern kunde inte starta p.g.a. `EADDRINUSE`.
+    2.  **DNS/Proxy Issue**: Vite-proxyn hade svårt att mappa `localhost` på Windows.
+    3.  **Transport Race**: `websocket` transport försökte initieras innan proxyn var redo.
+- **Åtgärd**:
+    1.  **Polling-First**: Ändrat `transports` i både frontend och backend till `['polling', 'websocket']`. Detta gör att anslutningen sker omedelbart via HTTP och uppgraderar sedan till WebSocket.
+    2.  **Vite Config**: Ändrat till `127.0.0.1` och ökat `timeout/proxyTimeout` till 60 sekunder.
+    3.  **Backend Error Handling**: Lagt till explicit felhantering för `EADDRINUSE`.
+- **Felsökning**: Kontrollerat port-status med `netstat` och verifierat att anslutningen stabiliseras efter transport-bytet.
+#### **ReferenceError: Matter is not defined in server.js**
+- **Datum**: 2026-05-09
+- **Symptom**: Backend kraschar med 500-fel i webbläsaren när en spelare försöker byta chassis eller aktivera DEV-tanken via debug-menyn.
+- **Root Cause**: `Matter.Body.setMass` anropades i `backend/server.js`, men `matter-js` var inte importerad i den filen. Detta orsakade en `ReferenceError` som stängde ner servern.
+- **Åtgärd**: Lagt till `import Matter from 'matter-js';` i `backend/server.js`.
+- **Verifiering**: Verifierat med `node -c` och manuell testning av chassis-byte i debug-menyn.
+
+
+
+

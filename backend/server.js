@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
+import Matter from 'matter-js';
 
 // Import Modular Logic
 import { loadPlayers, savePlayers, getPlayerData, setPlayerData } from './logic/Persistence.js';
@@ -35,7 +36,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const server = createServer(app);
 const io = new Server(server, {
-    cors: { origin: "*", methods: ["GET", "POST"] }
+    cors: { origin: "*", methods: ["GET", "POST"] },
+    transports: ['polling', 'websocket'],
+    allowEIO3: true
+});
+
+io.on('error', (err) => {
+    console.error('SOCKET IO ERROR:', err);
 });
 
 const PORT = process.env.PORT || 3000;
@@ -66,6 +73,15 @@ if (ENVIRONMENT === 'production') {
     app.use(express.static(path.join(__dirname, '../frontend/dist')));
 }
 
+app.use((req, res, next) => {
+    if (req.url.startsWith('/socket.io')) {
+        // Only log socket.io requests if needed, they are very frequent
+    } else {
+        console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    }
+    next();
+});
+
 // SPA Catch-all
 app.use((req, res) => {
     if (ENVIRONMENT === 'production' && !req.path.startsWith('/api')) {
@@ -73,6 +89,12 @@ app.use((req, res) => {
     } else {
         res.status(404).send('Not Found');
     }
+});
+
+// Global Error Handler
+app.use((err, req, res, next) => {
+    console.error('SERVER ERROR:', err.stack);
+    res.status(500).send('Internal Server Error');
 });
 
 // Socket.io Rate Limiting Middleware
@@ -83,19 +105,23 @@ io.use((socket, next) => {
 });
 
 io.on('connection', (socket) => {
-    socket.use(([event, ...args], next) => {
-        const now = Date.now();
-        if (now - socket.lastReset > 1000) {
-            socket.eventCount = 0;
-            socket.lastReset = now;
-        }
-        socket.eventCount++;
-        if (socket.eventCount > 100) return;
-        next();
-    });
+    try {
+        socket.use(([event, ...args], next) => {
+            const now = Date.now();
+            if (now - socket.lastReset > 1000) {
+                socket.eventCount = 0;
+                socket.lastReset = now;
+            }
+            socket.eventCount++;
+            if (socket.eventCount > 100) return;
+            next();
+        });
 
-    console.log('User connected:', socket.id);
-    if (IS_DEV) socket.emit('debug-init');
+        console.log('User connected:', socket.id);
+        if (IS_DEV) socket.emit('debug-init');
+    } catch (err) {
+        console.error('Socket Connection Error:', err);
+    }
 
     socket.on('join-game', async (data) => {
         if (!data || !data.username || data.username.trim() === '') return;
@@ -371,4 +397,13 @@ async function syncLobbyToDB(lobby) {
     } catch (e) { console.error('DB Sync Error:', e); }
 }
 
-server.listen(PORT, '0.0.0.0', () => console.log(`Server on ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server on ${PORT} [${ENVIRONMENT.toUpperCase()}]`);
+}).on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        console.error(`ERROR: Port ${PORT} is already in use. Please kill any existing node processes.`);
+        process.exit(1);
+    } else {
+        console.error('Server Error:', err);
+    }
+});

@@ -38,7 +38,8 @@ export class MapGenerator {
                 }
                 else if (mapType === 'DESERT') {
                     if (rand < 0.2) this.generateCityBlock(x, y, blockSize);
-                    else if (rand < 0.4) this.lobby.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.OIL, 300000, null, null, 140 * sizeMult, 140 * sizeMult);
+                    else if (rand < 0.3) this.lobby.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.OIL, 300000, null, null, 140 * sizeMult, 140 * sizeMult);
+                    else if (rand < 0.4) this.lobby.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.WATER, null, null, null, 180 * sizeMult, 180 * sizeMult);
                     else if (rand < 0.6) this.lobby.spawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.DIRT, null, null, null, 180 * sizeMult, 180 * sizeMult);
                     else if (rand < 0.75) {
                         const pType = Math.random() > 0.4 ? MATERIALS.CACTUS : MATERIALS.PALM;
@@ -181,8 +182,12 @@ export class MapGenerator {
         const mapType = this.lobby.mapType;
         const randShape = Math.random();
         
-        // 1. Chance for Circular Buildings in specific biomes
-        if (randShape < 0.15 && (mapType === 'WASTELAND' || mapType === 'INDUSTRIAL')) {
+        // 1. Chance for Special Shapes (Circles/Pyramids) in specific biomes
+        if (randShape < 0.2 && mapType === 'DESERT') {
+            const diam = size * (0.6 + Math.random() * 0.2);
+            this.lobby.spawnBuilding({ x: bx + size/2, y: by + size/2 }, diam, diam, 'pyramid');
+        }
+        else if (randShape < 0.15 && (mapType === 'WASTELAND' || mapType === 'INDUSTRIAL')) {
             const diam = size * (0.5 + Math.random() * 0.3);
             this.lobby.spawnBuilding({ x: bx + size/2, y: by + size/2 }, diam, diam, 'circle');
         } 
