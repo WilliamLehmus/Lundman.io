@@ -1,3 +1,4 @@
+export const MIN_PLAYERS = 1;
 export const MATERIALS = {
     METAL: 'metal',
     FIRE: 'fire',

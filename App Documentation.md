@@ -19,10 +19,14 @@ The core of the game engine lives on the **Node.js server**.
 - **Input Handling**: Clients send minimal input packets (WASD + Shoot + Seq) to the server.
 - **Client-Side Prediction (CSP)**: The local client predicts tank movement instantly and reconciles with the server's authoritative state using sequence numbers, eliminating perceived input lag.
 
-### 3. Monorepo Structure
-- **Backend**: `/backend/server.js` (Express + Socket.io + Matter.js)
-- **Frontend**: `/frontend/` (Vite 6 + Vanilla JS)
-- **Shared**: `/backend/gameConfig.js` contains the source of truth for weapon and chassis data.
+### 3. Modular Backend Architecture
+- **`backend/server.js`**: Entry point. Handles Express, Socket.io, and high-level lobby orchestration.
+- **`backend/logic/LobbyManager.js`**: Core `Lobby` class. Manages player lifecycle, teams, and match state.
+- **`backend/logic/CombatEngine.js`**: Physics interactions, bullet collisions, damage, status effects, and AI Guardians.
+- **`backend/logic/MapGenerator.js`**: Biome-aware procedural map generation.
+- **`backend/logic/BotAI.js`**: Decision making and movement logic for bots.
+- **`backend/logic/Persistence.js`**: JSON-based player statistics and PIN authentication.
+- **`backend/gameConfig.js`**: Shared source of truth for weapon and chassis data.
 
 ### 4. Persistence & Data
 - **Player Stats**: Persistent player statistics (Lifetime Kills, Deaths, Scrap) are stored in `players.json`.
@@ -358,5 +362,22 @@ To transition from a learning project to a **marketable product**, the following
     - Synchronized with `gameState` for zero-latency visual feedback.
 - **Verification**: All syntax validated with `node -c`. Rendering stability confirmed across all biomes.
 
----
+#### **Node.js API Leak in Browser (process is not defined)**
+- **Date**: 2026-05-09
+- **Issue**: Sidan laddar inte och konsolen visar `ReferenceError: process is not defined` i `game.js`.
+- **Root Cause**: Node.js-specifik kod (`process.on('uncaughtException', ...)`) lades av misstag till i `frontend/game.js`. Eftersom webbläsaren inte har tillgång till `process`-objektet kraschar skriptet vid laddning.
+- **Fix**: Tog bort `process.on`-raden. All felhantering i frontenden ska ske via `window.addEventListener('error', ...)` eller try-catch om det behövs, aldrig via Node-specifika moduler som `process` eller `fs`.
+- **Prevention**: Kör alltid `node -c frontend/game.js` efter ändringar, men var medveten om att Node-syntax-checkar inte fångar miljöspecifika objekt som saknas i webbläsaren.
+
+#### **Tundra "Eternal Winter" Visual Overhaul**
+- **Date**: 2026-05-09
+- **Goal**: Transform the Tundra from a basic blue zone to a high-fidelity frozen wasteland.
+- **Features Added**:
+    1.  **Aurora Borealis**: Waving green/purple curtain effect using global composite operations.
+    2.  **Volumetric Blizzard**: Wind-aware soft snow puffs that drift across the screen.
+    3.  **Screen Frosting**: Subtle ice crystal vignette in the corners of the screen.
+    4.  **Icicles**: Procedural icicles with glint effects hanging from buildings.
+    5.  **Engine Vapor**: Smoke/vapor puffs from tank chassit in cold air.
+    6.  **Refined Ice Sheets**: Improved "Black Ice" ground details with sharp crack lines and reflections.
+- **Technical Note**: Added global `windVector` and `auroraPhase` to manage atmospheric animations.
 

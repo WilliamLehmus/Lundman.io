@@ -147,6 +147,8 @@ let pendingInputs = [];
 
 let gameActive = false;
 let camera = { x: 0, y: 0 };
+let windVector = { x: 1.5, y: 0.5 };
+let auroraPhase = 0;
 let shake = { x: 0, y: 0, intensity: 0 };
 let particles = []; // { x, y, vx, vy, life, color, size }
 let atmosphereParticles = []; // { x, y, size, vx, vy, speed, color }
@@ -1030,6 +1032,38 @@ function resize() {
     canvas.height = window.innerHeight;
 }
 
+function drawScreenFrost() {
+    ctx.save();
+    const grad = ctx.createRadialGradient(canvas.width/2, canvas.height/2, canvas.height * 0.3, canvas.width/2, canvas.height/2, canvas.height * 0.8);
+    grad.addColorStop(0, 'rgba(200, 240, 255, 0)');
+    grad.addColorStop(0.8, 'rgba(200, 240, 255, 0.05)');
+    grad.addColorStop(1, 'rgba(255, 255, 255, 0.15)');
+    
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Subtle frost crystal shapes in corners
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.lineWidth = 1;
+    const corners = [
+        [0, 0], [canvas.width, 0], [0, canvas.height], [canvas.width, canvas.height]
+    ];
+    corners.forEach(([cx, cy]) => {
+        ctx.save();
+        ctx.translate(cx, cy);
+        for (let i = 0; i < 5; i++) {
+            const angle = (i / 5) * Math.PI * 0.5 + (cx > 0 ? Math.PI * 0.5 : 0) + (cy > 0 ? Math.PI : 0);
+            ctx.rotate(angle);
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(40 + Math.random() * 40, 0);
+            ctx.stroke();
+        }
+        ctx.restore();
+    });
+    ctx.restore();
+}
+
 // Input Handling
 window.addEventListener('keydown', e => handleInput(e.code, true));
 window.addEventListener('keyup', e => handleInput(e.code, false));
@@ -1638,38 +1672,67 @@ function renderLoop(now) {
 
         gameState.players.forEach(p => {
             drawTank(p);
-            // NEW: Dust particles when moving
-            if (ENABLE_PREMIUM_VISUALS && renderTime % 5 < 1) { 
-                const currentBiome = gameState.zones && gameState.zones[0] ? gameState.zones[0].t : 'RANDOM';
-                const isMoving = p.id === myId ? (keys.up || keys.down || keys.left || keys.right) : true; 
+            // NEW: Dust & Vapor particles when moving
+            if (ENABLE_PREMIUM_VISUALS && renderTime % 4 < 1) { 
+                const currentBiome = gameState.zones && gameState.zones[0] ? (gameState.zones[0].t || gameState.zones[0].type) : 'RANDOM';
+                const isMoving = p.id === myId ? (keys.up || keys.down || keys.left || keys.right) : (Math.abs(p.vx||0) > 0.1 || Math.abs(p.vy||0) > 0.1); 
+                
+                if (currentBiome === 'TUNDRA') {
+                    // Engine Vapor (Hot engine in cold air)
+                    if (renderTime % 12 < 1) {
+                        particles.push({
+                            x: p.x - Math.cos(p.a) * 15,
+                            y: p.y - Math.sin(p.a) * 15,
+                            vx: (Math.random() - 0.5) * 0.5,
+                            vy: -1.0 - Math.random(),
+                            life: 0.8,
+                            color: 'rgba(255, 255, 255, 0.3)',
+                            size: 4 + Math.random() * 6,
+                            isVapor: true
+                        });
+                    }
+                }
+
                 if (isMoving) {
-                    const overWater = currentBiome === 'WETLAND' || (p.wet); // Simplification: if player has 'wet' status or is in wetland
+                    const overWater = currentBiome === 'WETLAND' || (p.wet);
                     
                     if (overWater && ENABLE_PREMIUM_VISUALS) {
                         // Water Wakes (Tails)
-                        if (renderTime % 4 < 1) {
-                            const cos = Math.cos(p.a);
-                            const sin = Math.sin(p.a);
-                            // Two ripples behind tracks
-                            for (let side = -1; side <= 1; side += 2) {
-                                particles.push({
-                                    x: p.x - cos * 25 + sin * (18 * side),
-                                    y: p.y - sin * 25 - cos * (18 * side),
-                                    vx: -cos * 2 + (Math.random() - 0.5),
-                                    vy: -sin * 2 + (Math.random() - 0.5),
-                                    life: 1.0,
-                                    color: 'rgba(255, 255, 255, 0.3)',
-                                    size: 4 + Math.random() * 4,
-                                    isWaterWake: true
-                                });
-                            }
+                        const cos = Math.cos(p.a);
+                        const sin = Math.sin(p.a);
+                        for (let side = -1; side <= 1; side += 2) {
+                            particles.push({
+                                x: p.x - cos * 25 + sin * (18 * side),
+                                y: p.y - sin * 25 - cos * (18 * side),
+                                vx: -cos * 2 + (Math.random() - 0.5),
+                                vy: -sin * 2 + (Math.random() - 0.5),
+                                life: 1.0,
+                                color: 'rgba(255, 255, 255, 0.3)',
+                                size: 4 + Math.random() * 4,
+                                isWaterWake: true
+                            });
                         }
                     } else {
                         // More intense dust in wasteland/tundra
                         const pCount = (currentBiome === 'WASTELAND' || currentBiome === 'TUNDRA') ? 2 : 1;
                         const pColor = currentBiome === 'WASTELAND' ? 'rgba(150, 100, 50, 0.3)' : 
-                                       (currentBiome === 'TUNDRA' ? 'rgba(230, 250, 255, 0.4)' : 'rgba(100,100,100,0.2)');
-                        spawnParticles(p.x - Math.cos(p.a) * 20, p.y - Math.sin(p.a) * 20, pColor, pCount, 0.5);
+                                       (currentBiome === 'TUNDRA' ? 'rgba(230, 250, 255, 0.5)' : 'rgba(100,100,100,0.2)');
+                        const px = p.x - Math.cos(p.a) * 22;
+                        const py = p.y - Math.sin(p.a) * 22;
+                        spawnParticles(px, py, pColor, pCount, currentBiome === 'TUNDRA' ? 0.8 : 0.5);
+                        
+                        if (currentBiome === 'TUNDRA') {
+                            // Extra lingering snow dust
+                            particles.push({
+                                x: px, y: py,
+                                vx: (Math.random() - 0.5) * 1.0,
+                                vy: (Math.random() - 0.5) * 1.0,
+                                life: 1.2,
+                                color: 'rgba(255, 255, 255, 0.2)',
+                                size: 8 + Math.random() * 10,
+                                isSnowPuff: true
+                            });
+                        }
                     }
                 }
             }
@@ -1687,6 +1750,8 @@ function renderLoop(now) {
         if (ENABLE_PREMIUM_VISUALS) {
             drawVignette();
             drawGlobalTint();
+            const currentBiome = gameState.zones && gameState.zones[0] ? (gameState.zones[0].t || gameState.zones[0].type) : 'RANDOM';
+            if (currentBiome === 'TUNDRA') drawScreenFrost();
         }
     } else {
         drawGrid();
@@ -2428,20 +2493,35 @@ function drawGrid() {
                 if (d.x < camera.x - 100 || d.x > camera.x + canvas.width + 100 || d.y < camera.y - 100 || d.y > camera.y + canvas.height + 100) return;
                 
                 if (d.type === 'ice_sheet') {
-                    // Large frozen plate with cracks
-                    ctx.strokeStyle = 'rgba(200, 240, 255, 0.1)';
+                    // Large frozen plate with sharp cracks & reflection
+                    ctx.save();
+                    ctx.translate(d.x, d.y);
+                    ctx.rotate(d.angle);
+                    
+                    // Base Plate
+                    ctx.fillStyle = 'rgba(100, 180, 255, 0.08)';
+                    ctx.beginPath();
+                    ctx.roundRect(-d.size, -d.size, d.size*2, d.size*2, d.size*0.4);
+                    ctx.fill();
+                    
+                    // Cracks
+                    ctx.strokeStyle = 'rgba(200, 240, 255, 0.15)';
                     ctx.lineWidth = 1;
                     ctx.beginPath();
-                    ctx.moveTo(d.x - d.size, d.y);
-                    ctx.lineTo(d.x + d.size, d.y);
-                    ctx.moveTo(d.x, d.y - d.size);
-                    ctx.lineTo(d.x, d.y + d.size);
+                    ctx.moveTo(-d.size, 0); ctx.lineTo(d.size, 0);
+                    ctx.moveTo(0, -d.size); ctx.lineTo(0, d.size);
                     ctx.stroke();
                     
-                    ctx.fillStyle = 'rgba(150, 220, 255, 0.03)';
+                    // Surface Glint (Reflection)
+                    const glintMove = (renderTime * 0.001) % 2;
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+                    ctx.lineWidth = 2;
                     ctx.beginPath();
-                    ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2);
-                    ctx.fill();
+                    ctx.moveTo(-d.size + glintMove * d.size, -d.size);
+                    ctx.lineTo(d.size, d.size - glintMove * d.size);
+                    ctx.stroke();
+                    
+                    ctx.restore();
                 } else if (d.type === 'snow_drift') {
                     // Soft white patch
                     ctx.fillStyle = '#fff';
@@ -2509,6 +2589,50 @@ function drawGrid() {
                     ctx.fill();
                     ctx.restore();
                 }
+            });
+        }
+
+        // --- NEW TUNDRA OVERHAUL EFFECTS ---
+        
+        // 1. Aurora Borealis (Backdrop)
+        if (ENABLE_PREMIUM_VISUALS) {
+            ctx.save();
+            ctx.globalCompositeOperation = 'screen';
+            auroraPhase += 0.005;
+            for (let i = 0; i < 3; i++) {
+                const phase = auroraPhase + i * 2;
+                const grad = ctx.createLinearGradient(0, camera.y, 0, camera.y + 600);
+                const color = i === 1 ? 'rgba(150, 0, 255, 0.15)' : 'rgba(0, 255, 150, 0.15)';
+                grad.addColorStop(0, 'rgba(0,0,0,0)');
+                grad.addColorStop(0.5, color);
+                grad.addColorStop(1, 'rgba(0,0,0,0)');
+                
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.moveTo(camera.x, camera.y);
+                for (let x = 0; x <= canvas.width; x += 50) {
+                    const wave = Math.sin(x * 0.002 + phase) * 100 + Math.sin(x * 0.005 + phase * 0.5) * 50;
+                    ctx.lineTo(camera.x + x, camera.y + 100 + wave + i * 40);
+                }
+                ctx.lineTo(camera.x + canvas.width, camera.y + canvas.height);
+                ctx.lineTo(camera.x, camera.y + canvas.height);
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+
+        // 2. Volumetric Blizzard
+        if (ENABLE_PREMIUM_VISUALS && Math.random() > 0.85) {
+            const side = Math.random() > 0.5;
+            particles.push({
+                x: side ? camera.x - 50 : camera.x + canvas.width + 50,
+                y: camera.y + Math.random() * canvas.height,
+                vx: windVector.x * (2 + Math.random() * 2) * (side ? 1 : -1),
+                vy: windVector.y + (Math.random() - 0.5),
+                life: 1.5,
+                color: 'rgba(255, 255, 255, 0.2)',
+                size: 15 + Math.random() * 25,
+                isSnowPuff: true
             });
         }
     } else if (currentBiome === 'WETLAND') {
@@ -2847,10 +2971,32 @@ function drawElements() {
                 ctx.restore();
             }
 
-            // Tundra Snow
+            // Tundra Snow & Icicles
             if (isTundra && ENABLE_PREMIUM_VISUALS) {
-                ctx.save(); ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.2;
+                ctx.save(); ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.3;
+                // Snow on top
                 ctx.beginPath(); ctx.roundRect(e.x - e.w/2 + 5, e.y - e.h/2 + 5, e.w - 10, 15, 5); ctx.fill();
+                
+                // Icicles hanging from edges
+                ctx.strokeStyle = 'rgba(200, 240, 255, 0.8)';
+                ctx.lineWidth = 2;
+                ctx.lineCap = 'round';
+                const icicleCount = Math.floor(e.w / 15);
+                for (let i = 0; i < icicleCount; i++) {
+                    const ix = e.x - e.w/2 + 10 + i * 15 + getStableRandom(e.id + i) * 5;
+                    const iy = e.y + e.h/2; // Bottom edge
+                    const iLen = 5 + getStableRandom(e.id + i * 2) * 15;
+                    ctx.beginPath();
+                    ctx.moveTo(ix, iy);
+                    ctx.lineTo(ix, iy + iLen);
+                    ctx.stroke();
+                    // Glint on icicle
+                    if (Math.sin(renderTime * 0.003 + i) > 0.8) {
+                        ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.8;
+                        ctx.beginPath(); ctx.arc(ix, iy + iLen, 1.5, 0, Math.PI * 2); ctx.fill();
+                    }
+                }
+                
                 for (let i = 0; i < 3; i++) {
                     const sx = e.x + Math.sin(e.id + i) * (e.w * 0.3); const sy = e.y + Math.cos(e.id + i) * (e.h * 0.3);
                     ctx.beginPath(); ctx.arc(sx, sy, 8, 0, Math.PI * 2); ctx.fill();
@@ -3033,16 +3179,73 @@ function drawElements() {
                     ctx.restore();
                 } else if (e.t === MATERIALS.ICE && ENABLE_PREMIUM_VISUALS) {
                     const drawRadiusIce = baseRadius;
-                    const iceGrad = ctx.createRadialGradient(e.x - drawRadiusIce*0.3, e.y - drawRadiusIce*0.3, 0, e.x, e.y, drawRadiusIce);
-                    iceGrad.addColorStop(0, '#ffffff'); iceGrad.addColorStop(1, '#50a0ff');
-                    ctx.fillStyle = iceGrad; drawOrganicPath(ctx, e.x, e.y, drawRadiusIce, e.id); ctx.fill();
-                    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.globalAlpha = 0.6; ctx.beginPath(); ctx.arc(e.x, e.y, drawRadiusIce * 0.9, -2.5, -0.5); ctx.stroke();
-                    // Twinkling Sparkles
-                    const twinkle = Math.sin(renderTime * 0.01 + e.id) * 0.5 + 0.5;
-                    if (twinkle > 0.8) {
-                        ctx.fillStyle = '#fff'; ctx.globalAlpha = (twinkle - 0.8) * 5;
-                        ctx.beginPath(); ctx.arc(e.x + (getStableRandom(e.id)-0.5)*drawRadiusIce, e.y + (getStableRandom(e.id+1)-0.5)*drawRadiusIce, 2, 0, Math.PI*2); ctx.fill();
+                    
+                    // 1. Drop Shadow
+                    ctx.save();
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+                    drawOrganicPath(ctx, e.x + 8, e.y + 8, drawRadiusIce, e.id);
+                    ctx.fill();
+                    ctx.restore();
+
+                    // 2. Main Body with Vibrant Blue Gradient
+                    const iceGrad = ctx.createRadialGradient(
+                        e.x - drawRadiusIce * 0.35, e.y - drawRadiusIce * 0.35, 0,
+                        e.x, e.y, drawRadiusIce
+                    );
+                    iceGrad.addColorStop(0, '#eefaff'); // Bright white center
+                    iceGrad.addColorStop(0.3, '#9bdfff'); // Soft light blue
+                    iceGrad.addColorStop(0.7, '#4fa9ff'); // Vibrant blue
+                    iceGrad.addColorStop(1, '#3078cc');   // Darker rim blue
+                    
+                    ctx.fillStyle = iceGrad;
+                    drawOrganicPath(ctx, e.x, e.y, drawRadiusIce, e.id);
+                    ctx.fill();
+
+                    // 3. Inner "Crack" Lines (Recreating the sharp lines in image)
+                    ctx.save();
+                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    for (let i = 0; i < 3; i++) {
+                        const angle = (e.id * 1.3 + i * 2.1) % (Math.PI * 2);
+                        const len = drawRadiusIce * (0.4 + getStableRandom(e.id + i) * 0.4);
+                        ctx.moveTo(e.x, e.y);
+                        ctx.lineTo(e.x + Math.cos(angle) * len, e.y + Math.sin(angle) * len);
+                        // Sub-cracks
+                        if (getStableRandom(e.id + i + 10) > 0.5) {
+                            const subAngle = angle + (getStableRandom(e.id + i + 20) - 0.5) * 1.5;
+                            const subLen = len * 0.5;
+                            ctx.moveTo(e.x + Math.cos(angle) * (len * 0.6), e.y + Math.sin(angle) * (len * 0.6));
+                            ctx.lineTo(e.x + Math.cos(angle) * (len * 0.6) + Math.cos(subAngle) * subLen, e.y + Math.sin(angle) * (len * 0.6) + Math.sin(subAngle) * subLen);
+                        }
                     }
+                    ctx.stroke();
+                    ctx.restore();
+
+                    // 4. Highlight Arc (Glistening edge)
+                    ctx.save();
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 4;
+                    ctx.lineCap = 'round';
+                    ctx.globalAlpha = 0.6;
+                    ctx.beginPath();
+                    ctx.arc(e.x, e.y, drawRadiusIce * 0.85, -2.4, -0.6);
+                    ctx.stroke();
+                    ctx.restore();
+
+                    // 5. Twinkling Sparkles
+                    ctx.fillStyle = '#fff';
+                    for (let i = 0; i < 4; i++) {
+                        const sparkleSeed = e.id + i * 117;
+                        const sparkleTwinkle = Math.sin(renderTime * 0.01 + sparkleSeed) * 0.5 + 0.5;
+                        if (sparkleTwinkle > 0.6) {
+                            const sx = e.x + (getStableRandom(sparkleSeed) - 0.5) * drawRadiusIce * 1.2;
+                            const sy = e.y + (getStableRandom(sparkleSeed + 1) - 0.5) * drawRadiusIce * 1.2;
+                            ctx.globalAlpha = (sparkleTwinkle - 0.6) * 2;
+                            ctx.beginPath(); ctx.arc(sx, sy, 1.5, 0, Math.PI * 2); ctx.fill();
+                        }
+                    }
+                    ctx.globalAlpha = 1.0;
                 } else if (e.t === MATERIALS.FIRE && ENABLE_PREMIUM_VISUALS && firePatterns.length > 0) {
                     const auraRad = drawRadius * 2.2;
                     const g = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, auraRad);
