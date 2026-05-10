@@ -5247,24 +5247,13 @@ function updateLocalPlayerAudio(me) {
                 else if (e.t === MATERIALS.ICE) activePuddleSFX = iceSlideSFX;
                 else if (e.t === MATERIALS.WATER) activePuddleSFX = waterSplashSFX;
                 else if (e.t === MATERIALS.STEAM) activePuddleSFX = steamSFX;
+                else if (e.t === MATERIALS.DIRT) activePuddleSFX = dirtSFX;
             }
         });
     }
 
-    // Check zones (biomes, large regions)
-    if (me && !activePuddleSFX && gameState.zones) {
-        gameState.zones.forEach(z => {
-            // AABB check for rectangular zones
-            const inZone = me.x >= z.x && me.x <= z.x + z.w && 
-                          me.y >= z.y && me.y <= z.y + z.h;
+    // Check zones (removed per request - only discrete puddles should trigger sounds)
 
-            if (inZone) {
-                const type = z.t || z.type;
-                if (type === 'WETLAND') activePuddleSFX = waterSplashSFX;
-                else if (type === 'TUNDRA' && me.slp) activePuddleSFX = iceSlideSFX;
-            }
-        });
-    }
 
     // Only play if moving and entering/staying in a puddle
     if (isMoving && activePuddleSFX && activePuddleSFX !== currentPuddleSound) {

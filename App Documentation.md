@@ -559,10 +559,10 @@ To transition from a learning project to a **marketable product**, the following
 404: - **Issue**: Missing weapon-impact sounds (Water, Ice, Dirt) and inconsistent puddle audio triggers.
 405: - **Root Cause**: 
 406:     1. **Impact Feedback**: The `collision-effect` handler in `game.js` lacked logic to trigger audio feedback.
-407:     2. **Puddle Detection**: `updateLocalPlayerAudio` used incorrect material mappings (e.g., `MATERIALS.FROST` instead of `MATERIALS.ICE`) and lacked a buffer for organic shapes.
+407:     2. **Puddle Detection**: `updateLocalPlayerAudio` used incorrect material mappings and lacked a buffer for organic shapes.
 408: - **Fix**:
 409:     1. **Impact Integration**: Linked `playEnvironmentalImpact` to the `collision-effect` socket event.
-410:     2. **Puddle Refinement**: Updated `updateLocalPlayerAudio` with correct mappings for **Water** and **Ice**, increased the detection buffer (+25px), and added a 4s re-trigger timeout to prevent sound spam.
+410:     2. **Puddle Refinement**: Updated `updateLocalPlayerAudio` with correct mappings for **Water**, **Ice**, and **Dirt**. Increased the detection buffer (+25px), and added a 4s re-trigger timeout to prevent sound spam.
 411:     3. **Asset Mapping**: Verified and corrected the mapping of ElevenLabs `.mp3` assets in `playWeaponSound` and `playEnvironmentalImpact`.
 412: - **Verification**: Verified using `node -c` and audited all `playChannel` calls for proper channel management.
 
@@ -607,5 +607,5 @@ To transition from a learning project to a **marketable product**, the following
     - **Dirt Gun**: Heavy earthen thuds.
 - **Environmental Impact Audio**:
     - Bullet impacts now trigger biome-specific sounds (Water Splash, Ice Shatter, Dirt Impact).
-    - Local player movement now triggers high-fidelity "puddle" audio when entering hazards (Acid, Oil, Electric, Fire, Gas, Water, Steam, Ice).
+    - Local player movement now triggers high-fidelity "puddle" audio when entering hazards (Acid, Oil, Electric, Fire, Gas, Water, Steam, Ice, and Dirt).
 - **Optimization**: Switched from generic `playSFX` to a managed `playChannel` system for weapons and puddles to prevent sound overlapping and ensure a clean, premium audio mix.
