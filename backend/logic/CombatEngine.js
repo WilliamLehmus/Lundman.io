@@ -147,6 +147,7 @@ export class CombatEngine {
                     });
                     element.body.elementId = element.id;
                     Composite.add(this.lobby.engine.world, element.body);
+                    this.io.to(this.lobby.id).emit('collision-effect', { x: oldPos.x, y: oldPos.y, type: MATERIALS.QUICKSAND, targetLabel: 'alchemy' });
                     this.lobby.destroyBullet(bullet.id);
                     return;
                 }
@@ -156,6 +157,7 @@ export class CombatEngine {
                     element.expiresAt = Date.now() + 6000;
                     element.hp = 100;
                     element.ownerId = bulletData.ownerId;
+                    this.io.to(this.lobby.id).emit('collision-effect', { x: element.body.position.x, y: element.body.position.y, type: MATERIALS.FIRE, targetLabel: 'alchemy' });
                     this.lobby.destroyBullet(bullet.id);
                     return;
                 }
@@ -165,12 +167,14 @@ export class CombatEngine {
                     element.originalType = MATERIALS.WATER;
                     element.expiresAt = Date.now() + 2000;
                     element.ownerId = bulletData.ownerId;
+                    this.io.to(this.lobby.id).emit('collision-effect', { x: element.body.position.x, y: element.body.position.y, type: MATERIALS.ELECTRIC, targetLabel: 'alchemy' });
                     this.lobby.destroyBullet(bullet.id);
                     return;
                 }
 
                 if (isFireVSWater) {
                     this.lobby.spawnElement(bullet.position, MATERIALS.STEAM, 15000, null, bulletData.ownerId);
+                    this.io.to(this.lobby.id).emit('collision-effect', { x: bullet.position.x, y: bullet.position.y, type: MATERIALS.STEAM, targetLabel: 'alchemy' });
                     if (element.w < 150) this.lobby.destroyElement(element.id);
                     this.lobby.destroyBullet(bullet.id);
                     return;
@@ -181,6 +185,7 @@ export class CombatEngine {
                     element.originalType = MATERIALS.WATER;
                     element.expiresAt = Date.now() + 5000;
                     element.ownerId = bulletData.ownerId;
+                    this.io.to(this.lobby.id).emit('collision-effect', { x: element.body.position.x, y: element.body.position.y, type: MATERIALS.ICE, targetLabel: 'alchemy' });
                     this.lobby.destroyBullet(bullet.id);
                     return;
                 }
@@ -196,6 +201,7 @@ export class CombatEngine {
                     const size = { w: element.w * 1.5, h: element.h * 1.5 };
                     this.lobby.destroyElement(element.id);
                     this.lobby.spawnElement(pos, MATERIALS.GAS, 6000, null, bulletData.ownerId, size.w, size.h);
+                    this.io.to(this.lobby.id).emit('collision-effect', { x: pos.x, y: pos.y, type: MATERIALS.GAS, targetLabel: 'alchemy' });
                     this.lobby.destroyBullet(bullet.id);
                     return;
                 }
@@ -269,6 +275,7 @@ export class CombatEngine {
             if ((elementA.type === MATERIALS.FIRE && elementB.type === MATERIALS.ICE) ||
                 (elementB.type === MATERIALS.FIRE && elementA.type === MATERIALS.ICE)) {
                 this.lobby.spawnElement(elementA.body.position, MATERIALS.STEAM, 15000);
+                this.io.to(this.lobby.id).emit('collision-effect', { x: elementA.body.position.x, y: elementA.body.position.y, type: MATERIALS.STEAM, targetLabel: 'alchemy' });
                 this.lobby.destroyElement(elementA.id);
                 this.lobby.destroyElement(elementB.id);
                 return;
@@ -282,6 +289,8 @@ export class CombatEngine {
                 oil.expiresAt = Date.now() + 6000;
                 oil.hp = 100;
                 oil.ownerId = fire.ownerId;
+                this.io.to(this.lobby.id).emit('collision-effect', { x: oil.body.position.x, y: oil.body.position.y, type: MATERIALS.FIRE, targetLabel: 'alchemy' });
+                return;
             }
 
             if ((elementA.type === MATERIALS.FIRE && elementB.type === MATERIALS.WATER) ||
@@ -289,6 +298,7 @@ export class CombatEngine {
                 const fire = elementA.type === MATERIALS.FIRE ? elementA : elementB;
                 if (!fire.lastSteamSpawn || Date.now() - fire.lastSteamSpawn > 400) {
                     this.lobby.spawnElement(fire.body.position, MATERIALS.STEAM, 15000);
+                    this.io.to(this.lobby.id).emit('collision-effect', { x: fire.body.position.x, y: fire.body.position.y, type: MATERIALS.STEAM, targetLabel: 'alchemy' });
                     fire.lastSteamSpawn = Date.now();
                 }
                 this.lobby.destroyElement(fire.id);
@@ -304,6 +314,8 @@ export class CombatEngine {
                 this.lobby.destroyElement(elementA.id);
                 this.lobby.destroyElement(elementB.id);
                 this.lobby.spawnElement(pos, MATERIALS.GAS, 6000, null, fire.ownerId, w * 1.5, h * 1.5);
+                this.io.to(this.lobby.id).emit('collision-effect', { x: pos.x, y: pos.y, type: MATERIALS.GAS, targetLabel: 'alchemy' });
+                return;
             }
 
             if ((elementA.type === MATERIALS.WATER && elementB.type === MATERIALS.DIRT) ||
@@ -320,6 +332,8 @@ export class CombatEngine {
                 });
                 dirt.body.elementId = dirt.id;
                 Composite.add(this.lobby.engine.world, dirt.body);
+                this.io.to(this.lobby.id).emit('collision-effect', { x: oldPos.x, y: oldPos.y, type: MATERIALS.QUICKSAND, targetLabel: 'alchemy' });
+                return;
             }
         }
 

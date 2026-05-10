@@ -389,6 +389,17 @@ To transition from a learning project to a **marketable product**, the following
 
 ## 🛡️ Known Issues & Critical Fixes
 
+#### **Alchemy Audio Overlay & Electric Particle Fix**
+- **Date**: 2026-05-10
+- **Issue**: Elemental reactions (Alchemy) like Fire + Ice or Water + Dirt occurred silently on the server without client audio. Electric barrels used yellow generic explosion particles.
+- **Fix**: 
+    1. **Alchemy Events**: Added `collision-effect` emits with `targetLabel: 'alchemy'` to all 7 elemental reactions in `CombatEngine.js`. This triggers the client to play the new element's audio (e.g., `steamSFX` or `gasEntrySFX`) at the reaction point, layering the audio dynamically.
+    2. **Fire+Oil Loop Guard**: Fixed a missing `return;` statement in the Fire+Oil reaction in `CombatEngine.js` to ensure the physics loop properly exits after a transformation.
+    3. **Electric Particles**: Updated `game.js` to parse `targetLabel: 'explosion'` with `type: MATERIALS.ELECTRIC` to render high-contrast Cyan (`#00f2ff`) particles instead of standard yellow ones.
+    4. **Code Cleanup**: Removed dead `lastPuddleType` variable from `game.js`.
+- **Verification**: Verified using `node -c` for both server and client.
+
+
 #### **Electric Puddle Stun Lock**
 - **Date**: 2026-05-09
 - **Issue**: Players would get "stuck" indefinitely in small electric puddles in the Industrial biome.

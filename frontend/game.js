@@ -741,7 +741,12 @@ socket.on('collision-effect', (data) => {
         spawnParticles(data.x, data.y, '#aaddff', 15, 2.0);
         return;
     }
-    const hitColor = data.targetLabel === 'element' ? '#fff' : (isTank ? '#ff0000' : '#ffcc00');
+    let hitColor = '#ffcc00'; // default yellow/orange
+    if (data.targetLabel === 'element') hitColor = '#fff';
+    else if (isTank) hitColor = '#ff0000';
+    else if (data.targetLabel === 'explosion' && data.type === MATERIALS.ELECTRIC) hitColor = '#00f2ff'; // Cyan for electric
+    else if (data.targetLabel === 'alchemy') hitColor = '#ffffff'; // White for alchemy puffs
+    
     spawnParticles(data.x, data.y, hitColor, 8);
     
     // PREMIUM: Extra impact juice
@@ -987,8 +992,7 @@ let isMuted = localStorage.getItem('tanks_is_muted') === 'true';
 let isMenuOpen = false;
 let isShopOpen = false;
 
-// Track last puddle for local player to trigger "entry" sound
-let lastPuddleType = null;
+
 
 function setupAudio() {
     audioManager.musicVolume = isMuted ? 0 : musicVolume;
