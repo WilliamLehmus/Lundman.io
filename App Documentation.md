@@ -14,41 +14,6 @@ The core of the game engine lives on the **Node.js server**.
 
 ### 2. Real-Time Streaming
 - **Networking**: Powered by `Socket.io`.
-- **State Updates**: The server broadcasts the global game state to all clients at **30Hz (STATE_RATE)**. This rate is optimized for bandwidth while maintaining smoothness via client-side interpolation.
-- **Payload Optimization**: The game uses a compressed JSON format with shortened keys and reduced float precision to minimize network overhead.
-- **Input Handling**: Clients send minimal input packets (WASD + Shoot + Seq) to the server.
-- **Client-Side Prediction (CSP)**: The local client predicts tank movement instantly and reconciles with the server's authoritative state using sequence numbers, eliminating perceived input lag.
-
-### 3. Modular Backend Architecture
-- **`backend/server.js`**: Entry point. Handles Express, Socket.io, and high-level lobby orchestration.
-- **`backend/logic/LobbyManager.js`**: Core `Lobby` class. Manages player lifecycle, teams, and match state.
-- **`backend/logic/CombatEngine.js`**: Physics interactions, bullet collisions, damage, status effects, and AI Guardians.
-- **`backend/logic/MapGenerator.js`**: Biome-aware procedural map generation.
-- **`backend/logic/BotAI.js`**: Decision making and movement logic for bots. Features **Difficulty Scaling** (Easy/Normal/Hard) and distance-based weapon strategy.
-- **`backend/logic/Persistence.js`**: JSON-based player statistics and PIN authentication.
-- **`backend/gameConfig.js`**: Shared source of truth for weapon and chassis data.
-
-### 4. Persistence & Data
-- **Player Stats**: Persistent player statistics (Lifetime Kills, Deaths, Scrap) are stored in `players.json`.
-- **Session Data**: HUD settings and volume preferences are persisted in the browser's `localStorage`.
-
----
-# Tanks.io | Technical Documentation
-
-## 🚀 Project Overview
-Tanks.io is a high-performance, 5v5 online multiplayer tank combat game. It features a premium neon aesthetic, server-authoritative physics, and real-time streaming using Socket.io and Matter.js.
-
----
-
-## 🏗️ System Architecture
-
-### 1. Server-Authoritative Physics
-The core of the game engine lives on the **Node.js server**. 
-- **Reasoning**: To prevent client-side cheating and ensure perfect synchronization between all players.
-- **Implementation**: The `Matter.js` engine runs on the server at a consistent **60Hz (TICK_RATE)**. Every collision, bullet trajectory, and tank movement is calculated centrally.
-
-### 2. Real-Time Streaming
-- **Networking**: Powered by `Socket.io`.
 - **Spatial Audio**: Client-side audio logic calculates volume based on distance from the **camera center** (listener position) to the event coordinate, with a dynamic falloff up to 2000 pixels.
 - **State Updates**: The server broadcasts the global game state to all clients at **30Hz (STATE_RATE)**. This rate is optimized for bandwidth while maintaining smoothness via client-side interpolation.
 - **Payload Optimization**: The game uses a compressed JSON format with shortened keys and reduced float precision to minimize network overhead.
@@ -145,12 +110,9 @@ The environment is reactive:
     - DB is cleared on server startup to ensure only "live" lobbies are listed.
 - **Quick Match**: Logic that prioritizes joining the most populated non-full lobby before creating a new one.
 
-### 4. AI Guardians (Drones) [DISABLED]
-> [!NOTE]
-> AI Guardians are currently disabled but the logic remains in the codebase for potential future reactivation.
-
-- **Deployment**: Defensive drones spawn periodically near the map center.
-- **Engagement**: They orbit a fixed point and fire ELECTRIC pulses at any player that enters their range.
+### 4. AI Guardians (Killer Drones)
+- **Deployment**: Defensive drones can be enabled/disabled via a **Lobby Toggle** by the host player.
+- **Engagement**: When enabled, they spawn periodically near the map center, orbit a fixed point, and fire ELECTRIC pulses at any player that enters their range.
 - **Visuals**: Features a rotating red scanning laser and a pulsing thruster glow for high readability.
 - **Rewards**: Destroying a guardian yields high-density SCRAP drops.
 
