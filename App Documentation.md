@@ -123,6 +123,7 @@ The environment is reactive:
     - **AudioManager**: Centralized channel pooling system that manages high-fidelity ElevenLabs assets.
     - **Weapon SFX**: Professional audio assets mapped to elemental weapon types (Water, Frost, Dirt, Heavy, Tesla, Flame).
     - **Environmental Impacts**: Dynamic sound triggers for entering puddles (Acid, Oil, Quicksand, Electric, Fire, Gas, Ice, Water) and bullet impact feedback (Water Splash, Ice Shatter, Dirt Impact).
+    - **ElevenLabs Generation**: The project includes a `scripts/generate-sfx.js` tool to generate new high-fidelity assets using the ElevenLabs API. The API key is stored in `.env`.
 
 ### 6. Lobby & Slot Management
 - **Fixed Slots**: The lobby features a fixed layout of **5 slots per team** (10 total).
@@ -609,3 +610,23 @@ To transition from a learning project to a **marketable product**, the following
     - Bullet impacts now trigger biome-specific sounds (Water Splash, Ice Shatter, Dirt Impact).
     - Local player movement now triggers high-fidelity "puddle" audio when entering hazards (Acid, Oil, Electric, Fire, Gas, Water, Steam, Ice, and Dirt).
 - **Optimization**: Switched from generic `playSFX` to a managed `playChannel` system for weapons and puddles to prevent sound overlapping and ensure a clean, premium audio mix.
+
+#### **Hazard Spawning & Alchemy Stabilization**
+- **Date**: 2026-05-10
+- **Issue**: Barrels would fail to spawn puddles if an overlapping liquid already existed, and Fire + Ice interactions were basic (turned Ice to Water).
+- **Fix**:
+    1. **Force Spawn**: Updated `LobbyManager.spawnElement` to bypass building/liquid/solid overlap checks for barrel-spawned elements (identified via `ignoreId`). This ensures chemistry triggers even in tight spaces.
+    2. **Alchemy Upgrade**: Updated Fire + Ice interaction to immediately spawn **Steam** and destroy both elements, providing a more intuitive and high-fidelity reaction.
+    3. **Puddle Variety**: Increased non-fire barrel puddle counts to a randomized **3-6** range for a more organic, cinematic distribution.
+- **Verification**: Verified that barrels reliably trigger "Alchemy" reactions regardless of map positioning.
+
+#### **ElevenLabs Audio Integration & Volume Crash Fix**
+- **Date**: 2026-05-10
+- **Goal**: Implement "True Premium" cinematic audio for explosions and barrel destruction.
+- **Features**:
+    1. **Asset Generation**: Integrated ElevenLabs API key into `.env` and updated `scripts/generate-sfx.js` with cinematic prompts for `explosion.mp3` and `barrel_break.mp3`.
+    2. **Smart Triggers**: Refactored `updateLocalPlayerAudio` to track `currentPuddleId`. This allows the "entry" sound to re-trigger when moving between different puddles of the same type.
+    3. **Volume Clamping**: Fixed a critical `IndexSizeError` crash by implementing volume clamping (0.0 to 1.0) in the `AudioManager`. This prevents crashes when combined master and effect volumes exceed browser limits.
+    4. **Audio Layering**: Combined ElevenLabs assets with procedural `SoundSynth` effects (deep boom + mechanical break) for a rich, layered audio experience.
+    5. **Redundancy Fix**: Removed duplicate electric zap sounds from the barrel-break listener to ensure a clean, non-overlapping audio mix.
+- **Verification**: Audio stability confirmed across all volume settings. Puddle triggers are responsive and non-overlapping.

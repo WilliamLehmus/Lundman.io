@@ -51,7 +51,9 @@ const sounds = [
     { text: "Electric spark discharge, high voltage zap, short circuit crackle, sharp and quick", file: "electric_zap.mp3", dur: 0.6 },
     { text: "Metal tank tracks sliding on solid ice, sharp skating sound, frozen surface friction", file: "ice_slide.mp3", dur: 0.8 },
     { text: "Large fire ignition fwoosh, gas flare, intense heat burst, cinematic", file: "fire_entry.mp3", dur: 1.2 },
-    { text: "Toxic gas cloud hiss, chemical spray release, subtle poison atmosphere", file: "gas_entry.mp3", dur: 1.0 }
+    { text: "Toxic gas cloud hiss, chemical spray release, subtle poison atmosphere", file: "gas_entry.mp3", dur: 1.0 },
+    { text: "Large cinematic tank barrel explosion, deep bass boom, fire crackle, powerful resonance", file: "explosion.mp3", dur: 1.5 },
+    { text: "Metal barrel breaking, liquid splash, mechanical crunch, hollow metallic impact shatter", file: "barrel_break.mp3", dur: 0.8 }
 ];
 
 async function run() {

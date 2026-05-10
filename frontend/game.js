@@ -11,7 +11,6 @@ const socket = io({
 });
 
 
-
 socket.on('connect_error', (err) => {
     console.error('Socket Connection Error:', err.message);
     if (err.description) console.error('Error Description:', err.description);
@@ -26,8 +25,8 @@ console.log('Socket initialized, attempting connection...');
 
 socket.on('explosion', (data) => {
     shake.intensity = 20;
-    // Play explosion sound (Premium feedback)
-    audioManager.playSFX(heavySFX, 1.4); 
+    // Play ElevenLabs explosion sound (True Premium)
+    audioManager.playSFX(explosionSFX, 1.2);
     // Massive particle burst
     for (let i = 0; i < 30; i++) {
         particles.push({
@@ -54,18 +53,19 @@ socket.on('explosion', (data) => {
 });
 
 socket.on('barrel-break', (data) => {
-    // Play material-specific break/splash sound
+    // 1. Play ElevenLabs break sound (True Premium)
+    audioManager.playSFX(barrelBreakSFX, 0.8);
+
+    // 2. Play material-specific splash sound
     let sfx = null;
     let vol = 1.0;
     
     if (data.type === 'explosion') {
-        sfx = heavySFX;
-        vol = 0.8;
+        // Already handled by playExplosion above
     } else if (data.type === MATERIALS.WATER) sfx = waterSplashSFX;
     else if (data.type === MATERIALS.OIL) sfx = oilSloshSFX;
     else if (data.type === MATERIALS.ACID) sfx = acidSplashSFX;
     else if (data.type === MATERIALS.ICE) sfx = iceSFX;
-    else if (data.type === MATERIALS.ELECTRIC) sfx = electricZapSFX;
     else if (data.type === MATERIALS.GAS) sfx = gasEntrySFX;
     
     if (sfx) audioManager.playSFX(sfx, vol);
@@ -820,6 +820,54 @@ class SoundSynth {
         osc.start();
         osc.stop(this.ctx.currentTime + duration);
     }
+
+    playExplosion(vol = 0.5) {
+        if (!this.ctx || !this.noiseBuffer) return;
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+
+        const source = this.ctx.createBufferSource();
+        source.buffer = this.noiseBuffer;
+
+        const lowpass = this.ctx.createBiquadFilter();
+        lowpass.type = 'lowpass';
+        lowpass.frequency.setValueAtTime(800, this.ctx.currentTime);
+        lowpass.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 1.5);
+
+        const g = this.ctx.createGain();
+        g.gain.setValueAtTime(vol, this.ctx.currentTime);
+        g.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 1.5);
+
+        source.connect(lowpass);
+        lowpass.connect(g);
+        g.connect(this.masterGain);
+
+        source.start();
+        source.stop(this.ctx.currentTime + 1.5);
+    }
+
+    playBreak(vol = 0.3) {
+        if (!this.ctx || !this.noiseBuffer) return;
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+
+        const source = this.ctx.createBufferSource();
+        source.buffer = this.noiseBuffer;
+
+        const bandpass = this.ctx.createBiquadFilter();
+        bandpass.type = 'bandpass';
+        bandpass.frequency.setValueAtTime(2000, this.ctx.currentTime);
+        bandpass.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.3);
+
+        const g = this.ctx.createGain();
+        g.gain.setValueAtTime(vol, this.ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+
+        source.connect(bandpass);
+        bandpass.connect(g);
+        g.connect(this.masterGain);
+
+        source.start();
+        source.stop(this.ctx.currentTime + 0.3);
+    }
 }
 
 class AudioManager {
@@ -855,7 +903,7 @@ class AudioManager {
         this.init(); // Lazy init
 
         const sound = audio.cloneNode();
-        sound.volume = this.sfxVolume * vol;
+        sound.volume = Math.min(1, Math.max(0, this.sfxVolume * vol));
         sound.play().catch(e => console.warn("Audio play blocked", e));
 
         if (duration) {
@@ -878,7 +926,7 @@ class AudioManager {
         }
 
         const sound = audio.cloneNode();
-        sound.volume = this.sfxVolume * vol;
+        sound.volume = Math.min(1, Math.max(0, this.sfxVolume * vol));
         this.channels.set(name, sound);
         sound.play().catch(e => console.warn("Audio play blocked", e));
 
@@ -929,6 +977,8 @@ const electricZapSFX = new Audio('/electric_zap.mp3');
 const iceSlideSFX = new Audio('/ice_slide.mp3');
 const fireEntrySFX = new Audio('/fire_entry.mp3');
 const gasEntrySFX = new Audio('/gas_entry.mp3');
+const explosionSFX = new Audio('/explosion.mp3');
+const barrelBreakSFX = new Audio('/barrel_break.mp3');
 
 let currentMusicIndex = 0;
 let musicVolume = parseFloat(localStorage.getItem('tanks_music_vol')) || 0.3;
@@ -971,6 +1021,8 @@ function setupAudio() {
     iceSlideSFX.volume = audioManager.sfxVolume;
     fireEntrySFX.volume = audioManager.sfxVolume;
     gasEntrySFX.volume = audioManager.sfxVolume;
+    explosionSFX.volume = audioManager.sfxVolume;
+    barrelBreakSFX.volume = audioManager.sfxVolume;
 
     syncAudioUI();
 }
