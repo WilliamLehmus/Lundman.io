@@ -10,6 +10,8 @@ const socket = io({
     timeout: 20000
 });
 
+
+
 socket.on('connect_error', (err) => {
     console.error('Socket Connection Error:', err.message);
     if (err.description) console.error('Error Description:', err.description);
@@ -73,9 +75,9 @@ socket.on('debug-init', () => {
             speed: 0.012, 
             turnSpeed: 0.08,
             mass: 10,
-            slots: 6,
+            slots: 7,
             allowedWeapons: ALL_WEAPONS,
-            weapons: ['HEAVY_GUN', 'TESLA', 'FLAMETHROWER', 'WATER_CANNON', 'FROST_GUN', 'DIRT_GUN']
+            weapons: ['STANDARD', 'HEAVY_GUN', 'TESLA', 'FLAMETHROWER', 'WATER_CANNON', 'FROST_GUN', 'DIRT_GUN']
         };
     }
 
@@ -196,6 +198,8 @@ let mousePos = { x: 0, y: 0 };
 let canvasRect = null;
 let lastInputSent = 0;
 let renderTime = 0;
+let lastPuddleCheck = 0;
+let currentPuddleSound = null;
 
 // Liquid Patterns (9 Variations each for variety)
 let waterPatterns = []; 
@@ -734,6 +738,9 @@ socket.on('collision-effect', (data) => {
         }
     }
 
+    // 3. Audio Feedback (Impact sounds)
+    playEnvironmentalImpact(data.type, data.x, data.y);
+
     // If it hit a tank, maybe add a tiny shake
     if (isTank && data.targetLabel === `tank-${myId}`) {
         shake.intensity = Math.max(shake.intensity, 5);
@@ -939,6 +946,11 @@ function setupAudio() {
     waterSplashSFX.volume = audioManager.sfxVolume;
     oilSloshSFX.volume = audioManager.sfxVolume;
     acidSplashSFX.volume = audioManager.sfxVolume;
+    quicksandSFX.volume = audioManager.sfxVolume;
+    electricZapSFX.volume = audioManager.sfxVolume;
+    iceSlideSFX.volume = audioManager.sfxVolume;
+    fireEntrySFX.volume = audioManager.sfxVolume;
+    gasEntrySFX.volume = audioManager.sfxVolume;
 
     syncAudioUI();
 }
@@ -949,33 +961,41 @@ function playMusic() {
     track.play().catch(e => console.log("Audio play blocked until interaction"));
 }
 
-function playWeaponSound(type) {
+function playWeaponSound(type, x, y) {
     if (!gameActive) return;
     
-    // Play tactical beep feedback
-    audioManager.synth.playBeep(880, 'sine', 0.05, 0.03);
+    // Spatial volume calculation (similar to impact sounds)
+    let volMult = 1.0;
+    if (x !== undefined && y !== undefined) {
+        const dist = Math.hypot(x - camera.x, y - camera.y);
+        if (dist > 1500) return; // Cutoff for distance
+        volMult = Math.max(0, 1 - dist / 1500);
+    }
+
+    // Play tactical beep feedback (local only or very quiet)
+    audioManager.synth.playBeep(880, 'sine', 0.05, 0.01 * volMult);
 
     switch(type) {
         case 'FLAMETHROWER':
-            audioManager.playChannel('weapon', flameSFX, 1.0, 150);
+            audioManager.playChannel('weapon-flame', flameSFX, 1.0 * volMult, 150);
             break;
         case 'TESLA':
-            audioManager.playChannel('weapon', teslaSFX, 1.0, 200);
+            audioManager.playChannel('weapon-tesla', teslaSFX, 1.0 * volMult, 200);
             break;
         case 'WATER_CANNON':
-            audioManager.playChannel('weapon', waterSFX, 1.2);
+            audioManager.playSFX(waterSFX, 1.2 * volMult);
             break;
         case 'FROST_GUN':
-            audioManager.playChannel('weapon', iceSFX, 1.1);
+            audioManager.playSFX(iceSFX, 1.1 * volMult);
             break;
         case 'DIRT_GUN':
-            audioManager.playChannel('weapon', dirtSFX, 2.0);
+            audioManager.playSFX(dirtSFX, 1.8 * volMult);
             break;
         case 'HEAVY_GUN':
-            audioManager.playChannel('weapon', heavySFX, 1.3, 500);
+            audioManager.playSFX(heavySFX, 1.4 * volMult);
             break;
         default:
-            audioManager.playSFX(shotSFX, 0.8);
+            audioManager.playSFX(shotSFX, 0.8 * volMult);
     }
 }
 
@@ -1003,7 +1023,10 @@ function playEnvironmentalImpact(type, x, y) {
             audioManager.playSFX(electricZapSFX, vol * 0.9);
             break;
         case MATERIALS.ICE:
-            audioManager.playSFX(iceSlideSFX, vol * 0.7);
+            audioManager.playSFX(iceSFX, vol * 0.9);
+            break;
+        case MATERIALS.DIRT:
+            audioManager.playSFX(dirtSFX, vol * 0.8);
             break;
         case MATERIALS.FIRE:
             audioManager.playSFX(fireEntrySFX, vol);
@@ -1336,6 +1359,7 @@ function handleInput(code, isPressed) {
         if (code === 'Digit4') socket.emit('switch-weapon', 3);
         if (code === 'Digit5') socket.emit('switch-weapon', 4);
         if (code === 'Digit6') socket.emit('switch-weapon', 5);
+        if (code === 'Digit7') socket.emit('switch-weapon', 6);
     }
 }
 
@@ -1670,7 +1694,7 @@ socket.on('state', (state) => {
     if (state.bullets) {
         state.bullets.forEach(b => {
             if (!knownBulletIds.has(b.id)) {
-                playWeaponSound(b.w);
+                playWeaponSound(b.w, b.x, b.y);
                 knownBulletIds.add(b.id);
                 
                 // Muzzle Flash / Spawn particles
@@ -3381,6 +3405,8 @@ function drawGrid() {
     }
 }
 
+
+
 function interpolateState(dt) {
     const P = 1 - Math.pow(0.75, dt); // frame-rate independent lerp (~0.25 at 60fps)
 
@@ -4156,21 +4182,39 @@ function drawElements() {
                 ctx.arc(-3, -2, 2, 0, Math.PI*2);
                 ctx.fill();
             } else if (e.t === MATERIALS.BARREL_ACID) {
-                // Biohazard Symbol
+                // Biohazard Symbol - High Visibility
                 ctx.fillStyle = '#000';
                 ctx.beginPath();
-                ctx.arc(0, 0, 10, 0, Math.PI * 2);
+                ctx.arc(0, 0, 8, 0, Math.PI * 2);
                 ctx.fill();
-                ctx.strokeStyle = '#aaff00';
-                ctx.lineWidth = 2;
+                
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 2.5;
                 for (let i = 0; i < 3; i++) {
                     ctx.save();
                     ctx.rotate((i * Math.PI * 2) / 3);
                     ctx.beginPath();
-                    ctx.arc(0, -6, 5, 0, Math.PI * 2);
+                    ctx.arc(0, -7, 6, 0.6, Math.PI - 0.6); // Curved biohazard lobes
                     ctx.stroke();
                     ctx.restore();
                 }
+                // Center cutout
+                ctx.globalCompositeOperation = 'destination-out';
+                ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI * 2); ctx.fill();
+                ctx.globalCompositeOperation = 'source-over';
+            } else if (e.t === MATERIALS.BARREL_GAS) {
+                // Gas Cloud Symbol - Pulsing Toxic Feel
+                const gasPulse = 0.9 + Math.sin(renderTime * 0.005) * 0.1;
+                ctx.fillStyle = '#224400';
+                ctx.save();
+                ctx.scale(gasPulse, gasPulse);
+                for (let i = 0; i < 5; i++) {
+                    const ang = (i / 5) * Math.PI * 2;
+                    ctx.beginPath();
+                    ctx.arc(Math.cos(ang) * 7, Math.sin(ang) * 7, 7, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.restore();
             } else if (e.t === MATERIALS.BARREL_ELECTRIC) {
                 // Lightning Bolt - High Contrast Fix
                 const pulse = 0.8 + Math.sin(renderTime * 0.01) * 0.2;
@@ -4207,15 +4251,6 @@ function drawElements() {
                     ctx.moveTo(-3, -8); ctx.lineTo(0, -11); ctx.lineTo(3, -8);
                     ctx.stroke();
                     ctx.restore();
-                }
-            } else if (e.t === MATERIALS.BARREL_GAS) {
-                // Gas Cloud Symbol
-                ctx.fillStyle = '#446622';
-                for (let i = 0; i < 5; i++) {
-                    const ang = (i / 5) * Math.PI * 2;
-                    ctx.beginPath();
-                    ctx.arc(Math.cos(ang) * 6, Math.sin(ang) * 6, 6, 0, Math.PI * 2);
-                    ctx.fill();
                 }
             }
             ctx.restore();
@@ -5187,24 +5222,58 @@ function drawAtmosphere() {
 }
 
 function updateLocalPlayerAudio(me) {
-    // 1. Detect Puddle Entry
-    let currentPuddle = null;
-    if (gameState.zones) {
-        gameState.zones.forEach(z => {
-            const dx = me.x - z.x;
-            const dy = me.y - z.y;
-            const dist = Math.sqrt(dx*dx + dy*dy);
-            if (dist < z.r) {
-                currentPuddle = z.t || z.type;
+    const now = Date.now();
+    if (now - lastPuddleCheck < 200) return; 
+    lastPuddleCheck = now;
+
+    let activePuddleSFX = null;
+    const isMoving = me.v && (Math.abs(me.v[0]) > 0.15 || Math.abs(me.v[1]) > 0.15);
+    
+    // Check elements (puddles, steam, etc)
+    if (gameState.elements) {
+        gameState.elements.forEach(e => {
+            const dx = e.x - me.x;
+            const dy = e.y - me.y;
+            const distSq = dx * dx + dy * dy;
+            const radius = e.w ? (e.w / 2 + 25) : 60; // Increased buffer for better detection
+            
+            if (distSq < radius * radius) {
+                if (e.t === MATERIALS.ACID) activePuddleSFX = acidSplashSFX;
+                else if (e.t === MATERIALS.OIL) activePuddleSFX = oilSloshSFX;
+                else if (e.t === MATERIALS.ELECTRIC) activePuddleSFX = electricZapSFX;
+                else if (e.t === MATERIALS.QUICKSAND) activePuddleSFX = quicksandSFX;
+                else if (e.t === MATERIALS.FIRE) activePuddleSFX = fireEntrySFX;
+                else if (e.t === MATERIALS.GAS) activePuddleSFX = gasEntrySFX;
+                else if (e.t === MATERIALS.ICE) activePuddleSFX = iceSlideSFX;
+                else if (e.t === MATERIALS.WATER) activePuddleSFX = waterSplashSFX;
+                else if (e.t === MATERIALS.STEAM) activePuddleSFX = steamSFX;
             }
         });
     }
 
-    if (currentPuddle !== lastPuddleType) {
-        if (currentPuddle && currentPuddle !== 'NONE') {
-            playEnvironmentalImpact(currentPuddle, me.x, me.y);
-        }
-        lastPuddleType = currentPuddle;
+    // Check zones (biomes, large regions)
+    if (me && !activePuddleSFX && gameState.zones) {
+        gameState.zones.forEach(z => {
+            // AABB check for rectangular zones
+            const inZone = me.x >= z.x && me.x <= z.x + z.w && 
+                          me.y >= z.y && me.y <= z.y + z.h;
+
+            if (inZone) {
+                const type = z.t || z.type;
+                if (type === 'WETLAND') activePuddleSFX = waterSplashSFX;
+                else if (type === 'TUNDRA' && me.slp) activePuddleSFX = iceSlideSFX;
+            }
+        });
+    }
+
+    // Only play if moving and entering/staying in a puddle
+    if (isMoving && activePuddleSFX && activePuddleSFX !== currentPuddleSound) {
+        audioManager.playChannel('puddle', activePuddleSFX, 0.45, 2500);
+        currentPuddleSound = activePuddleSFX;
+        // Reset after 4s to allow re-triggering if still in it
+        setTimeout(() => { if (currentPuddleSound === activePuddleSFX) currentPuddleSound = null; }, 4000);
+    } else if (!activePuddleSFX || !isMoving) {
+        currentPuddleSound = null;
     }
 }
 

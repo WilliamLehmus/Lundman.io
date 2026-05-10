@@ -23,9 +23,9 @@ if (IS_DEV) {
         speed: 0.012, 
         turnSpeed: 0.08,
         mass: 10,
-        slots: 6,
+        slots: 7,
         allowedWeapons: ALL_WEAPONS,
-        weapons: ['HEAVY_GUN', 'TESLA', 'FLAMETHROWER', 'WATER_CANNON', 'FROST_GUN', 'DIRT_GUN']
+        weapons: ['STANDARD', 'HEAVY_GUN', 'TESLA', 'FLAMETHROWER', 'WATER_CANNON', 'FROST_GUN', 'DIRT_GUN']
     };
 }
 

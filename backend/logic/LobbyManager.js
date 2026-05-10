@@ -192,8 +192,13 @@ export class Lobby {
         }
     }
 
-    spawnElement(pos, type, duration = null, hp = null, ownerId = null, customW = null, customH = null) {
-        const solidTypes = [MATERIALS.BUILDING, MATERIALS.CRATE, MATERIALS.BARREL_EXPLOSIVE, MATERIALS.BARREL_OIL, MATERIALS.DIRT];
+    spawnElement(pos, type, duration = null, hp = null, ownerId = null, customW = null, customH = null, ignoreId = null) {
+        const solidTypes = [
+            MATERIALS.BUILDING, MATERIALS.CRATE, MATERIALS.DIRT,
+            MATERIALS.BARREL_EXPLOSIVE, MATERIALS.BARREL_OIL,
+            MATERIALS.BARREL_ACID, MATERIALS.BARREL_ELECTRIC,
+            MATERIALS.BARREL_FROST, MATERIALS.BARREL_GAS
+        ];
         const config = MATERIAL_PROPERTIES[type] || { w: 30, h: 30 };
         const ew = customW || config.w;
         const eh = customH || config.h;
@@ -208,13 +213,17 @@ export class Lobby {
                 if (relativeX >= 0 && relativeX < 350 + buffer * 2 && relativeY >= 0 && relativeY < 350 + buffer * 2) return null;
             }
             if (solidTypes.includes(type)) {
-                const otherSolids = Object.values(this.elements).filter(e => solidTypes.includes(e.type)).map(e => e.body);
-                if (Query.region(otherSolids, { min: { x: pos.x - 120, y: pos.y - 120 }, max: { x: pos.x + 120, y: pos.y + 120 } }).length > 0) return null;
+                const otherSolids = Object.values(this.elements)
+                    .filter(e => solidTypes.includes(e.type) && e.id !== ignoreId)
+                    .map(e => e.body);
+                if (Query.region(otherSolids, { min: { x: pos.x - 100, y: pos.y - 100 }, max: { x: pos.x + 100, y: pos.y + 100 } }).length > 0) return null;
             }
-            const liquidTypes = [MATERIALS.WATER, MATERIALS.OIL, MATERIALS.ACID];
+            const liquidTypes = [MATERIALS.WATER, MATERIALS.OIL, MATERIALS.ACID, MATERIALS.ELECTRIC, MATERIALS.ICE];
             if (liquidTypes.includes(type)) {
-                const otherLiquids = Object.values(this.elements).filter(e => liquidTypes.includes(e.type)).map(e => e.body);
-                if (Query.region(otherLiquids, { min: { x: pos.x - ew*1.2, y: pos.y - ew*1.2 }, max: { x: pos.x + ew*1.2, y: pos.y + ew*1.2 } }).length > 0) return null;
+                const otherLiquids = Object.values(this.elements)
+                    .filter(e => liquidTypes.includes(e.type) && e.id !== ignoreId)
+                    .map(e => e.body);
+                if (Query.region(otherLiquids, { min: { x: pos.x - ew*0.8, y: pos.y - ew*0.8 }, max: { x: pos.x + ew*0.8, y: pos.y + ew*0.8 } }).length > 0) return null;
             }
         }
 
@@ -390,6 +399,7 @@ export class Lobby {
                 h: p.hp, mh: p.maxHp, w: p.slots[p.currentSlot], cs: p.currentSlot,
                 sl: p.slots, s: p.scrap, hid: p.hidden, up: p.upgrades, ch: p.chassis, st: p.statusEffects.stun > now,
                 slw: p.statusEffects.slow > now, brn: p.statusEffects.burn > now, wt: p.statusEffects.wet > now,
+                slp: p.statusEffects.slip > now,
                 c: (() => { const w = WEAPON_MODULES[p.slots[p.currentSlot]]; return w ? Math.min(100, Math.floor((now-p.lastShot)/(w.reload/(1+p.scrap/200+p.upgrades.power*0.1))*100)) : 100; })(),
                 inv: p.invulnerableUntil > now, seq: p.lastInputSeq
             })),

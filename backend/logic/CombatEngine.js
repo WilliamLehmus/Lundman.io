@@ -258,8 +258,12 @@ export class CombatEngine {
     }
 
     processElementInteraction(bodyA, bodyB) {
-        const elementA = bodyA.label === 'element' ? this.lobby.elements[bodyA.elementId] : null;
-        const elementB = bodyB.label === 'element' ? this.lobby.elements[bodyB.elementId] : null;
+        if (this.isProcessingInteraction) return;
+        this.isProcessingInteraction = true;
+        
+        try {
+            const elementA = bodyA.label === 'element' ? this.lobby.elements[bodyA.elementId] : null;
+            const elementB = bodyB.label === 'element' ? this.lobby.elements[bodyB.elementId] : null;
 
         if (elementA && elementB) {
             if ((elementA.type === MATERIALS.FIRE && elementB.type === MATERIALS.ICE) ||
@@ -382,6 +386,9 @@ export class CombatEngine {
                     this.lobby.respawn(p, element.ownerId, weaponSource);
                 }
             }
+            }
+        } finally {
+            this.isProcessingInteraction = false;
         }
     }
 

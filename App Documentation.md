@@ -110,6 +110,19 @@ The environment is reactive:
 - **Visual Tank Selector**: The lobby features a visual interface where players can select their chassis by clicking on high-fidelity tank cards.
 - **Weapon Loadout Customization**: Each chassis has a specific number of weapon slots. In the lobby, players can click on these slots to cycle through allowed weapons for that chassis, allowing for custom loadouts (e.g., a Scout with a Flamethrower and a Frost Gun).
 - **Hazard Damage**: Environmental hazards like **Fire**, **Acid**, and **Gas** damage ALL players within their range, regardless of who created the hazard. **Electric** hazards do not deal HP damage but cause a powerful **Stun** effect to all targets. Standing in your own fire or acid will cause damage.
+- **Specialized Hazard Barrels (Tunor Overhaul)**:
+    - **Explosive (Red)**: Standard explosion. **Neutralized** by Water (creates steam instead).
+    - **Oil (Yellow)**: Spawns oil puddles. **Ignited** by Fire (explodes).
+    - **Acid (Green)**: Spawns acid puddles.
+    - **Electric (Cyan)**: Spawns electric puddles and deals **15 direct damage + stun** in a radius upon destruction.
+    - **Frost (Blue)**: Spawns ice puddles.
+    - **Gas (Lime)**: Spawns toxic gas clouds.
+    - *Note: Puddle sizes are randomized between 80% and 150% of the base size for a "True Premium" organic look.*
+- **ElevenLabs Audio Engine**:
+    - **SoundSynth**: Web Audio API-based procedural synthesizer for UI and tactical beeps.
+    - **AudioManager**: Centralized channel pooling system that manages high-fidelity ElevenLabs assets.
+    - **Weapon SFX**: Professional audio assets mapped to elemental weapon types (Water, Frost, Dirt, Heavy, Tesla, Flame).
+    - **Environmental Impacts**: Dynamic sound triggers for entering puddles (Acid, Oil, Quicksand, Electric, Fire, Gas, Ice, Water) and bullet impact feedback (Water Splash, Ice Shatter, Dirt Impact).
 
 ### 6. Lobby & Slot Management
 - **Fixed Slots**: The lobby features a fixed layout of **5 slots per team** (10 total).
@@ -534,3 +547,65 @@ To transition from a learning project to a **marketable product**, the following
     3. **Backend Acceleration**: Switched to `TypedArrays` for A* scores and removed slow cloning logic.
     4. **Stability Fix**: Properly scoped and initialized AI variables.
 - **Verification**: 60 FPS maintained in dense 5v5 Urban scenarios; `test_ai_deep.js` passed.
+- **Hazard Barrel Self-Blocking (ignoreId Fix)**:
+    - **Date**: 2026-05-10
+    - **Issue**: Barrels would occasionally fail to generate puddles or gas clouds upon destruction.
+    - **Root Cause**: The barrel remained in the physics engine's state during the frame it was destroyed. The `spawnElement` method's collision checks would detect the barrel itself as an obstacle, preventing the puddle from spawning at the same location.
+    - **Fix**: Added an `ignoreId` parameter to `spawnElement`. When a barrel is destroyed, its ID is passed to the spawn logic to allow the puddle to overlap the barrel's final position.
+    - **Verification**: Verified that all barrel types reliably spawn puddles/clouds upon destruction.
+401: 
+402: #### **Environmental Audio Overhaul ("True Premium" Feedback)**
+403: - **Date**: 2026-05-10
+404: - **Issue**: Missing weapon-impact sounds (Water, Ice, Dirt) and inconsistent puddle audio triggers.
+405: - **Root Cause**: 
+406:     1. **Impact Feedback**: The `collision-effect` handler in `game.js` lacked logic to trigger audio feedback.
+407:     2. **Puddle Detection**: `updateLocalPlayerAudio` used incorrect material mappings (e.g., `MATERIALS.FROST` instead of `MATERIALS.ICE`) and lacked a buffer for organic shapes.
+408: - **Fix**:
+409:     1. **Impact Integration**: Linked `playEnvironmentalImpact` to the `collision-effect` socket event.
+410:     2. **Puddle Refinement**: Updated `updateLocalPlayerAudio` with correct mappings for **Water** and **Ice**, increased the detection buffer (+25px), and added a 4s re-trigger timeout to prevent sound spam.
+411:     3. **Asset Mapping**: Verified and corrected the mapping of ElevenLabs `.mp3` assets in `playWeaponSound` and `playEnvironmentalImpact`.
+412: - **Verification**: Verified using `node -c` and audited all `playChannel` calls for proper channel management.
+
+#### **CombatEngine Interaction Recursion (Infinite Loop Fix)**
+- **Date**: 2026-05-10
+- **Issue**: The server would crash with a "Maximum call stack size exceeded" error during intense combat involving multiple elemental hazards (e.g., Fire hitting Ice).
+- **Root Cause**: A recursive chain of events in `processElementInteraction`. One interaction (Fire melts Ice to Water) could trigger another (Water reacts with nearby Fire to create Steam), which in turn could trigger the first one again if the bodies were still colliding, leading to an infinite loop within a single physics tick.
+- **Fix**: 
+    1. Implemented a recursion guard (`isProcessingInteraction`) in the `CombatEngine`.
+    2. Wrapped the entire interaction logic in a `try...finally` block to ensure the guard is always reset, even if a logic error occurs.
+    3. Added `return` statements after destructive interactions (like Fire + Water) to immediately exit the current processing chain.
+- **Verification**: Verified that the server remains stable even when dozens of elemental hazards overlap.
+
+#### **Dev Tank Weapon Expansion (7-Slot Support)**
+- **Date**: 2026-05-10
+- **Goal**: Enable testing of all seven weapon types on a single tank.
+- **Changes**:
+    1. **Backend**: Increased `CHASSIS.DEV` slots to **7** and added `DIRT_GUN` to its default loadout in `server.js`.
+    2. **Input**: Added a key binding for the `7` key (`Digit7`) in `game.js` to switch to the 7th weapon slot.
+    3. **HUD**: The weapon slot HUD is dynamically generated and now correctly displays 7 slots when using the Dev Tank.
+- **Verification**: Verified that all 7 weapons can be cycled and fired using keys 1-7.
+
+#### **Local Player Audio Crash (me.statusEffects TypeError)**
+- **Date**: 2026-05-10
+- **Issue**: Spelet kraschade med `TypeError: Cannot read properties of undefined (reading 'slip')` när man körde i Tundra-biomen.
+- **Root Cause**: `updateLocalPlayerAudio` försökte läsa `me.statusEffects.slip`, men `statusEffects`-objektet skickas inte direkt till klienten i det formatet (det skickas som minifierade flaggor som `slp`).
+- **Fix**: 
+    1. **Backend**: Lade till `slp: p.statusEffects.slip > now` i `broadcastState` i `LobbyManager.js`.
+    2. **Frontend**: Uppdaterade `game.js` att använda `me.slp` och lade till en säkerhetskontroll `if (me)` innan åtkomst.
+- **Verification**: Kraschen åtgärdad och is-ljudet triggas korrekt i Tundra.
+
+#### **Weapon Audio Finalization ("True Premium" Soundscapes)**
+- **Date**: 2026-05-10
+- **Status**: **VERIFIED**
+- **Outcome**: All seven elemental weapons now have distinct, spatialized high-fidelity audio feedback.
+- **Implemented Sounds**:
+    - **Standard/Heavy**: Snappy mechanical firing sounds.
+    - **Tesla**: High-frequency electrical discharge.
+    - **Flamethrower**: Sustained low-frequency combustion.
+    - **Water Cannon**: High-pressure splash feedback.
+    - **Frost Gun**: Crystalline freezing impacts.
+    - **Dirt Gun**: Heavy earthen thuds.
+- **Environmental Impact Audio**:
+    - Bullet impacts now trigger biome-specific sounds (Water Splash, Ice Shatter, Dirt Impact).
+    - Local player movement now triggers high-fidelity "puddle" audio when entering hazards (Acid, Oil, Electric, Fire, Gas, Water, Steam, Ice).
+- **Optimization**: Switched from generic `playSFX` to a managed `playChannel` system for weapons and puddles to prevent sound overlapping and ensure a clean, premium audio mix.
