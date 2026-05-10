@@ -152,8 +152,12 @@ export class MapGenerator {
                 
                 const rand = Math.random();
                 let pType;
-                if (rand < 0.35) pType = MATERIALS.BARREL_EXPLOSIVE;
-                else if (rand < 0.70) pType = MATERIALS.BARREL_OIL;
+                if (rand < 0.18) pType = MATERIALS.BARREL_EXPLOSIVE;
+                else if (rand < 0.35) pType = MATERIALS.BARREL_OIL;
+                else if (rand < 0.50) pType = MATERIALS.BARREL_ACID;
+                else if (rand < 0.65) pType = MATERIALS.BARREL_ELECTRIC;
+                else if (rand < 0.75) pType = MATERIALS.BARREL_FROST;
+                else if (rand < 0.85) pType = MATERIALS.BARREL_GAS;
                 else pType = MATERIALS.CRATE;
                 
                 const props = MATERIAL_PROPERTIES[pType];
@@ -187,7 +191,15 @@ export class MapGenerator {
                     const ang = Math.random() * Math.PI * 2;
                     const r = (bw/2 + 35) + Math.random() * 15;
                     const pos = { x: bx + ox + Math.cos(ang) * r, y: by + oy + Math.sin(ang) * r };
-                    const pType = Math.random() > 0.7 ? MATERIALS.BARREL_EXPLOSIVE : (Math.random() > 0.4 ? MATERIALS.BARREL_OIL : MATERIALS.CRATE);
+                    const rand = Math.random();
+                    let pType;
+                    if (rand < 0.18) pType = MATERIALS.BARREL_EXPLOSIVE;
+                    else if (rand < 0.35) pType = MATERIALS.BARREL_OIL;
+                    else if (rand < 0.50) pType = MATERIALS.BARREL_ACID;
+                    else if (rand < 0.65) pType = MATERIALS.BARREL_ELECTRIC;
+                    else if (rand < 0.75) pType = MATERIALS.BARREL_FROST;
+                    else if (rand < 0.85) pType = MATERIALS.BARREL_GAS;
+                    else pType = MATERIALS.CRATE;
                     this.lobby.spawnElement(pos, pType, null, MATERIAL_PROPERTIES[pType].hp);
                 }
             }
@@ -235,8 +247,12 @@ export class MapGenerator {
             const pos = { x: bx + Math.random() * size, y: by + Math.random() * size };
             const rand = Math.random();
             let pType;
-            if (rand < 0.35) pType = MATERIALS.BARREL_EXPLOSIVE;
-            else if (rand < 0.70) pType = MATERIALS.BARREL_OIL;
+            if (rand < 0.18) pType = MATERIALS.BARREL_EXPLOSIVE;
+            else if (rand < 0.35) pType = MATERIALS.BARREL_OIL;
+            else if (rand < 0.50) pType = MATERIALS.BARREL_ACID;
+            else if (rand < 0.65) pType = MATERIALS.BARREL_ELECTRIC;
+            else if (rand < 0.75) pType = MATERIALS.BARREL_FROST;
+            else if (rand < 0.85) pType = MATERIALS.BARREL_GAS;
             else pType = MATERIALS.CRATE;
             const props = MATERIAL_PROPERTIES[pType];
             this.lobby.spawnElement(pos, pType, null, props.hp);

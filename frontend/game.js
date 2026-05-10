@@ -4221,7 +4221,7 @@ function drawElements() {
             ctx.strokeStyle = '#fff';
             ctx.lineWidth = 1;
             ctx.stroke();
-        } else if (e.t === MATERIALS.BARREL_EXPLOSIVE || e.t === MATERIALS.BARREL_OIL) {
+        } else if ([MATERIALS.BARREL_EXPLOSIVE, MATERIALS.BARREL_OIL, MATERIALS.BARREL_ACID, MATERIALS.BARREL_ELECTRIC, MATERIALS.BARREL_FROST, MATERIALS.BARREL_GAS].includes(e.t)) {
             ctx.translate(e.x, e.y);
             // Deep Shadow (Cylindrical)
             ctx.fillStyle = 'rgba(0,0,0,0.6)';
@@ -4271,16 +4271,8 @@ function drawElements() {
                 ctx.bezierCurveTo(-10, -6, -12, 6, 0, 10);
                 ctx.bezierCurveTo(12, 6, 10, -6, 0, -14);
                 ctx.fill();
-                ctx.shadowBlur = 0; // Reset
-                
-                // Inner flame
-                ctx.fillStyle = '#ff4444';
-                ctx.beginPath();
-                ctx.moveTo(0, -8);
-                ctx.bezierCurveTo(-6, -3, -7, 3, 0, 6);
-                ctx.bezierCurveTo(7, 3, 6, -3, 0, -8);
-                ctx.fill();
-            } else {
+                ctx.shadowBlur = 0;
+            } else if (e.t === MATERIALS.BARREL_OIL) {
                 // Draw Oil Drop Symbol
                 ctx.fillStyle = '#000';
                 ctx.beginPath();
@@ -4292,6 +4284,62 @@ function drawElements() {
                 ctx.fillStyle = 'rgba(255,255,255,0.4)';
                 ctx.beginPath();
                 ctx.arc(-3, -2, 2, 0, Math.PI*2);
+                ctx.fill();
+            } else if (e.t === MATERIALS.BARREL_ACID) {
+                // Biohazard Symbol
+                ctx.fillStyle = '#111';
+                ctx.beginPath();
+                ctx.arc(0, 0, 5, 0, Math.PI*2);
+                ctx.fill();
+                for (let i = 0; i < 3; i++) {
+                    const ang = (i * Math.PI * 2) / 3;
+                    ctx.beginPath();
+                    ctx.arc(Math.cos(ang)*8, Math.sin(ang)*8, 4, 0, Math.PI*2);
+                    ctx.fill();
+                }
+            } else if (e.t === MATERIALS.BARREL_ELECTRIC) {
+                // Lightning Bolt
+                const pulse = 0.8 + Math.sin(renderTime * 0.01) * 0.2;
+                ctx.shadowBlur = 15 * pulse;
+                ctx.shadowColor = '#fff';
+                
+                // Outer Glow for contrast
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(-5, -12); ctx.lineTo(3, -2); ctx.lineTo(-2, 0); ctx.lineTo(6, 12);
+                ctx.lineTo(-2, 2); ctx.lineTo(3, 0); ctx.closePath();
+                ctx.stroke();
+
+                // Inner White Bolt
+                ctx.fillStyle = '#fff';
+                ctx.fill();
+                
+                // Sharp Cyan Stroke
+                ctx.strokeStyle = '#00f2ff';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+            } else if (e.t === MATERIALS.BARREL_FROST) {
+                // Snowflake
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                for (let i = 0; i < 4; i++) {
+                    const ang = (i * Math.PI) / 4;
+                    ctx.moveTo(-Math.cos(ang)*10, -Math.sin(ang)*10);
+                    ctx.lineTo(Math.cos(ang)*10, Math.sin(ang)*10);
+                }
+                ctx.stroke();
+            } else if (e.t === MATERIALS.BARREL_GAS) {
+                // Gas Mask Symbol
+                ctx.fillStyle = '#111';
+                ctx.beginPath();
+                ctx.arc(0, -2, 7, 0, Math.PI*2); // Head
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(-6, 6, 5, 0, Math.PI*2); // Left filter
+                ctx.arc(6, 6, 5, 0, Math.PI*2);  // Right filter
                 ctx.fill();
             }
             ctx.restore();

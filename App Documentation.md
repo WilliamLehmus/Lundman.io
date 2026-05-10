@@ -555,3 +555,25 @@ To transition from a learning project to a **marketable product**, the following
     3.  **SoundSynth**: Added a Web Audio API synthesizer for procedural UI/combat feedback.
     4.  **Volume Normalization**: Lowered default volumes to premium standards (Music 0.3 / SFX 0.5).
 - **Verification**: Smooth audio playback confirmed during rapid-fire testing; no performance dips observed.
+
+#### **Server 500 Error on Socket.io (2026-05-10)**
+- **Issue**: Backend server crashed with a 500 Internal Server Error, causing Socket.io connection failures.
+- **Root Cause**: Two critical errors in `MapGenerator.js` during the barrel overhaul:
+    1. A `for` loop line was accidentally deleted in `generateIndustrialComplex`.
+    2. The `propCount` variable was left undefined in `generateCityBlock`.
+    3. A missing closing brace at the end of a function caused a `SyntaxError` that prevented the server from starting.
+- **Fix**: 
+    1. Restored missing loop structures and variable declarations.
+    2. Fixed the brace imbalance.
+    3. Verified syntax with `node -c backend/logic/MapGenerator.js`.
+- **Prevention**: Always run `node -c` on all modified backend files before considering a task complete.
+
+#### **Electric Barrel Visibility Fix (EL TUNAN)**
+- **Date**: 2026-05-10
+- **Issue**: Lightning bolt on the electric barrel (EMP Barrel) was difficult to see against the cyan body.
+- **Root Cause**: Low contrast between the white bolt, cyan shadow, and cyan barrel body.
+- **Fix**: 
+    1. Added a thick black outer stroke (`rgba(0,0,0,0.8)`) to the lightning bolt for clear silhouette separation.
+    2. Switched shadow color to white and added a pulsing animation (`renderTime`-based) to the glow intensity.
+    3. Added a sharp cyan inner stroke to the white fill to give it a "charged" look.
+- **Verification**: Verified with `npm run build` and visual audit of the code logic.

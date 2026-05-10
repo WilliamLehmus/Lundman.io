@@ -215,6 +215,14 @@ export class CombatEngine {
                                 this.barrelExplode(element.body.position, 'fire', bulletData.ownerId);
                             } else if (element.type === MATERIALS.BARREL_OIL) {
                                 this.barrelExplode(element.body.position, 'oil', bulletData.ownerId);
+                            } else if (element.type === MATERIALS.BARREL_ACID) {
+                                this.barrelExplode(element.body.position, 'acid', bulletData.ownerId);
+                            } else if (element.type === MATERIALS.BARREL_ELECTRIC) {
+                                this.barrelExplode(element.body.position, 'electric', bulletData.ownerId);
+                            } else if (element.type === MATERIALS.BARREL_FROST) {
+                                this.barrelExplode(element.body.position, 'frost', bulletData.ownerId);
+                            } else if (element.type === MATERIALS.BARREL_GAS) {
+                                this.barrelExplode(element.body.position, 'gas', bulletData.ownerId);
                             } else if (element.type === MATERIALS.CRATE) {
                                 for (let i = 0; i < 3; i++) this.lobby.spawnElement({ x: element.body.position.x + (Math.random()-0.5)*30, y: element.body.position.y + (Math.random()-0.5)*30 }, MATERIALS.SCRAP, 30000);
                             }
@@ -377,13 +385,33 @@ export class CombatEngine {
                     y: pos.y + (Math.random() - 0.5) * 100
                 }, MATERIALS.FIRE, 8000, 100, ownerId, 60, 60);
             }
-        } else {
+        } else if (type === 'oil') {
             for (let i = 0; i < 3; i++) {
                 this.lobby.spawnElement({
                     x: pos.x + (Math.random() - 0.5) * 120,
                     y: pos.y + (Math.random() - 0.5) * 120
                 }, MATERIALS.OIL, null, null, null, 80, 80);
             }
+        } else if (type === 'acid') {
+            for (let i = 0; i < 4; i++) {
+                this.lobby.spawnElement({
+                    x: pos.x + (Math.random() - 0.5) * 100,
+                    y: pos.y + (Math.random() - 0.5) * 100
+                }, MATERIALS.ACID, 12000, null, ownerId, 70, 70);
+            }
+            this.lobby.spawnElement(pos, MATERIALS.GAS, 8000, null, ownerId, 150, 150);
+        } else if (type === 'electric') {
+            const el = this.lobby.spawnElement(pos, MATERIALS.ELECTRIC, 3000, null, ownerId, 200, 200);
+            if (el) el.originalType = MATERIALS.WATER; // For cleanup logic if on water
+        } else if (type === 'frost') {
+            for (let i = 0; i < 3; i++) {
+                this.lobby.spawnElement({
+                    x: pos.x + (Math.random() - 0.5) * 110,
+                    y: pos.y + (Math.random() - 0.5) * 110
+                }, MATERIALS.ICE, 10000, null, ownerId, 90, 90);
+            }
+        } else if (type === 'gas') {
+            this.lobby.spawnElement(pos, MATERIALS.GAS, 15000, null, ownerId, 300, 300);
         }
     }
 
