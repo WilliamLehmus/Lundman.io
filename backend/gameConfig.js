@@ -52,19 +52,19 @@ export const MATERIAL_PROPERTIES = {
 
 export const BIOMES = {
     TUNDRA: { color: 'rgba(10, 25, 40, 0.4)', friction: 0.015, speedMult: 1.1 },
-    SWAMP: { color: '#2d3e2d33', friction: 0.3, speedMult: 0.6 },
+    SWAMP: { color: '#2d3e2d33', friction: 0.11, speedMult: 0.95 },
     DESERT: { color: '#edc9af33', friction: 0.1, speedMult: 0.9 },
     URBAN: { color: 'rgba(0,0,0,0)', friction: 0.1, speedMult: 1.0 },
     WASTELAND: { color: 'rgba(139, 69, 19, 0.1)', friction: 0.12, speedMult: 1.0 },
     INDUSTRIAL: { color: 'rgba(50, 50, 50, 0.2)', friction: 0.08, speedMult: 1.1 },
-    WETLAND: { color: 'rgba(0, 100, 50, 0.2)', friction: 0.25, speedMult: 0.7 }
+    WETLAND: { color: 'rgba(0, 100, 50, 0.2)', friction: 0.08, speedMult: 1.1 }
 };
 
 export const CHASSIS = {
     SCOUT: {
         name: 'Scout',
         hp: 100,
-        speed: 0.008, 
+        speed: 0.0028, 
         turnSpeed: 0.065,
         mass: 3,
         slots: 2,
@@ -74,7 +74,7 @@ export const CHASSIS = {
     BRAWLER: {
         name: 'Brawler',
         hp: 200,
-        speed: 0.008, 
+        speed: 0.0024, 
         turnSpeed: 0.04,
         mass: 10,
         slots: 2,
@@ -84,7 +84,7 @@ export const CHASSIS = {
     ARTILLERY: {
         name: 'Artillery',
         hp: 150,
-        speed: 0.008, 
+        speed: 0.0020, 
         turnSpeed: 0.04,
         mass: 15,
         slots: 4,

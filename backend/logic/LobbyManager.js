@@ -356,8 +356,8 @@ export class Lobby {
                 const moveSpeed = config.speed * biome.speedMult * slowMult * speedBonus, turnSpeed = config.turnSpeed * (p.statusEffects.slow > now ? 0.6 : (p.statusEffects.quicksand > now ? 0.4 : 1.0)) * speedBonus;
                 const targetAngularVel = p.inputs.left ? -turnSpeed : (p.inputs.right ? turnSpeed : 0);
                 Body.setAngularVelocity(p.body, p.body.angularVelocity + (targetAngularVel - p.body.angularVelocity) * 0.3);
-                if (p.inputs.up) Body.applyForce(p.body, p.body.position, { x: Math.cos(p.body.angle) * moveSpeed, y: Math.sin(p.body.angle) * moveSpeed });
-                if (p.inputs.down) Body.applyForce(p.body, p.body.position, { x: -Math.cos(p.body.angle) * moveSpeed, y: -Math.sin(p.body.angle) * moveSpeed });
+                if (p.inputs.up) Body.applyForce(p.body, p.body.position, { x: Math.cos(p.body.angle) * moveSpeed * p.body.mass, y: Math.sin(p.body.angle) * moveSpeed * p.body.mass });
+                if (p.inputs.down) Body.applyForce(p.body, p.body.position, { x: -Math.cos(p.body.angle) * moveSpeed * p.body.mass, y: -Math.sin(p.body.angle) * moveSpeed * p.body.mass });
                 if (p.inputs.shoot && p.hp > 0) this.playerShoot(p);
             });
         }

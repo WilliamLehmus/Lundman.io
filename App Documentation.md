@@ -10,7 +10,7 @@ Tanks.io is a high-performance, 5v5 online multiplayer tank combat game. It feat
 ### 1. Server-Authoritative Physics
 The core of the game engine lives on the **Node.js server**. 
 - **Reasoning**: To prevent client-side cheating and ensure perfect synchronization between all players.
-- **Implementation**: The `Matter.js` engine runs on the server at a consistent **60Hz (TICK_RATE)**. Every collision, bullet trajectory, and tank movement is calculated centrally.
+- **Implementation**: The `Matter.js` engine runs on the server at a consistent **60Hz (TICK_RATE)**. Every collision, bullet trajectory, and tank movement is calculated centrally. Movement force is **mass-compensated** (Force = speed * mass) to ensure consistent acceleration across different chassis types.
 
 ### 2. Real-Time Streaming
 - **Networking**: Powered by `Socket.io`.
@@ -78,7 +78,7 @@ Matches feature unique, randomly generated maps:
 - **TUNDRA**: Frozen wasteland with **Snow Hares**, **Penguins**, **Arctic Foxes**, wind gusts, and slippery ice. Features a cold frost aesthetic.
 - **URBAN**: Dense neon city with a **Wet Asphalt** floor, procedural reflective puddles, and vibrant **Neon Crosswalks**. Buildings feature "Living Windows" with TV flicker, warm residential glows, and office lighting. Rooftops include AC units and water tanks. Features **Pigeons**, **Stray Cats**, and **Cockroaches**.
 - **INDUSTRIAL**: High-tech factory environment with a **Modular Panel** floor, pulsing energy tracks, and complex **Megastructure** complexes. Features animated gears, ventilation fans with motion blur, laser scanners, and flickering holographic sign projections. Periodic steam blowoff and furnace glows enhance the atmosphere. Features **Rats**, **Micro-Drones**, and **Moths**.
-- **WETLAND**: Murky swamp land with dynamic water ripples, interactive **Dragonflies**, **Frogs**, and **Water Striders**. Features **Swamp Shack** structures, thick atmospheric mist, and fireflies.
+- **WETLAND**: High-speed murky swamp land with reduced friction and dynamic water ripples. Features interactive **Dragonflies**, **Frogs**, and **Water Striders**, along with **Swamp Shack** structures and thick atmospheric mist.
 - **WASTELAND**: Post-apocalyptic terrain with radioactive pools, floating ash, and dynamic wind. Features **Mutated Crows**, **Scrap Beetles**, and **Radioactive Slugs**.
 - **WORLD BORDER**: The playable area is contained within a high-fidelity **Neon Energy Barrier** with pulsing corner accents and a subtle outer glow.
 - **QUICKSAND**: Created when Water hits Dirt. Features a high-fidelity **Swirling Vortex** animation and rising methane bubbles. Very high movement penalty.

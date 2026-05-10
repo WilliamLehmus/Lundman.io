@@ -20,7 +20,7 @@ if (IS_DEV) {
     CHASSIS.DEV = {
         name: 'Dev Tank',
         hp: 1000,
-        speed: 0.012, 
+        speed: 0.0040, 
         turnSpeed: 0.08,
         mass: 10,
         slots: 7,
