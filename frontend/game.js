@@ -749,6 +749,214 @@ const bulletTrails = new Map();
 const TANK_WIDTH = 58;  // Length
 const TANK_HEIGHT = 42; // Width
 
+// Audio System Classes
+class SoundSynth {
+    constructor() {
+        this.ctx = null;
+        this.masterGain = null;
+        this.noiseBuffer = null;
+    }
+
+    init() {
+        if (this.ctx) return;
+        try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) return;
+            this.ctx = new AudioContext();
+            this.masterGain = this.ctx.createGain();
+            this.masterGain.connect(this.ctx.destination);
+            
+            // Pre-generate noise buffer
+            const bufferSize = this.ctx.sampleRate * 2;
+            this.noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+            const data = this.noiseBuffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+            
+            console.log("SoundSynth initialized with noise buffer. Sample rate:", this.ctx.sampleRate);
+        } catch (e) {
+            console.error("Web Audio API not supported", e);
+        }
+    }
+
+    resume() {
+        if (!this.ctx) this.init();
+        if (this.ctx && this.ctx.state === 'suspended') {
+            this.ctx.resume();
+        }
+    }
+
+    playLaser(freq = 880, duration = 0.1, volume = 0.5) {
+        if (!this.ctx) return;
+        this.resume();
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(freq * 0.1, this.ctx.currentTime + duration);
+        gain.gain.setValueAtTime(volume, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        osc.start();
+        osc.stop(this.ctx.currentTime + duration);
+    }
+
+    playBeep(freq = 440, duration = 0.05, volume = 0.3) {
+        if (!this.ctx) return;
+        this.resume();
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+        gain.gain.setValueAtTime(volume, this.ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        osc.start();
+        osc.stop(this.ctx.currentTime + duration);
+    }
+
+    playWaterSplash(duration = 0.2, volume = 0.5) {
+        this.resume();
+        if (!this.ctx || !this.noiseBuffer) return;
+        
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = this.noiseBuffer;
+        
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(1000, this.ctx.currentTime);
+        filter.frequency.exponentialRampToValueAtTime(400, this.ctx.currentTime + duration);
+        filter.Q.value = 1.0;
+        
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(volume * 1.5, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+        
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.masterGain);
+        
+        noise.start();
+        noise.stop(this.ctx.currentTime + duration);
+    }
+
+    playIceCrystal(duration = 0.25, volume = 0.5) {
+        this.resume();
+        if (!this.ctx || !this.noiseBuffer) return;
+        
+        // 1. Crystalline "Ping"
+        const osc1 = this.ctx.createOscillator();
+        const gain1 = this.ctx.createGain();
+        osc1.type = 'triangle';
+        osc1.frequency.setValueAtTime(1200, this.ctx.currentTime);
+        osc1.frequency.exponentialRampToValueAtTime(1500, this.ctx.currentTime + duration);
+        gain1.gain.setValueAtTime(volume, this.ctx.currentTime);
+        gain1.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+        osc1.connect(gain1);
+        gain1.connect(this.masterGain);
+        
+        // 2. Frosty "Crack" (Noise)
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = this.noiseBuffer;
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.frequency.setValueAtTime(3000, this.ctx.currentTime);
+        const gain2 = this.ctx.createGain();
+        gain2.gain.setValueAtTime(volume * 0.4, this.ctx.currentTime);
+        gain2.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration * 0.5);
+        noise.connect(filter);
+        filter.connect(gain2);
+        gain2.connect(this.masterGain);
+
+        osc1.start();
+        noise.start();
+        osc1.stop(this.ctx.currentTime + duration);
+        noise.stop(this.ctx.currentTime + duration);
+    }
+
+    playEarthThud(duration = 0.25, volume = 0.5) {
+        this.resume();
+        if (!this.ctx || !this.noiseBuffer) return;
+        
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = this.noiseBuffer;
+        
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(400, this.ctx.currentTime);
+        filter.frequency.exponentialRampToValueAtTime(80, this.ctx.currentTime + duration);
+        
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(volume * 2.0, this.ctx.currentTime); // Boosted for impact
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+        
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.masterGain);
+        
+        noise.start();
+        noise.stop(this.ctx.currentTime + duration);
+    }
+}
+
+const audioManager = {
+    synth: new SoundSynth(),
+    channels: {}, // Active sounds per type
+    
+    init() {
+        this.synth.init();
+    },
+
+    updateVolumes(musicVol, sfxVol) {
+        if (this.synth.masterGain) {
+            this.synth.masterGain.gain.value = sfxVol;
+        }
+        // Update global SFX assets
+        shotSFX.volume = sfxVol;
+        flameSFX.volume = sfxVol;
+        teslaSFX.volume = sfxVol;
+        waterSFX.volume = sfxVol;
+        iceSFX.volume = sfxVol;
+        dirtSFX.volume = sfxVol;
+    },
+
+    play(key, sourceAudio, volume, playbackRate = 1.0, duration = 0) {
+        // Specialized handling for continuous sounds
+        if (this.channels[key]) {
+            if (key === 'FLAMETHROWER' || key === 'TESLA') {
+                // If it's already playing, just update volume/pitch maybe? 
+                // For now, let's allow it to overlap slightly but cap instances
+                if (Object.keys(this.channels).filter(k => k.startsWith(key)).length > 2) return;
+            }
+        }
+
+        const channelKey = `${key}_${Date.now()}_${Math.random()}`;
+        const sfx = sourceAudio.cloneNode();
+        sfx.volume = volume;
+        sfx.playbackRate = playbackRate;
+        
+        this.channels[channelKey] = sfx;
+        sfx.play().catch(e => {});
+
+        if (duration > 0) {
+            setTimeout(() => {
+                if (this.channels[channelKey]) {
+                    sfx.pause();
+                    sfx.currentTime = 0;
+                    delete this.channels[channelKey];
+                }
+            }, duration);
+        }
+
+        sfx.onended = () => {
+            delete this.channels[channelKey];
+        };
+    }
+};
+
 // Audio setup
 const optionsMenu = document.getElementById('options-menu');
 const shopMenu = document.getElementById('shop-menu');
@@ -778,15 +986,19 @@ const musicTracks = [
 const shotSFX = new Audio('/tank_shot.mp3');
 const flameSFX = new Audio('/flamethrower.mp3');
 const teslaSFX = new Audio('/tesla_gun.mp3');
+const waterSFX = new Audio('/water_cannon.mp3');
+const iceSFX = new Audio('/ice_shatter.mp3');
+const dirtSFX = new Audio('/dirt_impact.mp3');
 
 let currentMusicIndex = 0;
-let musicVolume = parseFloat(localStorage.getItem('tanks_music_vol')) || 0.5;
-let sfxVolume = parseFloat(localStorage.getItem('tanks_sfx_vol')) || 0.7;
+let musicVolume = parseFloat(localStorage.getItem('tanks_music_vol')) || 0.3;
+let sfxVolume = parseFloat(localStorage.getItem('tanks_sfx_vol')) || 0.5;
 let isMuted = localStorage.getItem('tanks_is_muted') === 'true';
 let isMenuOpen = false;
 let isShopOpen = false;
 
 function setupAudio() {
+    audioManager.init();
     const currentMusicVol = isMuted ? 0 : musicVolume;
     const currentSfxVol = isMuted ? 0 : sfxVolume;
 
@@ -798,10 +1010,8 @@ function setupAudio() {
             playMusic();
         };
     });
-    shotSFX.volume = currentSfxVol;
-    flameSFX.volume = currentSfxVol;
-    teslaSFX.volume = currentSfxVol;
-
+    
+    audioManager.updateVolumes(currentMusicVol, currentSfxVol);
     syncAudioUI();
 }
 
@@ -820,25 +1030,43 @@ function playWeaponSound(weaponType, x, y) {
     
     if (finalVol <= 0.01) return;
 
-    let sfx;
+    let source;
+    let duration = 0;
+    let playbackRate = 1.0;
+
     if (weaponType === 'FLAMETHROWER') {
-        sfx = flameSFX.cloneNode();
+        source = flameSFX;
+        duration = 150; // Snappy fire bursts
     } else if (weaponType === 'TESLA') {
-        sfx = teslaSFX.cloneNode();
+        source = teslaSFX;
+        duration = 200;
+    } else if (weaponType === 'WATER_CANNON') {
+        source = waterSFX;
+        duration = 300;
+    } else if (weaponType === 'FROST_GUN') {
+        source = iceSFX;
+        duration = 400;
+    } else if (weaponType === 'DIRT_GUN') {
+        source = dirtSFX;
+        duration = 300;
+    } else if (weaponType === 'ARTILLERY') {
+        source = shotSFX;
+        playbackRate = 0.6 + Math.random() * 0.1;
+    } else if (weaponType === 'SCOUT' || weaponType === 'STANDARD') {
+        source = shotSFX;
+        playbackRate = 1.1 + Math.random() * 0.2;
     } else {
-        sfx = shotSFX.cloneNode();
+        source = shotSFX;
+        playbackRate = 0.9 + Math.random() * 0.2;
     }
     
-    sfx.volume = finalVol;
+    audioManager.play(weaponType, source, finalVol, playbackRate, duration);
     
-    // Pitch shifting for specialized weapons using generic shot
-    if (weaponType === 'ARTILLERY') {
-        sfx.playbackRate = 0.7; // Deep heavy boom
-    } else if (weaponType === 'STANDARD' || weaponType === 'HEAVY_GUN') {
-        sfx.playbackRate = 0.9 + Math.random() * 0.2; // Slight variation
+    // UI Beep for local player shooting
+    if (x === gameState.players.find(p => p.u === myId)?.x) {
+        // Small procedural feedback
+        audioManager.synth.playBeep(220, 0.02, finalVol * 0.2);
     }
-    
-    sfx.play();
 }
 
 function syncAudioUI() {
@@ -865,9 +1093,7 @@ if (muteToggle) {
         const currentSfxVol = isMuted ? 0 : sfxVolume;
         
         musicTracks.forEach(t => t.volume = currentMusicVol);
-        shotSFX.volume = currentSfxVol;
-        flameSFX.volume = currentSfxVol;
-        teslaSFX.volume = currentSfxVol;
+        audioManager.updateVolumes(currentMusicVol, currentSfxVol);
         
         if (!isMuted) {
             playMusic();
@@ -888,9 +1114,7 @@ if (musicSlider) musicSlider.oninput = (e) => {
 if (sfxSlider) sfxSlider.oninput = (e) => {
     sfxVolume = parseFloat(e.target.value);
     if (!isMuted) {
-        shotSFX.volume = sfxVolume;
-        flameSFX.volume = sfxVolume;
-        teslaSFX.volume = sfxVolume;
+        audioManager.updateVolumes(musicVolume, sfxVolume);
     }
     localStorage.setItem('tanks_sfx_vol', sfxVolume);
 };
