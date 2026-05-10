@@ -921,6 +921,16 @@ const audioManager = {
         waterSFX.volume = sfxVol;
         iceSFX.volume = sfxVol;
         dirtSFX.volume = sfxVol;
+        heavySFX.volume = sfxVol;
+        steamSFX.volume = sfxVol;
+        waterSplashSFX.volume = sfxVol;
+        oilSloshSFX.volume = sfxVol;
+        acidSplashSFX.volume = sfxVol;
+        quicksandSFX.volume = sfxVol;
+        electricZapSFX.volume = sfxVol;
+        iceSlideSFX.volume = sfxVol;
+        fireEntrySFX.volume = sfxVol;
+        gasEntrySFX.volume = sfxVol;
     },
 
     play(key, sourceAudio, volume, playbackRate = 1.0, duration = 0) {
@@ -989,6 +999,16 @@ const teslaSFX = new Audio('/tesla_gun.mp3');
 const waterSFX = new Audio('/water_cannon.mp3');
 const iceSFX = new Audio('/ice_shatter.mp3');
 const dirtSFX = new Audio('/dirt_impact.mp3');
+const heavySFX = new Audio('/heavy_gun.mp3');
+const steamSFX = new Audio('/steam_hiss.mp3');
+const waterSplashSFX = new Audio('/water_splash.mp3');
+const oilSloshSFX = new Audio('/oil_slosh.mp3');
+const acidSplashSFX = new Audio('/acid_splash.mp3');
+const quicksandSFX = new Audio('/quicksand_entry.mp3');
+const electricZapSFX = new Audio('/electric_zap.mp3');
+const iceSlideSFX = new Audio('/ice_slide.mp3');
+const fireEntrySFX = new Audio('/fire_entry.mp3');
+const gasEntrySFX = new Audio('/gas_entry.mp3');
 
 let currentMusicIndex = 0;
 let musicVolume = parseFloat(localStorage.getItem('tanks_music_vol')) || 0.3;
@@ -1049,6 +1069,9 @@ function playWeaponSound(weaponType, x, y) {
     } else if (weaponType === 'DIRT_GUN') {
         source = dirtSFX;
         duration = 300;
+    } else if (weaponType === 'HEAVY_GUN') {
+        source = heavySFX;
+        duration = 500;
     } else if (weaponType === 'ARTILLERY') {
         source = shotSFX;
         playbackRate = 0.6 + Math.random() * 0.1;
@@ -1724,6 +1747,31 @@ socket.on('player-event', (data) => {
     playerEvents.push({ ...data, time: Date.now() });
     if (playerEvents.length > 5) playerEvents.shift();
 });
+
+let trackedElementIds = new Set();
+function playSteamHiss(x, y) {
+    const distSq = (x - (camera.x + canvas.width/2))**2 + (y - (camera.y + canvas.height/2))**2;
+    const maxDist = 1200;
+    if (distSq > maxDist * maxDist) return;
+    const spatialVol = Math.max(0, 1 - Math.sqrt(distSq) / maxDist);
+    audioManager.play('STEAM_HISS', steamSFX, sfxVolume * spatialVol, 0.9 + Math.random() * 0.2, 1000);
+}
+
+let currentPuddleId = null;
+function playEnvironmentalImpact(type) {
+    let source = waterSplashSFX;
+    let volMult = 0.6;
+    
+    if (type === 'oil') source = oilSloshSFX;
+    if (type === 'acid') source = acidSplashSFX;
+    if (type === 'quicksand') { source = quicksandSFX; volMult = 0.8; }
+    if (type === 'electric') { source = electricZapSFX; volMult = 0.7; }
+    if (type === 'ice') { source = iceSlideSFX; volMult = 0.5; }
+    if (type === 'fire') { source = fireEntrySFX; volMult = 0.7; }
+    if (type === 'gas') { source = gasEntrySFX; volMult = 0.5; }
+
+    audioManager.play('ENV_IMPACT', source, sfxVolume * volMult, 0.9 + Math.random() * 0.2, 1000);
+}
 
 socket.on('state', (state) => {
     serverState = state;
@@ -3433,6 +3481,48 @@ function interpolateState(dt) {
     const P = 1 - Math.pow(0.75, dt); // frame-rate independent lerp (~0.25 at 60fps)
 
     gameState.bullets   = serverState.bullets;
+    gameState.players = serverState.players;
+    
+    // Track new steam elements for audio
+    serverState.elements.forEach(e => {
+        if (!trackedElementIds.has(e.id)) {
+            if (e.t === 'steam') {
+                playSteamHiss(e.x, e.y);
+            }
+            trackedElementIds.add(e.id);
+        }
+    });
+
+    // Puddle Entry Detection for Local Player
+    const me = serverState.players.find(p => p.id === socket.id);
+    if (me) {
+        let insideElement = null;
+        const hazards = ['water', 'oil', 'acid', 'quicksand', 'electric', 'ice', 'fire', 'gas'];
+        serverState.elements.forEach(e => {
+            if (hazards.includes(e.t)) {
+                const dx = me.x - e.x;
+                const dy = me.y - e.y;
+                const radius = (e.w * 0.5) + 15;
+                if (dx*dx + dy*dy < radius * radius) {
+                    insideElement = e;
+                }
+            }
+        });
+        
+        if (insideElement && insideElement.id !== currentPuddleId) {
+            playEnvironmentalImpact(insideElement.t);
+            currentPuddleId = insideElement.id;
+        } else if (!insideElement) {
+            currentPuddleId = null;
+        }
+    }
+    
+    // Cleanup old IDs
+    if (trackedElementIds.size > 200) {
+        const currentIds = new Set(serverState.elements.map(e => e.id));
+        trackedElementIds = new Set([...trackedElementIds].filter(id => currentIds.has(id)));
+    }
+
     gameState.elements  = serverState.elements;
     gameState.guardians = serverState.guardians;
     gameState.zones     = serverState.zones ? serverState.zones.map(z => ({ ...z, type: z.t || z.type })) : [];

@@ -47,9 +47,11 @@ async function generateSFX(text, filename, duration = null) {
 
 // Map of sounds to generate
 const sounds = [
-    { text: "High-pressure liquid water cannon blast splash, cinematic", file: "water_cannon.mp3", dur: 0.8 },
-    { text: "Crystalline ice magic shatter, frosty crunch, high fidelity", file: "ice_shatter.mp3", dur: 1.0 },
-    { text: "Heavy wet mud impact, earthy thud, splat", file: "dirt_impact.mp3", dur: 0.8 }
+    { text: "Heavy thick mud squelch, sucking vacuum sound, deep liquid trap, cinematic", file: "quicksand_entry.mp3", dur: 1.0 },
+    { text: "Electric spark discharge, high voltage zap, short circuit crackle, sharp and quick", file: "electric_zap.mp3", dur: 0.6 },
+    { text: "Metal tank tracks sliding on solid ice, sharp skating sound, frozen surface friction", file: "ice_slide.mp3", dur: 0.8 },
+    { text: "Large fire ignition fwoosh, gas flare, intense heat burst, cinematic", file: "fire_entry.mp3", dur: 1.2 },
+    { text: "Toxic gas cloud hiss, chemical spray release, subtle poison atmosphere", file: "gas_entry.mp3", dur: 1.0 }
 ];
 
 async function run() {
