@@ -147,6 +147,7 @@ const joinBtn = document.getElementById('join-btn');
 const quickMatchBtn = document.getElementById('quick-match-btn');
 const startGameBtn = document.getElementById('start-game-btn');
 const readyBtn = document.getElementById('ready-btn');
+const dronesToggle = document.getElementById('drones-toggle');
 
 const serverBrowser = document.getElementById('server-browser');
 const serverList = document.getElementById('server-list');
@@ -1040,12 +1041,15 @@ function playMusic() {
 function playWeaponSound(type, x, y) {
     if (!gameActive) return;
     
-    // Spatial volume calculation (similar to impact sounds)
+    // Spatial volume calculation relative to camera center (player position)
     let volMult = 1.0;
     if (x !== undefined && y !== undefined) {
-        const dist = Math.hypot(x - camera.x, y - camera.y);
-        if (dist > 1500) return; // Cutoff for distance
-        volMult = Math.max(0, 1 - dist / 1500);
+        const centerX = camera.x + canvas.width / 2;
+        const centerY = camera.y + canvas.height / 2;
+        const dist = Math.hypot(x - centerX, y - centerY);
+        const maxDist = 2000;
+        if (dist > maxDist) return; // Cutoff for distance
+        volMult = Math.max(0, 1 - dist / maxDist);
     }
 
     // Play tactical beep feedback (local only or very quiet)
@@ -1077,10 +1081,13 @@ function playWeaponSound(type, x, y) {
 
 function playEnvironmentalImpact(type, x, y) {
     // Only play if near camera for performance and clarity
-    const dist = Math.hypot(x - camera.x, y - camera.y);
-    if (dist > 1200) return;
+    const centerX = camera.x + canvas.width / 2;
+    const centerY = camera.y + canvas.height / 2;
+    const dist = Math.hypot(x - centerX, y - centerY);
+    const maxDist = 1800;
+    if (dist > maxDist) return;
     
-    const vol = Math.max(0, 1 - dist / 1200);
+    const vol = Math.max(0, 1 - dist / maxDist);
     
     switch(type) {
         case MATERIALS.WATER:
@@ -1454,7 +1461,10 @@ socket.on('connect', () => {
     myId = socket.id;
 });
 
-function updateLobbyUI(id, players) {
+function updateLobbyUI(id, payload) {
+    const players = payload.players || [];
+    const dronesEnabled = payload.dronesEnabled || false;
+    
     if (lobbyIdSpan) lobbyIdSpan.innerText = id.toUpperCase();
     
     // 1. Tank Selection Rendering
@@ -1637,7 +1647,6 @@ function updateLobbyUI(id, players) {
 
     const isHost = players.length > 0 && players[0].id === myId;
     const totalCount = players.length;
-
     if (isHost && totalCount >= 1) { // Bots count, so 1 human + anything is fine
         startGameBtn.classList.remove('hidden');
         lobbyStatus.innerText = `READY TO DEPLOY (${totalCount}/10)`;
@@ -1653,6 +1662,12 @@ function updateLobbyUI(id, players) {
         }
     }
 
+    // Update Drones Toggle
+    if (dronesToggle) {
+        dronesToggle.disabled = !isHost;
+        dronesToggle.checked = dronesEnabled;
+    }
+
     // Update Ready Button
     if (readyBtn) {
         const myPlayer = players.find(p => p.id === myId);
@@ -1663,10 +1678,11 @@ function updateLobbyUI(id, players) {
     }
 }
 
-socket.on('lobby-update', ({ id, players }) => {
+socket.on('lobby-update', (payload) => {
+    const { id } = payload;
     splashScreen.classList.add('hidden');
     lobbyScreen.classList.remove('hidden');
-    updateLobbyUI(id, players);
+    updateLobbyUI(id, payload);
 });
 
 socket.on('auth-error', (data) => {
@@ -1738,12 +1754,13 @@ socket.on('match-ended', ({ winner, scores, stats }) => {
     }
 });
 
-socket.on('lobby-reset', ({ id, players }) => {
+socket.on('lobby-reset', (payload) => {
+    const { id } = payload;
     gameActive = false;
     gameOverScreen.classList.add('hidden');
     hud.classList.add('hidden');
     lobbyScreen.classList.remove('hidden');
-    updateLobbyUI(id, players);
+    updateLobbyUI(id, payload);
     updateCursorState();
 });
 
@@ -5494,6 +5511,12 @@ startGameBtn.onclick = () => {
     const mapType = document.getElementById('map-select').value;
     socket.emit('start-game', { mapType });
 };
+
+if (dronesToggle) {
+    dronesToggle.onchange = (e) => {
+        socket.emit('toggle-drones', e.target.checked);
+    };
+}
 
 // Bot management is now handled via slots in updateLobbyUI
 

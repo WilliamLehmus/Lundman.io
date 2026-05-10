@@ -30,6 +30,7 @@ export class Lobby {
         this.guardians = {};
         this.lastGuardianId = 0;
         this.nextGuardianSpawn = 0;
+        this.dronesEnabled = false; // Disabled by default as per request
         this.lastTimeTick = Date.now();
         this.worldSize = 2500;
         this.walls = [];
@@ -105,10 +106,18 @@ export class Lobby {
     }
 
     mapLobbyPlayers() {
-        return Object.values(this.players).map(p => ({ 
-            u: p.username, t: p.team, id: p.id, ch: p.chassis, sl: p.slots, isBot: !!p.isBot,
-            botDifficulty: p.botDifficulty, ready: p.isBot ? true : !!p.ready 
-        }));
+        const sortedPlayers = Object.values(this.players)
+            .filter(p => !p.isBot) // Host must be a human
+            .sort((a, b) => a.joinedAt - b.joinedAt)
+            .concat(Object.values(this.players).filter(p => p.isBot));
+
+        return {
+            players: sortedPlayers.map(p => ({ 
+                u: p.username, t: p.team, id: p.id, ch: p.chassis, sl: p.slots, isBot: !!p.isBot,
+                botDifficulty: p.botDifficulty, ready: p.isBot ? true : !!p.ready 
+            })),
+            dronesEnabled: this.dronesEnabled
+        };
     }
 
     addPlayer(socket, username, chassisType = 'SCOUT') {
@@ -133,7 +142,8 @@ export class Lobby {
             slots: [...config.weapons], currentSlot: 0, lastShot: 0, scrap: 0, kills: 0, deaths: 0,
             statusEffects: { stun: 0, slip: 0, slow: 0, burn: 0, wet: 0, stunImmunity: 0, revealed: 0, quicksand: 0, trapImmunity: 0 },
             inputs: { up: false, down: false, left: false, right: false, shoot: false, aimAngle: 0 },
-            lastInputSeq: 0, lastBuffLevel: 0, upgrades: { health: 0, speed: 0, power: 0 }, ready: false
+            lastInputSeq: 0, lastBuffLevel: 0, upgrades: { health: 0, speed: 0, power: 0 }, ready: false,
+            joinedAt: Date.now()
         };
     }
 
@@ -168,7 +178,8 @@ export class Lobby {
             targetOffset: { x: (Math.random()-0.5)*150, y: (Math.random()-0.5)*150 },
             role: Math.random() > 0.6 ? 'FLANKER' : 'ASSAULT', strafeDir: Math.random() > 0.5 ? 1 : -1,
             lastRoleSwitch: Date.now(), path: [], lastPathUpdate: 0, lastBuffLevel: 0,
-            upgrades: { health: 0, speed: 0, power: 0 }, ready: true
+            upgrades: { health: 0, speed: 0, power: 0 }, ready: true,
+            joinedAt: Date.now()
         };
     }
 
@@ -335,10 +346,10 @@ export class Lobby {
                 this.matchTimer--; this.lastTimeTick = now;
                 if (this.matchTimer <= 0) this.checkMatchEnd();
                 this.replenishElements();
-                // if (Object.keys(this.guardians).length < 2 && now > this.nextGuardianSpawn) this.combatEngine.spawnGuardian();
+                if (this.dronesEnabled && Object.keys(this.guardians).length < 2 && now > this.nextGuardianSpawn) this.combatEngine.spawnGuardian();
             }
             this.botAI.processBots(now);
-            // this.combatEngine.processGuardians(now);
+            if (this.dronesEnabled) this.combatEngine.processGuardians(now);
             Object.values(this.players).forEach(p => {
                 const buffLevel = Math.floor(p.scrap / 100);
                 if (buffLevel > p.lastBuffLevel && buffLevel <= 5) {
@@ -435,7 +446,7 @@ export class Lobby {
         Object.keys(this.bullets).forEach(id => this.destroyBullet(id)); Object.keys(this.elements).forEach(id => this.destroyElement(id)); Object.keys(this.guardians).forEach(id => this.destroyGuardian(id));
         Object.values(this.players).forEach(p => { this.respawn(p); p.ready = !!p.isBot; });
         this.generateMap();
-        this.io.to(this.id).emit('lobby-reset', { id: this.id, players: Object.values(this.players).map(p => ({ username: p.username, team: p.team, id: p.id })) });
+        this.io.to(this.id).emit('lobby-reset', { id: this.id, ...this.mapLobbyPlayers() });
     }
 
     destroyGuardian(id, killerId) {

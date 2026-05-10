@@ -157,7 +157,7 @@ io.on('connection', (socket) => {
         socket.join(bestLobby.id);
         socket.lobbyId = bestLobby.id;
         if (bestLobby.active) socket.emit('game-started');
-        io.to(bestLobby.id).emit('lobby-update', { id: bestLobby.id, players: bestLobby.mapLobbyPlayers() });
+        io.to(bestLobby.id).emit('lobby-update', { id: bestLobby.id, ...bestLobby.mapLobbyPlayers() });
         syncLobbyToDB(bestLobby);
     });
 
@@ -183,7 +183,7 @@ io.on('connection', (socket) => {
         lobby.addPlayer(socket, username, chassisType);
         socket.join(id);
         socket.lobbyId = id;
-        io.to(socket.id).emit('lobby-update', { id: lobby.id, players: lobby.mapLobbyPlayers() });
+        io.to(socket.id).emit('lobby-update', { id: lobby.id, ...lobby.mapLobbyPlayers() });
         syncLobbyToDB(lobby);
     });
 
@@ -212,7 +212,7 @@ io.on('connection', (socket) => {
         socket.join(lobby.id);
         socket.lobbyId = lobby.id;
         if (lobby.active) socket.emit('game-started');
-        io.to(lobby.id).emit('lobby-update', { id: lobby.id, players: lobby.mapLobbyPlayers() });
+        io.to(lobby.id).emit('lobby-update', { id: lobby.id, ...lobby.mapLobbyPlayers() });
         syncLobbyToDB(lobby);
     });
 
@@ -220,7 +220,7 @@ io.on('connection', (socket) => {
         const lobby = lobbies[socket.lobbyId];
         if (lobby && Object.keys(lobby.players).length < 10) {
             lobby.addBot(data.difficulty, null, true, data.team, data.chassisType);
-            io.to(lobby.id).emit('lobby-update', { id: lobby.id, players: lobby.mapLobbyPlayers() });
+            io.to(lobby.id).emit('lobby-update', { id: lobby.id, ...lobby.mapLobbyPlayers() });
         }
     });
 
@@ -251,7 +251,19 @@ io.on('connection', (socket) => {
         const lobby = lobbies[socket.lobbyId];
         if (lobby && lobby.players[socket.id]) {
             lobby.players[socket.id].ready = !lobby.players[socket.id].ready;
-            io.to(lobby.id).emit('lobby-update', { id: lobby.id, players: lobby.mapLobbyPlayers() });
+            io.to(lobby.id).emit('lobby-update', { id: lobby.id, ...lobby.mapLobbyPlayers() });
+        }
+    });
+
+    socket.on('toggle-drones', (enabled) => {
+        const lobby = lobbies[socket.lobbyId];
+        if (lobby && lobby.players[socket.id]) {
+            const players = Object.values(lobby.players).sort((a,b) => a.joinedAt - b.joinedAt);
+            const isHost = players.length > 0 && players[0].id === socket.id;
+            if (isHost) {
+                lobby.dronesEnabled = !!enabled;
+                io.to(lobby.id).emit('lobby-update', { id: lobby.id, ...lobby.mapLobbyPlayers() });
+            }
         }
     });
 
@@ -274,7 +286,7 @@ io.on('connection', (socket) => {
         const lobby = lobbies[socket.lobbyId];
         if (lobby && data.botId && lobby.players[data.botId]) {
             lobby.players[data.botId].botDifficulty = data.difficulty;
-            io.to(lobby.id).emit('lobby-update', { id: lobby.id, players: lobby.mapLobbyPlayers() });
+            io.to(lobby.id).emit('lobby-update', { id: lobby.id, ...lobby.mapLobbyPlayers() });
         }
     });
 
@@ -287,7 +299,7 @@ io.on('connection', (socket) => {
                 const bots = Object.values(lobby.players).filter(p => p.isBot);
                 if (bots.length > 0) lobby.removePlayer(bots[bots.length - 1].id);
             }
-            io.to(lobby.id).emit('lobby-update', { id: lobby.id, players: lobby.mapLobbyPlayers() });
+            io.to(lobby.id).emit('lobby-update', { id: lobby.id, ...lobby.mapLobbyPlayers() });
         }
     });
 
@@ -314,7 +326,7 @@ io.on('connection', (socket) => {
                 
                 if (p.body) Matter.Body.setMass(p.body, config.mass);
                 console.log(`[CHASSIS_CHANGE] Player ${p.username} changed to ${chassisType}. Slots:`, p.slots);
-                io.to(lobby.id).emit('lobby-update', { id: lobby.id, players: lobby.mapLobbyPlayers() });
+                io.to(lobby.id).emit('lobby-update', { id: lobby.id, ...lobby.mapLobbyPlayers() });
             }
         }
     });
@@ -328,7 +340,7 @@ io.on('connection', (socket) => {
             if (config && config.allowedWeapons.includes(weaponType)) {
                 if (slotIndex >= 0 && slotIndex < config.slots) {
                     p.slots[slotIndex] = weaponType;
-                    io.to(lobby.id).emit('lobby-update', { id: lobby.id, players: lobby.mapLobbyPlayers() });
+                    io.to(lobby.id).emit('lobby-update', { id: lobby.id, ...lobby.mapLobbyPlayers() });
                 }
             }
         }
@@ -381,7 +393,7 @@ io.on('connection', (socket) => {
                 if (MONGO_URL) LobbyModel.deleteOne({ lobbyId: socket.lobbyId }).catch(console.error);
             } else {
                 io.to(lobby.id).emit('player-event', { text: `${username.toUpperCase()} LEFT`, color: '#ff3333' });
-                io.to(lobby.id).emit('lobby-update', { id: lobby.id, players: lobby.mapLobbyPlayers() });
+                io.to(lobby.id).emit('lobby-update', { id: lobby.id, ...lobby.mapLobbyPlayers() });
             }
         }
     });

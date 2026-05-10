@@ -49,6 +49,7 @@ The core of the game engine lives on the **Node.js server**.
 
 ### 2. Real-Time Streaming
 - **Networking**: Powered by `Socket.io`.
+- **Spatial Audio**: Client-side audio logic calculates volume based on distance from the **camera center** (listener position) to the event coordinate, with a dynamic falloff up to 2000 pixels.
 - **State Updates**: The server broadcasts the global game state to all clients at **30Hz (STATE_RATE)**. This rate is optimized for bandwidth while maintaining smoothness via client-side interpolation.
 - **Payload Optimization**: The game uses a compressed JSON format with shortened keys and reduced float precision to minimize network overhead.
 - **Input Handling**: Clients send minimal input packets (WASD + Shoot + Seq) to the server.
@@ -641,3 +642,12 @@ To transition from a learning project to a **marketable product**, the following
     4. **Audio Layering**: Combined ElevenLabs assets with procedural `SoundSynth` effects (deep boom + mechanical break) for a rich, layered audio experience.
     5. **Redundancy Fix**: Removed duplicate electric zap sounds from the barrel-break listener to ensure a clean, non-overlapping audio mix.
 - **Verification**: Audio stability confirmed across all volume settings. Puddle triggers are responsive and non-overlapping.
+#### **Killer Drone Toggle (Lobby Feature)**
+- **Date**: 2026-05-10
+- **Issue**: Players wanted the ability to choose whether "Killer Drones" (Guardians) should be active during a match.
+- **Solution**: 
+    1. **UI**: Added a "KILLER DRONES" checkbox in the lobby screen.
+    2. **Logic**: Implemented host-only control and real-time state synchronization for the toggle.
+    3. **Backend**: Added `dronesEnabled` flag to the `Lobby` class and updated the physics loop to conditionally spawn and process Guardians.
+    4. **Host Persistence**: Implemented `joinedAt` timestamps for players to ensure the host is consistently identified as the earliest human player in the lobby.
+- **Verification**: Verified using `node -c` and confirmed that the toggle correctly enables/disables drone spawning in the `LobbyManager` loop.
