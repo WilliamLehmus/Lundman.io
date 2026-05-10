@@ -14,15 +14,15 @@ export const MATERIALS = {
     BUILDING: 'building',
     BARREL_EXPLOSIVE: 'barrel_explosive',
     BARREL_OIL: 'barrel_oil',
+    BARREL_ACID: 'barrel_acid',
+    BARREL_ELECTRIC: 'barrel_electric',
+    BARREL_FROST: 'barrel_frost',
+    BARREL_GAS: 'barrel_gas',
     CRATE: 'crate',
     DRONE: 'drone',
     QUICKSAND: 'quicksand',
     CACTUS: 'cactus',
-    PALM: 'palm',
-    BARREL_ACID: 'barrel_acid',
-    BARREL_ELECTRIC: 'barrel_electric',
-    BARREL_FROST: 'barrel_frost',
-    BARREL_GAS: 'barrel_gas'
+    PALM: 'palm'
 };
 
 export const MATERIAL_PROPERTIES = {
@@ -39,15 +39,15 @@ export const MATERIAL_PROPERTIES = {
     [MATERIALS.ELECTRIC]: { w: 120, h: 120, color: 'rgba(0, 242, 255, 0.3)' },
     [MATERIALS.BARREL_EXPLOSIVE]: { w: 35, h: 45, color: '#ff4444', hp: 20 },
     [MATERIALS.BARREL_OIL]: { w: 35, h: 45, color: '#ffcc00', hp: 20 },
+    [MATERIALS.BARREL_ACID]: { w: 35, h: 45, color: '#aaff00', hp: 20 },
+    [MATERIALS.BARREL_ELECTRIC]: { w: 35, h: 45, color: '#00f2ff', hp: 20 },
+    [MATERIALS.BARREL_FROST]: { w: 35, h: 45, color: '#00ccff', hp: 20 },
+    [MATERIALS.BARREL_GAS]: { w: 35, h: 45, color: '#88ff44', hp: 20 },
     [MATERIALS.CRATE]: { w: 45, h: 45, color: '#8b4513', hp: 30 },
     [MATERIALS.DRONE]: { w: 40, h: 40, color: '#00f2ff', hp: 150 },
     [MATERIALS.QUICKSAND]: { w: 140, h: 140, color: '#4d3a24', name: 'Quicksand' },
     [MATERIALS.CACTUS]: { w: 35, h: 35, color: '#2d4d2d', hp: 40, name: 'Cactus' },
-    [MATERIALS.PALM]: { w: 50, h: 50, color: '#8b4513', hp: 60, name: 'Palm Tree' },
-    [MATERIALS.BARREL_ACID]: { w: 35, h: 45, color: '#39ff14', hp: 20, name: 'Acid Barrel' },
-    [MATERIALS.BARREL_ELECTRIC]: { w: 35, h: 45, color: '#00f2ff', hp: 20, name: 'EMP Barrel' },
-    [MATERIALS.BARREL_FROST]: { w: 35, h: 45, color: '#aaddff', hp: 20, name: 'Cryo Barrel' },
-    [MATERIALS.BARREL_GAS]: { w: 35, h: 45, color: '#ffd700', hp: 20, name: 'Gas Barrel' }
+    [MATERIALS.PALM]: { w: 50, h: 50, color: '#8b4513', hp: 60, name: 'Palm Tree' }
 };
 
 export const BIOMES = {

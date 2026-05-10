@@ -68,16 +68,6 @@ The core of the game engine lives on the **Node.js server**.
 - **Player Stats**: Persistent player statistics (Lifetime Kills, Deaths, Scrap) are stored in `players.json`.
 - **Session Data**: HUD settings and volume preferences are persisted in the browser's `localStorage`.
 
-### 5. Audio Architecture
-- **AudioManager**: A centralized manager that handles sound pooling and channel management.
-    - **Channel Management**: Limits concurrent instances of similar sounds to prevent "audio mud" and clipping.
-    - **Duration Support**: Can force-stop sounds after a set duration (e.g., 150ms for snappy weapon bursts).
-- **SoundSynth**: A procedural sound engine using the **Web Audio API**.
-    - **Procedural Feedback**: Generates real-time "beeps", "splashes", "crystals", and "thuds" without requiring external files.
-    - **Dynamic Pitch**: Allows for organic variations in frequency and timbre.
-- **Normalization**: Standardized volumes (Music: 0.3, SFX: 0.5) to ensure a premium acoustic balance.
-- **Spatial Audio**: Distance-based volume attenuation calculated relative to the camera center.
-
 ---
 
 ## 🎮 Gameplay Features
@@ -544,36 +534,3 @@ To transition from a learning project to a **marketable product**, the following
     3. **Backend Acceleration**: Switched to `TypedArrays` for A* scores and removed slow cloning logic.
     4. **Stability Fix**: Properly scoped and initialized AI variables.
 - **Verification**: 60 FPS maintained in dense 5v5 Urban scenarios; `test_ai_deep.js` passed.
-
-#### **Audio Overhaul & Sound Mud Fix**
-- **Date**: 2026-05-10
-- **Issue**: Weapon sounds (especially Flamethrower/Tesla) sounded "muddy" and caused performance lag due to excessive `cloneNode()` calls.
-- **Root Cause**: Every weapon fire created a new `Audio` element that played to completion, leading to hundreds of overlapping nodes during intense combat.
-- **Fix (The "Audio Engine" Update)**:
-    1.  **AudioManager**: Replaced the ad-hoc `cloneNode` calls with a managed `AudioManager`.
-    2.  **Duration Caps**: Implemented logic to stop continuous weapon sounds after 150-200ms, making them sound snappier and reducing CPU load.
-    3.  **SoundSynth**: Added a Web Audio API synthesizer for procedural UI/combat feedback.
-    4.  **Volume Normalization**: Lowered default volumes to premium standards (Music 0.3 / SFX 0.5).
-- **Verification**: Smooth audio playback confirmed during rapid-fire testing; no performance dips observed.
-
-#### **Server 500 Error on Socket.io (2026-05-10)**
-- **Issue**: Backend server crashed with a 500 Internal Server Error, causing Socket.io connection failures.
-- **Root Cause**: Two critical errors in `MapGenerator.js` during the barrel overhaul:
-    1. A `for` loop line was accidentally deleted in `generateIndustrialComplex`.
-    2. The `propCount` variable was left undefined in `generateCityBlock`.
-    3. A missing closing brace at the end of a function caused a `SyntaxError` that prevented the server from starting.
-- **Fix**: 
-    1. Restored missing loop structures and variable declarations.
-    2. Fixed the brace imbalance.
-    3. Verified syntax with `node -c backend/logic/MapGenerator.js`.
-- **Prevention**: Always run `node -c` on all modified backend files before considering a task complete.
-
-#### **Electric Barrel Visibility Fix (EL TUNAN)**
-- **Date**: 2026-05-10
-- **Issue**: Lightning bolt on the electric barrel (EMP Barrel) was difficult to see against the cyan body.
-- **Root Cause**: Low contrast between the white bolt, cyan shadow, and cyan barrel body.
-- **Fix**: 
-    1. Added a thick black outer stroke (`rgba(0,0,0,0.8)`) to the lightning bolt for clear silhouette separation.
-    2. Switched shadow color to white and added a pulsing animation (`renderTime`-based) to the glow intensity.
-    3. Added a sharp cyan inner stroke to the white fill to give it a "charged" look.
-- **Verification**: Verified with `npm run build` and visual audit of the code logic.

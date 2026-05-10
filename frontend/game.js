@@ -765,207 +765,108 @@ class SoundSynth {
             this.ctx = new AudioContext();
             this.masterGain = this.ctx.createGain();
             this.masterGain.connect(this.ctx.destination);
-            
-            // Pre-generate noise buffer
-            const bufferSize = this.ctx.sampleRate * 2;
+            this.masterGain.gain.value = 0.5;
+
+            // Generate white noise buffer
+            const bufferSize = 2 * this.ctx.sampleRate;
             this.noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-            const data = this.noiseBuffer.getChannelData(0);
+            const output = this.noiseBuffer.getChannelData(0);
             for (let i = 0; i < bufferSize; i++) {
-                data[i] = Math.random() * 2 - 1;
+                output[i] = Math.random() * 2 - 1;
             }
-            
-            console.log("SoundSynth initialized with noise buffer. Sample rate:", this.ctx.sampleRate);
         } catch (e) {
-            console.error("Web Audio API not supported", e);
+            console.warn("Web Audio API not supported", e);
         }
     }
 
-    resume() {
-        if (!this.ctx) this.init();
-        if (this.ctx && this.ctx.state === 'suspended') {
-            this.ctx.resume();
-        }
-    }
-
-    playLaser(freq = 880, duration = 0.1, volume = 0.5) {
+    playBeep(freq = 440, type = 'sine', duration = 0.1, vol = 0.1) {
         if (!this.ctx) return;
-        this.resume();
+        if (this.ctx.state === 'suspended') this.ctx.resume();
         const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.type = 'sawtooth';
+        const g = this.ctx.createGain();
+        osc.type = type;
         osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(freq * 0.1, this.ctx.currentTime + duration);
-        gain.gain.setValueAtTime(volume, this.ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
-        osc.connect(gain);
-        gain.connect(this.masterGain);
+        g.gain.setValueAtTime(vol, this.ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+        osc.connect(g);
+        g.connect(this.masterGain);
         osc.start();
         osc.stop(this.ctx.currentTime + duration);
-    }
-
-    playBeep(freq = 440, duration = 0.05, volume = 0.3) {
-        if (!this.ctx) return;
-        this.resume();
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
-        gain.gain.setValueAtTime(volume, this.ctx.currentTime);
-        gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + duration);
-        osc.connect(gain);
-        gain.connect(this.masterGain);
-        osc.start();
-        osc.stop(this.ctx.currentTime + duration);
-    }
-
-    playWaterSplash(duration = 0.2, volume = 0.5) {
-        this.resume();
-        if (!this.ctx || !this.noiseBuffer) return;
-        
-        const noise = this.ctx.createBufferSource();
-        noise.buffer = this.noiseBuffer;
-        
-        const filter = this.ctx.createBiquadFilter();
-        filter.type = 'bandpass';
-        filter.frequency.setValueAtTime(1000, this.ctx.currentTime);
-        filter.frequency.exponentialRampToValueAtTime(400, this.ctx.currentTime + duration);
-        filter.Q.value = 1.0;
-        
-        const gain = this.ctx.createGain();
-        gain.gain.setValueAtTime(volume * 1.5, this.ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
-        
-        noise.connect(filter);
-        filter.connect(gain);
-        gain.connect(this.masterGain);
-        
-        noise.start();
-        noise.stop(this.ctx.currentTime + duration);
-    }
-
-    playIceCrystal(duration = 0.25, volume = 0.5) {
-        this.resume();
-        if (!this.ctx || !this.noiseBuffer) return;
-        
-        // 1. Crystalline "Ping"
-        const osc1 = this.ctx.createOscillator();
-        const gain1 = this.ctx.createGain();
-        osc1.type = 'triangle';
-        osc1.frequency.setValueAtTime(1200, this.ctx.currentTime);
-        osc1.frequency.exponentialRampToValueAtTime(1500, this.ctx.currentTime + duration);
-        gain1.gain.setValueAtTime(volume, this.ctx.currentTime);
-        gain1.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
-        osc1.connect(gain1);
-        gain1.connect(this.masterGain);
-        
-        // 2. Frosty "Crack" (Noise)
-        const noise = this.ctx.createBufferSource();
-        noise.buffer = this.noiseBuffer;
-        const filter = this.ctx.createBiquadFilter();
-        filter.type = 'highpass';
-        filter.frequency.setValueAtTime(3000, this.ctx.currentTime);
-        const gain2 = this.ctx.createGain();
-        gain2.gain.setValueAtTime(volume * 0.4, this.ctx.currentTime);
-        gain2.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration * 0.5);
-        noise.connect(filter);
-        filter.connect(gain2);
-        gain2.connect(this.masterGain);
-
-        osc1.start();
-        noise.start();
-        osc1.stop(this.ctx.currentTime + duration);
-        noise.stop(this.ctx.currentTime + duration);
-    }
-
-    playEarthThud(duration = 0.25, volume = 0.5) {
-        this.resume();
-        if (!this.ctx || !this.noiseBuffer) return;
-        
-        const noise = this.ctx.createBufferSource();
-        noise.buffer = this.noiseBuffer;
-        
-        const filter = this.ctx.createBiquadFilter();
-        filter.type = 'lowpass';
-        filter.frequency.setValueAtTime(400, this.ctx.currentTime);
-        filter.frequency.exponentialRampToValueAtTime(80, this.ctx.currentTime + duration);
-        
-        const gain = this.ctx.createGain();
-        gain.gain.setValueAtTime(volume * 2.0, this.ctx.currentTime); // Boosted for impact
-        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
-        
-        noise.connect(filter);
-        filter.connect(gain);
-        gain.connect(this.masterGain);
-        
-        noise.start();
-        noise.stop(this.ctx.currentTime + duration);
     }
 }
 
-const audioManager = {
-    synth: new SoundSynth(),
-    channels: {}, // Active sounds per type
-    
+class AudioManager {
+    constructor() {
+        this.channels = new Map(); // name -> Audio
+        this.pools = new Map();    // name -> Array<Audio>
+        this.masterVolume = 1.0;
+        this.musicVolume = 0.3;
+        this.sfxVolume = 0.5;
+        this.isMuted = false;
+        this.initialized = false;
+        this.synth = new SoundSynth();
+    }
+
     init() {
+        if (this.initialized) return;
         this.synth.init();
-    },
+        this.initialized = true;
+    }
 
-    updateVolumes(musicVol, sfxVol) {
-        if (this.synth.masterGain) {
-            this.synth.masterGain.gain.value = sfxVol;
-        }
-        // Update global SFX assets
-        shotSFX.volume = sfxVol;
-        flameSFX.volume = sfxVol;
-        teslaSFX.volume = sfxVol;
-        waterSFX.volume = sfxVol;
-        iceSFX.volume = sfxVol;
-        dirtSFX.volume = sfxVol;
-        heavySFX.volume = sfxVol;
-        steamSFX.volume = sfxVol;
-        waterSplashSFX.volume = sfxVol;
-        oilSloshSFX.volume = sfxVol;
-        acidSplashSFX.volume = sfxVol;
-        quicksandSFX.volume = sfxVol;
-        electricZapSFX.volume = sfxVol;
-        iceSlideSFX.volume = sfxVol;
-        fireEntrySFX.volume = sfxVol;
-        gasEntrySFX.volume = sfxVol;
-    },
+    setMusicVolume(v) {
+        this.musicVolume = v;
+        musicTracks.forEach(t => t.volume = this.isMuted ? 0 : v);
+    }
 
-    play(key, sourceAudio, volume, playbackRate = 1.0, duration = 0) {
-        // Specialized handling for continuous sounds
-        if (this.channels[key]) {
-            if (key === 'FLAMETHROWER' || key === 'TESLA') {
-                // If it's already playing, just update volume/pitch maybe? 
-                // For now, let's allow it to overlap slightly but cap instances
-                if (Object.keys(this.channels).filter(k => k.startsWith(key)).length > 2) return;
-            }
-        }
+    setSFXVolume(v) {
+        this.sfxVolume = v;
+        // Update all active SFX volumes if needed
+    }
 
-        const channelKey = `${key}_${Date.now()}_${Math.random()}`;
-        const sfx = sourceAudio.cloneNode();
-        sfx.volume = volume;
-        sfx.playbackRate = playbackRate;
-        
-        this.channels[channelKey] = sfx;
-        sfx.play().catch(e => {});
+    playSFX(audio, vol = 1.0, duration = null) {
+        if (this.isMuted || !audio) return;
+        this.init(); // Lazy init
 
-        if (duration > 0) {
+        const sound = audio.cloneNode();
+        sound.volume = this.sfxVolume * vol;
+        sound.play().catch(e => console.warn("Audio play blocked", e));
+
+        if (duration) {
             setTimeout(() => {
-                if (this.channels[channelKey]) {
-                    sfx.pause();
-                    sfx.currentTime = 0;
-                    delete this.channels[channelKey];
+                sound.pause();
+                sound.src = "";
+            }, duration);
+        }
+    }
+
+    playChannel(name, audio, vol = 1.0, duration = null) {
+        if (this.isMuted || !audio) return;
+        this.init();
+
+        // Stop existing sound on this channel
+        if (this.channels.has(name)) {
+            const old = this.channels.get(name);
+            old.pause();
+            old.currentTime = 0;
+        }
+
+        const sound = audio.cloneNode();
+        sound.volume = this.sfxVolume * vol;
+        this.channels.set(name, sound);
+        sound.play().catch(e => console.warn("Audio play blocked", e));
+
+        if (duration) {
+            setTimeout(() => {
+                if (this.channels.get(name) === sound) {
+                    sound.pause();
+                    this.channels.delete(name);
                 }
             }, duration);
         }
-
-        sfx.onended = () => {
-            delete this.channels[channelKey];
-        };
     }
-};
+}
+
+const audioManager = new AudioManager();
 
 // Audio setup
 const optionsMenu = document.getElementById('options-menu');
@@ -976,23 +877,13 @@ const closeOptionsBtn = document.getElementById('close-options');
 const closeShopBtn = document.getElementById('close-shop');
 const openShopBtn = document.getElementById('open-shop-btn');
 
-if (openShopBtn) {
-    openShopBtn.addEventListener('click', () => {
-        if (shopMenu) {
-            const isHidden = shopMenu.style.display === 'none' || shopMenu.style.display === '';
-            shopMenu.style.display = isHidden ? 'flex' : 'none';
-            if (isHidden) {
-                updateShopUI();
-            }
-        }
-    });
-}
-
 const musicTracks = [
     new Audio('/music_track1.mp3'),
     new Audio('/music_track2.mp3'),
     new Audio('/music_track3.mp3')
 ];
+
+// Weapon SFX
 const shotSFX = new Audio('/tank_shot.mp3');
 const flameSFX = new Audio('/flamethrower.mp3');
 const teslaSFX = new Audio('/tesla_gun.mp3');
@@ -1000,6 +891,8 @@ const waterSFX = new Audio('/water_cannon.mp3');
 const iceSFX = new Audio('/ice_shatter.mp3');
 const dirtSFX = new Audio('/dirt_impact.mp3');
 const heavySFX = new Audio('/heavy_gun.mp3');
+
+// Environmental SFX
 const steamSFX = new Audio('/steam_hiss.mp3');
 const waterSplashSFX = new Audio('/water_splash.mp3');
 const oilSloshSFX = new Audio('/oil_slosh.mp3');
@@ -1017,21 +910,36 @@ let isMuted = localStorage.getItem('tanks_is_muted') === 'true';
 let isMenuOpen = false;
 let isShopOpen = false;
 
+// Track last puddle for local player to trigger "entry" sound
+let lastPuddleType = null;
+
 function setupAudio() {
-    audioManager.init();
-    const currentMusicVol = isMuted ? 0 : musicVolume;
-    const currentSfxVol = isMuted ? 0 : sfxVolume;
+    audioManager.musicVolume = isMuted ? 0 : musicVolume;
+    audioManager.sfxVolume = isMuted ? 0 : sfxVolume;
+    audioManager.isMuted = isMuted;
 
     musicTracks.forEach(track => {
         track.loop = false;
-        track.volume = currentMusicVol;
+        track.volume = audioManager.musicVolume;
         track.onended = () => {
             currentMusicIndex = (currentMusicIndex + 1) % musicTracks.length;
             playMusic();
         };
     });
-    
-    audioManager.updateVolumes(currentMusicVol, currentSfxVol);
+
+    // Update global SFX assets volume
+    shotSFX.volume = audioManager.sfxVolume;
+    flameSFX.volume = audioManager.sfxVolume;
+    teslaSFX.volume = audioManager.sfxVolume;
+    waterSFX.volume = audioManager.sfxVolume;
+    iceSFX.volume = audioManager.sfxVolume;
+    dirtSFX.volume = audioManager.sfxVolume;
+    heavySFX.volume = audioManager.sfxVolume;
+    steamSFX.volume = audioManager.sfxVolume;
+    waterSplashSFX.volume = audioManager.sfxVolume;
+    oilSloshSFX.volume = audioManager.sfxVolume;
+    acidSplashSFX.volume = audioManager.sfxVolume;
+
     syncAudioUI();
 }
 
@@ -1041,54 +949,68 @@ function playMusic() {
     track.play().catch(e => console.log("Audio play blocked until interaction"));
 }
 
-function playWeaponSound(weaponType, x, y) {
-    if (isMuted) return;
-    // Spatial volume based on distance to camera
-    const dist = Math.hypot(x - (camera.x + canvas.width/2), y - (camera.y + canvas.height/2));
-    const spatialVol = Math.max(0, 1 - (dist / 1500));
-    const finalVol = sfxVolume * spatialVol;
+function playWeaponSound(type) {
+    if (!gameActive) return;
     
-    if (finalVol <= 0.01) return;
+    // Play tactical beep feedback
+    audioManager.synth.playBeep(880, 'sine', 0.05, 0.03);
 
-    let source;
-    let duration = 0;
-    let playbackRate = 1.0;
-
-    if (weaponType === 'FLAMETHROWER') {
-        source = flameSFX;
-        duration = 150; // Snappy fire bursts
-    } else if (weaponType === 'TESLA') {
-        source = teslaSFX;
-        duration = 200;
-    } else if (weaponType === 'WATER_CANNON') {
-        source = waterSFX;
-        duration = 300;
-    } else if (weaponType === 'FROST_GUN') {
-        source = iceSFX;
-        duration = 400;
-    } else if (weaponType === 'DIRT_GUN') {
-        source = dirtSFX;
-        duration = 300;
-    } else if (weaponType === 'HEAVY_GUN') {
-        source = heavySFX;
-        duration = 500;
-    } else if (weaponType === 'ARTILLERY') {
-        source = shotSFX;
-        playbackRate = 0.6 + Math.random() * 0.1;
-    } else if (weaponType === 'SCOUT' || weaponType === 'STANDARD') {
-        source = shotSFX;
-        playbackRate = 1.1 + Math.random() * 0.2;
-    } else {
-        source = shotSFX;
-        playbackRate = 0.9 + Math.random() * 0.2;
+    switch(type) {
+        case 'FLAMETHROWER':
+            audioManager.playChannel('weapon', flameSFX, 1.0, 150);
+            break;
+        case 'TESLA':
+            audioManager.playChannel('weapon', teslaSFX, 1.0, 200);
+            break;
+        case 'WATER_CANNON':
+            audioManager.playChannel('weapon', waterSFX, 1.2);
+            break;
+        case 'FROST_GUN':
+            audioManager.playChannel('weapon', iceSFX, 1.1);
+            break;
+        case 'DIRT_GUN':
+            audioManager.playChannel('weapon', dirtSFX, 2.0);
+            break;
+        case 'HEAVY_GUN':
+            audioManager.playChannel('weapon', heavySFX, 1.3, 500);
+            break;
+        default:
+            audioManager.playSFX(shotSFX, 0.8);
     }
+}
+
+function playEnvironmentalImpact(type, x, y) {
+    // Only play if near camera for performance and clarity
+    const dist = Math.hypot(x - camera.x, y - camera.y);
+    if (dist > 1200) return;
     
-    audioManager.play(weaponType, source, finalVol, playbackRate, duration);
+    const vol = Math.max(0, 1 - dist / 1200);
     
-    // UI Beep for local player shooting
-    if (x === gameState.players.find(p => p.u === myId)?.x) {
-        // Small procedural feedback
-        audioManager.synth.playBeep(220, 0.02, finalVol * 0.2);
+    switch(type) {
+        case MATERIALS.WATER:
+            audioManager.playSFX(waterSplashSFX, vol);
+            break;
+        case MATERIALS.OIL:
+            audioManager.playSFX(oilSloshSFX, vol * 0.8);
+            break;
+        case MATERIALS.ACID:
+            audioManager.playSFX(acidSplashSFX, vol);
+            break;
+        case MATERIALS.QUICKSAND:
+            audioManager.playSFX(quicksandSFX, vol * 1.2);
+            break;
+        case MATERIALS.ELECTRIC:
+            audioManager.playSFX(electricZapSFX, vol * 0.9);
+            break;
+        case MATERIALS.ICE:
+            audioManager.playSFX(iceSlideSFX, vol * 0.7);
+            break;
+        case MATERIALS.FIRE:
+            audioManager.playSFX(fireEntrySFX, vol);
+            break;
+        case MATERIALS.GAS:
+            audioManager.playSFX(gasEntrySFX, vol * 0.6);
+            break;
     }
 }
 
@@ -1112,11 +1034,8 @@ if (muteToggle) {
         isMuted = e.target.checked;
         localStorage.setItem('tanks_is_muted', isMuted);
         
-        const currentMusicVol = isMuted ? 0 : musicVolume;
-        const currentSfxVol = isMuted ? 0 : sfxVolume;
-        
-        musicTracks.forEach(t => t.volume = currentMusicVol);
-        audioManager.updateVolumes(currentMusicVol, currentSfxVol);
+        audioManager.isMuted = isMuted;
+        audioManager.setMusicVolume(isMuted ? 0 : musicVolume);
         
         if (!isMuted) {
             playMusic();
@@ -1128,17 +1047,13 @@ if (muteToggle) {
 
 if (musicSlider) musicSlider.oninput = (e) => {
     musicVolume = parseFloat(e.target.value);
-    if (!isMuted) {
-        musicTracks.forEach(t => t.volume = musicVolume);
-    }
+    audioManager.setMusicVolume(isMuted ? 0 : musicVolume);
     localStorage.setItem('tanks_music_vol', musicVolume);
 };
 
 if (sfxSlider) sfxSlider.oninput = (e) => {
     sfxVolume = parseFloat(e.target.value);
-    if (!isMuted) {
-        audioManager.updateVolumes(musicVolume, sfxVolume);
-    }
+    audioManager.setSFXVolume(sfxVolume);
     localStorage.setItem('tanks_sfx_vol', sfxVolume);
 };
 
@@ -1748,31 +1663,6 @@ socket.on('player-event', (data) => {
     if (playerEvents.length > 5) playerEvents.shift();
 });
 
-let trackedElementIds = new Set();
-function playSteamHiss(x, y) {
-    const distSq = (x - (camera.x + canvas.width/2))**2 + (y - (camera.y + canvas.height/2))**2;
-    const maxDist = 1200;
-    if (distSq > maxDist * maxDist) return;
-    const spatialVol = Math.max(0, 1 - Math.sqrt(distSq) / maxDist);
-    audioManager.play('STEAM_HISS', steamSFX, sfxVolume * spatialVol, 0.9 + Math.random() * 0.2, 1000);
-}
-
-let currentPuddleId = null;
-function playEnvironmentalImpact(type) {
-    let source = waterSplashSFX;
-    let volMult = 0.6;
-    
-    if (type === 'oil') source = oilSloshSFX;
-    if (type === 'acid') source = acidSplashSFX;
-    if (type === 'quicksand') { source = quicksandSFX; volMult = 0.8; }
-    if (type === 'electric') { source = electricZapSFX; volMult = 0.7; }
-    if (type === 'ice') { source = iceSlideSFX; volMult = 0.5; }
-    if (type === 'fire') { source = fireEntrySFX; volMult = 0.7; }
-    if (type === 'gas') { source = gasEntrySFX; volMult = 0.5; }
-
-    audioManager.play('ENV_IMPACT', source, sfxVolume * volMult, 0.9 + Math.random() * 0.2, 1000);
-}
-
 socket.on('state', (state) => {
     serverState = state;
     
@@ -1780,7 +1670,7 @@ socket.on('state', (state) => {
     if (state.bullets) {
         state.bullets.forEach(b => {
             if (!knownBulletIds.has(b.id)) {
-                playWeaponSound(b.w, b.x, b.y);
+                playWeaponSound(b.w);
                 knownBulletIds.add(b.id);
                 
                 // Muzzle Flash / Spawn particles
@@ -1976,6 +1866,9 @@ function renderLoop(now) {
             updateAimAngle();
             // Apply it immediately to the rendered state
             me.aa = keys.aimAngle;
+
+            // NEW: Environmental Audio Detection
+            updateLocalPlayerAudio(me);
         }
 
         if (shake.intensity > 0) {
@@ -2008,6 +1901,17 @@ function renderLoop(now) {
             updateElectricPattern(renderTime);
             updateFirePattern(renderTime);
             updateSteamPattern(renderTime);
+            
+            // Trigger steam hiss SFX if newly created near player
+            gameState.elements.forEach(e => {
+                if (e.t === MATERIALS.STEAM && e.age && e.age < 2) {
+                    const dist = Math.hypot(e.x - camera.x, e.y - camera.y);
+                    if (dist < 600) {
+                        audioManager.playChannel('steam', steamSFX, 0.4, 1500);
+                    }
+                }
+            });
+
             updateAtmosphere(dt);
             updateEnvironmentalObjects(dt);
             updateEnvironmentalLife(dt);
@@ -3481,48 +3385,6 @@ function interpolateState(dt) {
     const P = 1 - Math.pow(0.75, dt); // frame-rate independent lerp (~0.25 at 60fps)
 
     gameState.bullets   = serverState.bullets;
-    gameState.players = serverState.players;
-    
-    // Track new steam elements for audio
-    serverState.elements.forEach(e => {
-        if (!trackedElementIds.has(e.id)) {
-            if (e.t === 'steam') {
-                playSteamHiss(e.x, e.y);
-            }
-            trackedElementIds.add(e.id);
-        }
-    });
-
-    // Puddle Entry Detection for Local Player
-    const me = serverState.players.find(p => p.id === socket.id);
-    if (me) {
-        let insideElement = null;
-        const hazards = ['water', 'oil', 'acid', 'quicksand', 'electric', 'ice', 'fire', 'gas'];
-        serverState.elements.forEach(e => {
-            if (hazards.includes(e.t)) {
-                const dx = me.x - e.x;
-                const dy = me.y - e.y;
-                const radius = (e.w * 0.5) + 15;
-                if (dx*dx + dy*dy < radius * radius) {
-                    insideElement = e;
-                }
-            }
-        });
-        
-        if (insideElement && insideElement.id !== currentPuddleId) {
-            playEnvironmentalImpact(insideElement.t);
-            currentPuddleId = insideElement.id;
-        } else if (!insideElement) {
-            currentPuddleId = null;
-        }
-    }
-    
-    // Cleanup old IDs
-    if (trackedElementIds.size > 200) {
-        const currentIds = new Set(serverState.elements.map(e => e.id));
-        trackedElementIds = new Set([...trackedElementIds].filter(id => currentIds.has(id)));
-    }
-
     gameState.elements  = serverState.elements;
     gameState.guardians = serverState.guardians;
     gameState.zones     = serverState.zones ? serverState.zones.map(z => ({ ...z, type: z.t || z.type })) : [];
@@ -4221,7 +4083,7 @@ function drawElements() {
             ctx.strokeStyle = '#fff';
             ctx.lineWidth = 1;
             ctx.stroke();
-        } else if ([MATERIALS.BARREL_EXPLOSIVE, MATERIALS.BARREL_OIL, MATERIALS.BARREL_ACID, MATERIALS.BARREL_ELECTRIC, MATERIALS.BARREL_FROST, MATERIALS.BARREL_GAS].includes(e.t)) {
+        } else if (e.t.startsWith('barrel_')) {
             ctx.translate(e.x, e.y);
             // Deep Shadow (Cylindrical)
             ctx.fillStyle = 'rgba(0,0,0,0.6)';
@@ -4271,7 +4133,15 @@ function drawElements() {
                 ctx.bezierCurveTo(-10, -6, -12, 6, 0, 10);
                 ctx.bezierCurveTo(12, 6, 10, -6, 0, -14);
                 ctx.fill();
-                ctx.shadowBlur = 0;
+                ctx.shadowBlur = 0; // Reset
+                
+                // Inner flame
+                ctx.fillStyle = '#ff4444';
+                ctx.beginPath();
+                ctx.moveTo(0, -8);
+                ctx.bezierCurveTo(-6, -3, -7, 3, 0, 6);
+                ctx.bezierCurveTo(7, 3, 6, -3, 0, -8);
+                ctx.fill();
             } else if (e.t === MATERIALS.BARREL_OIL) {
                 // Draw Oil Drop Symbol
                 ctx.fillStyle = '#000';
@@ -4287,60 +4157,66 @@ function drawElements() {
                 ctx.fill();
             } else if (e.t === MATERIALS.BARREL_ACID) {
                 // Biohazard Symbol
-                ctx.fillStyle = '#111';
+                ctx.fillStyle = '#000';
                 ctx.beginPath();
-                ctx.arc(0, 0, 5, 0, Math.PI*2);
+                ctx.arc(0, 0, 10, 0, Math.PI * 2);
                 ctx.fill();
+                ctx.strokeStyle = '#aaff00';
+                ctx.lineWidth = 2;
                 for (let i = 0; i < 3; i++) {
-                    const ang = (i * Math.PI * 2) / 3;
+                    ctx.save();
+                    ctx.rotate((i * Math.PI * 2) / 3);
                     ctx.beginPath();
-                    ctx.arc(Math.cos(ang)*8, Math.sin(ang)*8, 4, 0, Math.PI*2);
-                    ctx.fill();
+                    ctx.arc(0, -6, 5, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.restore();
                 }
             } else if (e.t === MATERIALS.BARREL_ELECTRIC) {
-                // Lightning Bolt
+                // Lightning Bolt - High Contrast Fix
                 const pulse = 0.8 + Math.sin(renderTime * 0.01) * 0.2;
                 ctx.shadowBlur = 15 * pulse;
                 ctx.shadowColor = '#fff';
                 
-                // Outer Glow for contrast
-                ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+                // Outer Black Stroke for maximum visibility
+                ctx.strokeStyle = '#000';
                 ctx.lineWidth = 4;
                 ctx.beginPath();
                 ctx.moveTo(-5, -12); ctx.lineTo(3, -2); ctx.lineTo(-2, 0); ctx.lineTo(6, 12);
-                ctx.lineTo(-2, 2); ctx.lineTo(3, 0); ctx.closePath();
+                ctx.lineTo(-2, 2); ctx.lineTo(3, 0); ctx.lineTo(-5, -12);
                 ctx.stroke();
 
-                // Inner White Bolt
+                // Main Bolt Fill
                 ctx.fillStyle = '#fff';
                 ctx.fill();
                 
-                // Sharp Cyan Stroke
+                // Sharp Cyan Inner Stroke
                 ctx.strokeStyle = '#00f2ff';
                 ctx.lineWidth = 1.5;
                 ctx.stroke();
+
                 ctx.shadowBlur = 0;
             } else if (e.t === MATERIALS.BARREL_FROST) {
-                // Snowflake
+                // Snowflake Symbol
                 ctx.strokeStyle = '#fff';
-                ctx.lineWidth = 3;
-                ctx.beginPath();
-                for (let i = 0; i < 4; i++) {
-                    const ang = (i * Math.PI) / 4;
-                    ctx.moveTo(-Math.cos(ang)*10, -Math.sin(ang)*10);
-                    ctx.lineTo(Math.cos(ang)*10, Math.sin(ang)*10);
+                ctx.lineWidth = 2;
+                for (let i = 0; i < 6; i++) {
+                    ctx.save();
+                    ctx.rotate((i * Math.PI * 2) / 6);
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0); ctx.lineTo(0, -12);
+                    ctx.moveTo(-3, -8); ctx.lineTo(0, -11); ctx.lineTo(3, -8);
+                    ctx.stroke();
+                    ctx.restore();
                 }
-                ctx.stroke();
             } else if (e.t === MATERIALS.BARREL_GAS) {
-                // Gas Mask Symbol
-                ctx.fillStyle = '#111';
-                ctx.beginPath();
-                ctx.arc(0, -2, 7, 0, Math.PI*2); // Head
-                ctx.fill();
-                ctx.beginPath();
-                ctx.arc(-6, 6, 5, 0, Math.PI*2); // Left filter
-                ctx.arc(6, 6, 5, 0, Math.PI*2);  // Right filter
-                ctx.fill();
+                // Gas Cloud Symbol
+                ctx.fillStyle = '#446622';
+                for (let i = 0; i < 5; i++) {
+                    const ang = (i / 5) * Math.PI * 2;
+                    ctx.beginPath();
+                    ctx.arc(Math.cos(ang) * 6, Math.sin(ang) * 6, 6, 0, Math.PI * 2);
+                    ctx.fill();
+                }
             }
             ctx.restore();
         } else if (e.t === MATERIALS.CRATE) {
@@ -5308,6 +5184,28 @@ function drawAtmosphere() {
         }
     }
     ctx.restore();
+}
+
+function updateLocalPlayerAudio(me) {
+    // 1. Detect Puddle Entry
+    let currentPuddle = null;
+    if (gameState.zones) {
+        gameState.zones.forEach(z => {
+            const dx = me.x - z.x;
+            const dy = me.y - z.y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            if (dist < z.r) {
+                currentPuddle = z.t || z.type;
+            }
+        });
+    }
+
+    if (currentPuddle !== lastPuddleType) {
+        if (currentPuddle && currentPuddle !== 'NONE') {
+            playEnvironmentalImpact(currentPuddle, me.x, me.y);
+        }
+        lastPuddleType = currentPuddle;
+    }
 }
 
 function spawnParticles(x, y, color, count = 10, sizeMult = 1) {

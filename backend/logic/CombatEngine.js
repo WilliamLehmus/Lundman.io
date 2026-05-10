@@ -202,27 +202,47 @@ export class CombatEngine {
 
                 if (bulletData.type === element.type) return;
 
-                const isSolid = [MATERIALS.BUILDING, MATERIALS.BARREL_EXPLOSIVE, MATERIALS.BARREL_OIL, MATERIALS.CRATE, MATERIALS.DIRT].includes(element.type);
+                const isBarrel = element.type.startsWith('barrel_');
+                const isSolid = isBarrel || [MATERIALS.BUILDING, MATERIALS.CRATE, MATERIALS.DIRT].includes(element.type);
+                
                 if (isSolid) {
+                    // Specialized Weapon-Barrel Interactions
+                    if (bulletData.type === MATERIALS.WATER && element.type === MATERIALS.BARREL_EXPLOSIVE) {
+                        // Water neutralizes explosive barrels -> turn into steam
+                        this.lobby.spawnElement(element.body.position, MATERIALS.STEAM, 8000, 50, bulletData.ownerId, 100, 100);
+                        this.lobby.destroyElement(element.id);
+                        this.lobby.destroyBullet(bullet.id);
+                        return;
+                    }
+
+                    if (bulletData.type === MATERIALS.FIRE && element.type === MATERIALS.BARREL_OIL) {
+                        // Fire ignites oil barrels -> explode
+                        this.barrelExplode(element.body.position, 'fire', bulletData.ownerId);
+                        this.lobby.destroyElement(element.id);
+                        this.lobby.destroyBullet(bullet.id);
+                        return;
+                    }
+
                     if (element.hp != null) {
                         let damage = bulletData.damage;
                         if (bulletData.type === MATERIALS.METAL && (element.type === MATERIALS.DIRT || element.type === MATERIALS.BUILDING)) damage *= 2.0;
                         element.hp -= damage;
+                        
                         if (element.hp <= 0) {
                             if (element.type === MATERIALS.BUILDING) {
                                 for (let i = 0; i < 10; i++) this.lobby.spawnElement({ x: element.body.position.x + (Math.random()-0.5)*element.w, y: element.body.position.y + (Math.random()-0.5)*element.h }, MATERIALS.SCRAP, 30000);
                             } else if (element.type === MATERIALS.BARREL_EXPLOSIVE) {
                                 this.barrelExplode(element.body.position, 'fire', bulletData.ownerId);
                             } else if (element.type === MATERIALS.BARREL_OIL) {
-                                this.barrelExplode(element.body.position, 'oil', bulletData.ownerId);
+                                this.barrelBreak(element.body.position, MATERIALS.OIL, bulletData.ownerId);
                             } else if (element.type === MATERIALS.BARREL_ACID) {
-                                this.barrelExplode(element.body.position, 'acid', bulletData.ownerId);
+                                this.barrelBreak(element.body.position, MATERIALS.ACID, bulletData.ownerId);
                             } else if (element.type === MATERIALS.BARREL_ELECTRIC) {
-                                this.barrelExplode(element.body.position, 'electric', bulletData.ownerId);
+                                this.barrelBreak(element.body.position, MATERIALS.ELECTRIC, bulletData.ownerId);
                             } else if (element.type === MATERIALS.BARREL_FROST) {
-                                this.barrelExplode(element.body.position, 'frost', bulletData.ownerId);
+                                this.barrelBreak(element.body.position, MATERIALS.ICE, bulletData.ownerId);
                             } else if (element.type === MATERIALS.BARREL_GAS) {
-                                this.barrelExplode(element.body.position, 'gas', bulletData.ownerId);
+                                this.barrelBreak(element.body.position, MATERIALS.GAS, bulletData.ownerId);
                             } else if (element.type === MATERIALS.CRATE) {
                                 for (let i = 0; i < 3; i++) this.lobby.spawnElement({ x: element.body.position.x + (Math.random()-0.5)*30, y: element.body.position.y + (Math.random()-0.5)*30 }, MATERIALS.SCRAP, 30000);
                             }
@@ -366,7 +386,7 @@ export class CombatEngine {
     }
 
     barrelExplode(pos, type, ownerId) {
-        const radius = 180;
+        const radius = 155; // Adjusted to match user's visual request ( Bild 2 )
         Object.values(this.lobby.players).forEach(p => {
             const dist = Vector.magnitude(Vector.sub(p.body.position, pos));
             if (dist < radius) {
@@ -380,39 +400,43 @@ export class CombatEngine {
 
         if (type === 'fire') {
             for (let i = 0; i < 5; i++) {
+                const size = 60 * (0.8 + Math.random() * 0.7); // Randomized size
                 this.lobby.spawnElement({
                     x: pos.x + (Math.random() - 0.5) * 100,
                     y: pos.y + (Math.random() - 0.5) * 100
-                }, MATERIALS.FIRE, 8000, 100, ownerId, 60, 60);
+                }, MATERIALS.FIRE, 8000, 100, ownerId, size, size);
             }
-        } else if (type === 'oil') {
+        } else {
             for (let i = 0; i < 3; i++) {
+                const size = 80 * (0.8 + Math.random() * 0.7); // Randomized size
                 this.lobby.spawnElement({
                     x: pos.x + (Math.random() - 0.5) * 120,
                     y: pos.y + (Math.random() - 0.5) * 120
-                }, MATERIALS.OIL, null, null, null, 80, 80);
+                }, MATERIALS.OIL, null, null, null, size, size);
             }
-        } else if (type === 'acid') {
-            for (let i = 0; i < 4; i++) {
-                this.lobby.spawnElement({
-                    x: pos.x + (Math.random() - 0.5) * 100,
-                    y: pos.y + (Math.random() - 0.5) * 100
-                }, MATERIALS.ACID, 12000, null, ownerId, 70, 70);
-            }
-            this.lobby.spawnElement(pos, MATERIALS.GAS, 8000, null, ownerId, 150, 150);
-        } else if (type === 'electric') {
-            const el = this.lobby.spawnElement(pos, MATERIALS.ELECTRIC, 3000, null, ownerId, 200, 200);
-            if (el) el.originalType = MATERIALS.WATER; // For cleanup logic if on water
-        } else if (type === 'frost') {
-            for (let i = 0; i < 3; i++) {
-                this.lobby.spawnElement({
-                    x: pos.x + (Math.random() - 0.5) * 110,
-                    y: pos.y + (Math.random() - 0.5) * 110
-                }, MATERIALS.ICE, 10000, null, ownerId, 90, 90);
-            }
-        } else if (type === 'gas') {
-            this.lobby.spawnElement(pos, MATERIALS.GAS, 15000, null, ownerId, 300, 300);
         }
+    }
+
+    barrelBreak(pos, type, ownerId) {
+        const sizeMult = 0.8 + Math.random() * 0.7; // 80% to 150% as requested
+        const baseSize = MATERIAL_PROPERTIES[type]?.w || 80;
+        const size = baseSize * sizeMult;
+
+        // Specialized logic for Electric Barrel
+        if (type === MATERIALS.ELECTRIC) {
+            const radius = 155; // Same as explosion radius
+            Object.values(this.lobby.players).forEach(p => {
+                const dist = Vector.magnitude(Vector.sub(p.body.position, pos));
+                if (dist < radius) {
+                    p.hp -= 15; // Direct direct damage
+                    p.statusEffects.stun = Date.now() + 1500; // Stun effect
+                    if (p.hp <= 0) this.lobby.respawn(p, ownerId, 'ELECTRIC_BARREL');
+                }
+            });
+            this.io.to(this.lobby.id).emit('collision-effect', { x: pos.x, y: pos.y, type: MATERIALS.ELECTRIC, targetLabel: 'explosion' });
+        }
+
+        this.lobby.spawnElement(pos, type, type === MATERIALS.GAS ? 8000 : null, null, ownerId, size, size);
     }
 
     processGuardians(now) {

@@ -152,12 +152,12 @@ export class MapGenerator {
                 
                 const rand = Math.random();
                 let pType;
-                if (rand < 0.18) pType = MATERIALS.BARREL_EXPLOSIVE;
-                else if (rand < 0.35) pType = MATERIALS.BARREL_OIL;
+                if (rand < 0.20) pType = MATERIALS.BARREL_EXPLOSIVE;
+                else if (rand < 0.40) pType = MATERIALS.BARREL_OIL;
                 else if (rand < 0.50) pType = MATERIALS.BARREL_ACID;
-                else if (rand < 0.65) pType = MATERIALS.BARREL_ELECTRIC;
-                else if (rand < 0.75) pType = MATERIALS.BARREL_FROST;
-                else if (rand < 0.85) pType = MATERIALS.BARREL_GAS;
+                else if (rand < 0.60) pType = MATERIALS.BARREL_ELECTRIC;
+                else if (rand < 0.70) pType = MATERIALS.BARREL_FROST;
+                else if (rand < 0.80) pType = MATERIALS.BARREL_GAS;
                 else pType = MATERIALS.CRATE;
                 
                 const props = MATERIAL_PROPERTIES[pType];
@@ -193,12 +193,10 @@ export class MapGenerator {
                     const pos = { x: bx + ox + Math.cos(ang) * r, y: by + oy + Math.sin(ang) * r };
                     const rand = Math.random();
                     let pType;
-                    if (rand < 0.18) pType = MATERIALS.BARREL_EXPLOSIVE;
-                    else if (rand < 0.35) pType = MATERIALS.BARREL_OIL;
-                    else if (rand < 0.50) pType = MATERIALS.BARREL_ACID;
-                    else if (rand < 0.65) pType = MATERIALS.BARREL_ELECTRIC;
-                    else if (rand < 0.75) pType = MATERIALS.BARREL_FROST;
-                    else if (rand < 0.85) pType = MATERIALS.BARREL_GAS;
+                    if (rand > 0.85) pType = MATERIALS.BARREL_EXPLOSIVE;
+                    else if (rand > 0.70) pType = MATERIALS.BARREL_OIL;
+                    else if (rand > 0.55) pType = MATERIALS.BARREL_ELECTRIC;
+                    else if (rand > 0.40) pType = MATERIALS.BARREL_ACID;
                     else pType = MATERIALS.CRATE;
                     this.lobby.spawnElement(pos, pType, null, MATERIAL_PROPERTIES[pType].hp);
                 }
@@ -247,12 +245,12 @@ export class MapGenerator {
             const pos = { x: bx + Math.random() * size, y: by + Math.random() * size };
             const rand = Math.random();
             let pType;
-            if (rand < 0.18) pType = MATERIALS.BARREL_EXPLOSIVE;
-            else if (rand < 0.35) pType = MATERIALS.BARREL_OIL;
-            else if (rand < 0.50) pType = MATERIALS.BARREL_ACID;
-            else if (rand < 0.65) pType = MATERIALS.BARREL_ELECTRIC;
-            else if (rand < 0.75) pType = MATERIALS.BARREL_FROST;
-            else if (rand < 0.85) pType = MATERIALS.BARREL_GAS;
+            if (rand < 0.20) pType = MATERIALS.BARREL_EXPLOSIVE;
+            else if (rand < 0.40) pType = MATERIALS.BARREL_OIL;
+            else if (rand < 0.55) pType = MATERIALS.BARREL_ACID;
+            else if (rand < 0.70) pType = MATERIALS.BARREL_ELECTRIC;
+            else if (rand < 0.80) pType = MATERIALS.BARREL_FROST;
+            else if (rand < 0.90) pType = MATERIALS.BARREL_GAS;
             else pType = MATERIALS.CRATE;
             const props = MATERIAL_PROPERTIES[pType];
             this.lobby.spawnElement(pos, pType, null, props.hp);
