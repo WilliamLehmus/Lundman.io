@@ -305,9 +305,15 @@ io.on('connection', (socket) => {
             const p = lobby.players[socket.id];
             if (CHASSIS[chassisType]) {
                 const config = CHASSIS[chassisType];
-                p.chassis = chassisType; p.hp = config.hp; p.maxHp = p.hp;
-                p.slots = [...config.weapons]; p.currentSlot = 0;
+                p.chassis = chassisType; 
+                p.hp = config.hp; 
+                p.maxHp = config.hp;
+                // Force update slots from the new config
+                p.slots = [...config.weapons]; 
+                p.currentSlot = 0;
+                
                 if (p.body) Matter.Body.setMass(p.body, config.mass);
+                console.log(`[CHASSIS_CHANGE] Player ${p.username} changed to ${chassisType}. Slots:`, p.slots);
                 io.to(lobby.id).emit('lobby-update', { id: lobby.id, players: lobby.mapLobbyPlayers() });
             }
         }
@@ -407,3 +413,5 @@ server.listen(PORT, '0.0.0.0', () => {
         console.error('Server Error:', err);
     }
 });
+ 
+ 

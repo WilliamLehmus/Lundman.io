@@ -63,7 +63,7 @@ export const BIOMES = {
 export const CHASSIS = {
     SCOUT: {
         name: 'Scout',
-        hp: 80,
+        hp: 100,
         speed: 0.008, 
         turnSpeed: 0.065,
         mass: 3,
@@ -74,17 +74,17 @@ export const CHASSIS = {
     BRAWLER: {
         name: 'Brawler',
         hp: 200,
-        speed: 0.006, 
+        speed: 0.008, 
         turnSpeed: 0.04,
         mass: 10,
-        slots: 1,
-        allowedWeapons: ['HEAVY_GUN', 'STANDARD', 'DIRT_GUN'],
-        weapons: ['HEAVY_GUN']
+        slots: 2,
+        allowedWeapons: ['HEAVY_GUN', 'TESLA', 'STANDARD', 'DIRT_GUN'],
+        weapons: ['HEAVY_GUN', 'TESLA']
     },
     ARTILLERY: {
         name: 'Artillery',
-        hp: 60,
-        speed: 0.0045, 
+        hp: 150,
+        speed: 0.008, 
         turnSpeed: 0.04,
         mass: 15,
         slots: 4,

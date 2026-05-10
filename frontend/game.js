@@ -1246,11 +1246,21 @@ const WEAPON_NAMES = {
 };
 const WEAPON_ABBR = {
     STANDARD: 'GUN', FLAMETHROWER: 'FIRE', WATER_CANNON: 'H\u2082O',
-    DIRT_GUN: 'DIRT', TESLA: 'ARC', FROST_GUN: 'ICE', HEAVY_GUN: 'HVY'
+    DIRT_GUN: 'DIRT', TESLA: 'TSL', FROST_GUN: 'ICE', HEAVY_GUN: 'HVY'
 };
 
 function getWeaponIcon(weaponType) {
     const name = weaponType.toUpperCase();
+    if (name === 'STANDARD') return 'assets/icon_standard.png';
+    if (name === 'HEAVY_GUN') return 'assets/icon_launcher.png';
+    if (name === 'FLAMETHROWER') return 'assets/icon_flame.png';
+    if (name === 'WATER_CANNON') return 'assets/icon_water.png';
+    if (name === 'TESLA') return 'assets/icon_tesla.png';
+    if (name === 'FROST_GUN') return 'assets/icon_frost.png';
+    if (name === 'DIRT_GUN') return 'assets/icon_dirt.png';
+    if (name === 'SHOTGUN') return 'assets/icon_shotgun.png';
+    
+    // Fallback search
     if (name.includes('STANDARD')) return 'assets/icon_standard.png';
     if (name.includes('HEAVY')) return 'assets/icon_launcher.png';
     if (name.includes('FLAME')) return 'assets/icon_flame.png';
@@ -1258,7 +1268,6 @@ function getWeaponIcon(weaponType) {
     if (name.includes('TESLA')) return 'assets/icon_tesla.png';
     if (name.includes('FROST')) return 'assets/icon_frost.png';
     if (name.includes('DIRT')) return 'assets/icon_dirt.png';
-    if (name.includes('SHOTGUN')) return 'assets/icon_shotgun.png';
     return null;
 }
 const TRAIL_LENGTHS  = { metal: 6, fire: 4, water: 3, dirt: 3, electric: 8, ice: 7 };
@@ -1473,7 +1482,8 @@ function updateLobbyUI(id, players) {
 
             const stats = document.createElement('div');
             stats.className = 'tank-stats';
-            stats.innerHTML = `<span>HP: ${config.hp}</span><span>SLOTS: ${config.slots}</span>`;
+            const speedVal = (config.speed * 1000).toFixed(1);
+            stats.innerHTML = `<span>HP: ${config.hp}</span><span>SLOTS: ${config.slots}</span><span>SPD: ${speedVal}</span>`;
             card.appendChild(stats);
 
             // Loadout Slots
@@ -1551,8 +1561,24 @@ function updateLobbyUI(id, players) {
                 info.innerHTML = `
                     <div class="slot-name">${player.u.toUpperCase()} ${player.isBot ? '(BOT)' : ''}</div>
                     <div class="slot-chassis">${player.ch} ${player.ready ? '<span class="ready-status">READY</span>' : '<span class="not-ready-status">WAITING</span>'}</div>
+                    <div class="slot-weapons-preview" id="preview-${player.id}"></div>
                 `;
                 slot.appendChild(info);
+
+                // Populate weapon preview
+                const wp = info.querySelector('.slot-weapons-preview');
+                if (wp && player.sl) {
+                    player.sl.forEach(wType => {
+                        const icon = getWeaponIcon(wType);
+                        if (icon) {
+                            const img = document.createElement('img');
+                            img.src = icon;
+                            img.className = 'mini-weapon-icon';
+                            img.title = wType;
+                            wp.appendChild(img);
+                        }
+                    });
+                }
 
                 const actions = document.createElement('div');
                 actions.className = 'slot-actions';
@@ -1837,7 +1863,13 @@ function updateHUD() {
 
         const weaponContainer = document.querySelector('.weapon-slots');
         if (weaponContainer) {
-            if (weaponContainer.children.length !== me.sl.length) {
+            // Check if slots have changed (either count or weapon types)
+            const currentSlotTypes = Array.from(weaponContainer.querySelectorAll('.weapon-slot-label')).map(el => el.innerText);
+            const newSlotTypes = me.sl.map(slot => WEAPON_ABBR[slot] || slot.toString().substring(0, 3));
+            const needsFullRender = weaponContainer.children.length !== me.sl.length || 
+                                   JSON.stringify(currentSlotTypes) !== JSON.stringify(newSlotTypes);
+
+            if (needsFullRender) {
                 weaponContainer.innerHTML = '';
                 me.sl.forEach((slot, index) => {
                     const slotDiv = document.createElement('div');
