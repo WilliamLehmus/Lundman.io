@@ -205,7 +205,7 @@ export class Lobby {
 
         if (type !== MATERIALS.BUILDING) {
             const buildings = Object.values(this.elements).filter(e => e.type === MATERIALS.BUILDING).map(e => e.body);
-            if (Query.region(buildings, { min: { x: pos.x - ew/2, y: pos.y - eh/2 }, max: { x: pos.x + ew/2, y: pos.y + eh/2 } }).length > 0) return null;
+            if (!ignoreId && Query.region(buildings, { min: { x: pos.x - ew/2, y: pos.y - eh/2 }, max: { x: pos.x + ew/2, y: pos.y + eh/2 } }).length > 0) return null;
             if (this.mapType === 'URBAN' && solidTypes.includes(type)) {
                 const step = 500, padding = 150, buffer = 20;
                 const relativeX = (pos.x - (padding - buffer)) % step;
@@ -216,14 +216,14 @@ export class Lobby {
                 const otherSolids = Object.values(this.elements)
                     .filter(e => solidTypes.includes(e.type) && e.id !== ignoreId)
                     .map(e => e.body);
-                if (Query.region(otherSolids, { min: { x: pos.x - 100, y: pos.y - 100 }, max: { x: pos.x + 100, y: pos.y + 100 } }).length > 0) return null;
+                if (!ignoreId && Query.region(otherSolids, { min: { x: pos.x - 100, y: pos.y - 100 }, max: { x: pos.x + 100, y: pos.y + 100 } }).length > 0) return null;
             }
             const liquidTypes = [MATERIALS.WATER, MATERIALS.OIL, MATERIALS.ACID, MATERIALS.ELECTRIC, MATERIALS.ICE];
             if (liquidTypes.includes(type)) {
                 const otherLiquids = Object.values(this.elements)
                     .filter(e => liquidTypes.includes(e.type) && e.id !== ignoreId)
                     .map(e => e.body);
-                if (Query.region(otherLiquids, { min: { x: pos.x - ew*0.8, y: pos.y - ew*0.8 }, max: { x: pos.x + ew*0.8, y: pos.y + ew*0.8 } }).length > 0) return null;
+                if (!ignoreId && Query.region(otherLiquids, { min: { x: pos.x - ew*0.8, y: pos.y - ew*0.8 }, max: { x: pos.x + ew*0.8, y: pos.y + ew*0.8 } }).length > 0) return null;
             }
         }
 

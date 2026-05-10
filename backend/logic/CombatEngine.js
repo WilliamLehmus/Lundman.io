@@ -217,7 +217,7 @@ export class CombatEngine {
 
                     if (bulletData.type === MATERIALS.FIRE && element.type === MATERIALS.BARREL_OIL) {
                         // Fire ignites oil barrels -> explode
-                        this.barrelExplode(element.body.position, 'fire', bulletData.ownerId);
+                        this.barrelExplode(element.body.position, 'fire', bulletData.ownerId, element.id);
                         this.lobby.destroyElement(element.id);
                         this.lobby.destroyBullet(bullet.id);
                         return;
@@ -232,17 +232,17 @@ export class CombatEngine {
                             if (element.type === MATERIALS.BUILDING) {
                                 for (let i = 0; i < 10; i++) this.lobby.spawnElement({ x: element.body.position.x + (Math.random()-0.5)*element.w, y: element.body.position.y + (Math.random()-0.5)*element.h }, MATERIALS.SCRAP, 30000);
                             } else if (element.type === MATERIALS.BARREL_EXPLOSIVE) {
-                                this.barrelExplode(element.body.position, 'fire', bulletData.ownerId);
+                                this.barrelExplode(element.body.position, 'fire', bulletData.ownerId, element.id);
                             } else if (element.type === MATERIALS.BARREL_OIL) {
-                                this.barrelBreak(element.body.position, MATERIALS.OIL, bulletData.ownerId);
+                                this.barrelBreak(element.body.position, MATERIALS.OIL, bulletData.ownerId, element.id);
                             } else if (element.type === MATERIALS.BARREL_ACID) {
-                                this.barrelBreak(element.body.position, MATERIALS.ACID, bulletData.ownerId);
+                                this.barrelBreak(element.body.position, MATERIALS.ACID, bulletData.ownerId, element.id);
                             } else if (element.type === MATERIALS.BARREL_ELECTRIC) {
-                                this.barrelBreak(element.body.position, MATERIALS.ELECTRIC, bulletData.ownerId);
+                                this.barrelBreak(element.body.position, MATERIALS.ELECTRIC, bulletData.ownerId, element.id);
                             } else if (element.type === MATERIALS.BARREL_FROST) {
-                                this.barrelBreak(element.body.position, MATERIALS.ICE, bulletData.ownerId);
+                                this.barrelBreak(element.body.position, MATERIALS.ICE, bulletData.ownerId, element.id);
                             } else if (element.type === MATERIALS.BARREL_GAS) {
-                                this.barrelBreak(element.body.position, MATERIALS.GAS, bulletData.ownerId);
+                                this.barrelBreak(element.body.position, MATERIALS.GAS, bulletData.ownerId, element.id);
                             } else if (element.type === MATERIALS.CRATE) {
                                 for (let i = 0; i < 3; i++) this.lobby.spawnElement({ x: element.body.position.x + (Math.random()-0.5)*30, y: element.body.position.y + (Math.random()-0.5)*30 }, MATERIALS.SCRAP, 30000);
                             }
@@ -268,15 +268,10 @@ export class CombatEngine {
         if (elementA && elementB) {
             if ((elementA.type === MATERIALS.FIRE && elementB.type === MATERIALS.ICE) ||
                 (elementB.type === MATERIALS.FIRE && elementA.type === MATERIALS.ICE)) {
-                const ice = elementA.type === MATERIALS.ICE ? elementA : elementB;
-                ice.type = MATERIALS.WATER;
-                if (this.lobby.mapType === 'TUNDRA') {
-                    ice.expiresAt = Date.now() + 30000;
-                    ice.originalType = MATERIALS.ICE;
-                } else {
-                    ice.expiresAt = null;
-                    ice.originalType = null;
-                }
+                this.lobby.spawnElement(elementA.body.position, MATERIALS.STEAM, 15000);
+                this.lobby.destroyElement(elementA.id);
+                this.lobby.destroyElement(elementB.id);
+                return;
             }
 
             if ((elementA.type === MATERIALS.FIRE && elementB.type === MATERIALS.OIL) ||
@@ -392,7 +387,7 @@ export class CombatEngine {
         }
     }
 
-    barrelExplode(pos, type, ownerId) {
+    barrelExplode(pos, type, ownerId, ignoreId) {
         const radius = 155; // Adjusted to match user's visual request ( Bild 2 )
         Object.values(this.lobby.players).forEach(p => {
             const dist = Vector.magnitude(Vector.sub(p.body.position, pos));
@@ -404,6 +399,7 @@ export class CombatEngine {
         });
 
         this.io.to(this.lobby.id).emit('explosion', { x: pos.x, y: pos.y, radius });
+        this.io.to(this.lobby.id).emit('barrel-break', { x: pos.x, y: pos.y, type: 'explosion' });
 
         if (type === 'fire') {
             for (let i = 0; i < 5; i++) {
@@ -411,20 +407,21 @@ export class CombatEngine {
                 this.lobby.spawnElement({
                     x: pos.x + (Math.random() - 0.5) * 100,
                     y: pos.y + (Math.random() - 0.5) * 100
-                }, MATERIALS.FIRE, 8000, 100, ownerId, size, size);
+                }, MATERIALS.FIRE, 8000, 100, ownerId, size, size, ignoreId);
             }
         } else {
-            for (let i = 0; i < 3; i++) {
+            const count = 3 + Math.floor(Math.random() * 4); // 3 to 6 puddles
+            for (let i = 0; i < count; i++) {
                 const size = 80 * (0.8 + Math.random() * 0.7); // Randomized size
                 this.lobby.spawnElement({
                     x: pos.x + (Math.random() - 0.5) * 120,
                     y: pos.y + (Math.random() - 0.5) * 120
-                }, MATERIALS.OIL, null, null, null, size, size);
+                }, MATERIALS.OIL, null, null, null, size, size, ignoreId);
             }
         }
     }
 
-    barrelBreak(pos, type, ownerId) {
+    barrelBreak(pos, type, ownerId, ignoreId) {
         const sizeMult = 0.8 + Math.random() * 0.7; // 80% to 150% as requested
         const baseSize = MATERIAL_PROPERTIES[type]?.w || 80;
         const size = baseSize * sizeMult;
@@ -443,7 +440,8 @@ export class CombatEngine {
             this.io.to(this.lobby.id).emit('collision-effect', { x: pos.x, y: pos.y, type: MATERIALS.ELECTRIC, targetLabel: 'explosion' });
         }
 
-        this.lobby.spawnElement(pos, type, type === MATERIALS.GAS ? 8000 : null, null, ownerId, size, size);
+        this.io.to(this.lobby.id).emit('barrel-break', { x: pos.x, y: pos.y, type });
+        this.lobby.spawnElement(pos, type, type === MATERIALS.GAS ? 8000 : null, null, ownerId, size, size, ignoreId);
     }
 
     processGuardians(now) {

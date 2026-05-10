@@ -26,6 +26,8 @@ console.log('Socket initialized, attempting connection...');
 
 socket.on('explosion', (data) => {
     shake.intensity = 20;
+    // Play explosion sound (Premium feedback)
+    audioManager.playSFX(heavySFX, 1.4); 
     // Massive particle burst
     for (let i = 0; i < 30; i++) {
         particles.push({
@@ -45,10 +47,28 @@ socket.on('explosion', (data) => {
             vx: (Math.random() - 0.5) * 8,
             vy: (Math.random() - 0.5) * 8,
             life: 1.0,
-            color: '#333',
-            size: 15 + Math.random() * 20
+            color: '#fff',
+            size: 4 + Math.random() * 4
         });
     }
+});
+
+socket.on('barrel-break', (data) => {
+    // Play material-specific break/splash sound
+    let sfx = null;
+    let vol = 1.0;
+    
+    if (data.type === 'explosion') {
+        sfx = heavySFX;
+        vol = 0.8;
+    } else if (data.type === MATERIALS.WATER) sfx = waterSplashSFX;
+    else if (data.type === MATERIALS.OIL) sfx = oilSloshSFX;
+    else if (data.type === MATERIALS.ACID) sfx = acidSplashSFX;
+    else if (data.type === MATERIALS.ICE) sfx = iceSFX;
+    else if (data.type === MATERIALS.ELECTRIC) sfx = electricZapSFX;
+    else if (data.type === MATERIALS.GAS) sfx = gasEntrySFX;
+    
+    if (sfx) audioManager.playSFX(sfx, vol);
 });
 
 socket.on('player-event', (data) => {
@@ -199,7 +219,7 @@ let canvasRect = null;
 let lastInputSent = 0;
 let renderTime = 0;
 let lastPuddleCheck = 0;
-let currentPuddleSound = null;
+let currentPuddleId = null;
 
 // Liquid Patterns (9 Variations each for variety)
 let waterPatterns = []; 
@@ -5223,10 +5243,11 @@ function drawAtmosphere() {
 
 function updateLocalPlayerAudio(me) {
     const now = Date.now();
-    if (now - lastPuddleCheck < 200) return; 
+    if (now - lastPuddleCheck < 100) return; // Slightly faster check
     lastPuddleCheck = now;
 
     let activePuddleSFX = null;
+    let activePuddleId = null;
     const isMoving = me.v && (Math.abs(me.v[0]) > 0.15 || Math.abs(me.v[1]) > 0.15);
     
     // Check elements (puddles, steam, etc)
@@ -5238,6 +5259,7 @@ function updateLocalPlayerAudio(me) {
             const radius = e.w ? (e.w / 2 + 25) : 60; // Increased buffer for better detection
             
             if (distSq < radius * radius) {
+                activePuddleId = e.id;
                 if (e.t === MATERIALS.ACID) activePuddleSFX = acidSplashSFX;
                 else if (e.t === MATERIALS.OIL) activePuddleSFX = oilSloshSFX;
                 else if (e.t === MATERIALS.ELECTRIC) activePuddleSFX = electricZapSFX;
@@ -5252,17 +5274,14 @@ function updateLocalPlayerAudio(me) {
         });
     }
 
-    // Check zones (removed per request - only discrete puddles should trigger sounds)
-
-
-    // Only play if moving and entering/staying in a puddle
-    if (isMoving && activePuddleSFX && activePuddleSFX !== currentPuddleSound) {
+    // Only play if moving and entering a NEW puddle (or same puddle if sound expired)
+    if (isMoving && activePuddleSFX && activePuddleId !== currentPuddleId) {
         audioManager.playChannel('puddle', activePuddleSFX, 0.45, 2500);
-        currentPuddleSound = activePuddleSFX;
+        currentPuddleId = activePuddleId;
         // Reset after 4s to allow re-triggering if still in it
-        setTimeout(() => { if (currentPuddleSound === activePuddleSFX) currentPuddleSound = null; }, 4000);
+        setTimeout(() => { if (currentPuddleId === activePuddleId) currentPuddleId = null; }, 4000);
     } else if (!activePuddleSFX || !isMoving) {
-        currentPuddleSound = null;
+        currentPuddleId = null;
     }
 }
 
