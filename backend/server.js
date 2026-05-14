@@ -198,13 +198,14 @@ app.post('/api/feedback', async (req, res) => {
                            (greedyMatchKey ? process.env[greedyMatchKey] : null);
 
         if (!webhookUrl) {
-            const sortedKeys = [...currentKeys].sort().join(', ');
+            const allKeyNames = Object.keys(process.env).sort().join(', ');
             return res.status(500).json({ 
                 error: 'Webhook URL not configured',
                 env: process.env.RAILWAY_ENVIRONMENT_NAME || 'unknown-env',
                 service: process.env.RAILWAY_SERVICE_NAME || 'unknown-service',
                 diagnostic: `Found ${currentKeys.length} keys. Discord keys: ${currentKeys.filter(k => k.toUpperCase().includes('DISCORD')).join(', ')}. Greedy match: ${!!greedyMatchKey}`,
-                hint: `Verify that DISCORD_FEEDBACK_WEBHOOK_URL is set in Service: "${process.env.RAILWAY_SERVICE_NAME || '?'}" and Environment: "${process.env.RAILWAY_ENVIRONMENT_NAME || '?'}" in Railway.`
+                all_keys: allKeyNames,
+                hint: `Check the 'all_keys' list below to see if your variable is named correctly. It must be exactly DISCORD_FEEDBACK_WEBHOOK_URL.`
             });
         }
 
