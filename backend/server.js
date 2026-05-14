@@ -109,6 +109,11 @@ app.post('/api/feedback', async (req, res) => {
         }
 
         const webhookUrl = process.env.DISCORD_FEEDBACK_WEBHOOK_URL;
+        
+        // DIAGNOSTIC LOG: List keys to see if Railway injected them
+        const discordKeys = Object.keys(process.env).filter(k => k.includes('DISCORD'));
+        console.log(`[FEEDBACK] Diagnostic - Found keys: ${discordKeys.join(', ')}`);
+        
         if (!webhookUrl) {
             console.error('[FEEDBACK] ERROR: DISCORD_FEEDBACK_WEBHOOK_URL is missing or empty');
             return res.status(500).json({ error: 'Webhook URL not configured' });
