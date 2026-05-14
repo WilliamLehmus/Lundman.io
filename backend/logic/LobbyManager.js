@@ -144,7 +144,8 @@ export class Lobby {
             statusEffects: { stun: 0, slip: 0, slow: 0, burn: 0, wet: 0, stunImmunity: 0, revealed: 0, quicksand: 0, trapImmunity: 0 },
             inputs: { up: false, down: false, left: false, right: false, shoot: false, aimAngle: 0 },
             lastInputSeq: 0, lastBuffLevel: 0, upgrades: { health: 0, speed: 0, power: 0 }, ready: false,
-            joinedAt: Date.now()
+            joinedAt: Date.now(),
+            respawnAt: 0
         };
 
         // Send static map data to joining player
@@ -208,38 +209,57 @@ export class Lobby {
             MATERIALS.BUILDING, MATERIALS.CRATE, MATERIALS.DIRT,
             MATERIALS.BARREL_EXPLOSIVE, MATERIALS.BARREL_OIL,
             MATERIALS.BARREL_ACID, MATERIALS.BARREL_ELECTRIC,
-            MATERIALS.BARREL_FROST, MATERIALS.BARREL_GAS
+            MATERIALS.BARREL_FROST, MATERIALS.BARREL_GAS,
+            MATERIALS.CACTUS, MATERIALS.PALM
         ];
         const config = MATERIAL_PROPERTIES[type] || { w: 30, h: 30 };
         const ew = customW || config.w;
         const eh = customH || config.h;
 
+        const padding = 10;
+        if (pos.x - ew/2 < padding || pos.x + ew/2 > this.worldSize - padding || pos.y - eh/2 < padding || pos.y + eh/2 > this.worldSize - padding) return null;
+
+        // Overlap checks
         if (type !== MATERIALS.BUILDING) {
+            // 1. Check against all buildings
             const buildings = Object.values(this.elements).filter(e => e.type === MATERIALS.BUILDING).map(e => e.body);
-            if (!ignoreId && Query.region(buildings, { min: { x: pos.x - ew/2, y: pos.y - eh/2 }, max: { x: pos.x + ew/2, y: pos.y + eh/2 } }).length > 0) return null;
+            if (!ignoreId && Query.region(buildings, { 
+                min: { x: pos.x - ew/2 - 5, y: pos.y - eh/2 - 5 }, 
+                max: { x: pos.x + ew/2 + 5, y: pos.y + eh/2 + 5 } 
+            }).length > 0) return null;
+
+            // 2. Urban street/block alignment check
             if (this.mapType === 'URBAN' && solidTypes.includes(type)) {
-                const step = 500, padding = 150, buffer = 20;
-                const relativeX = (pos.x - (padding - buffer)) % step;
-                const relativeY = (pos.y - (padding - buffer)) % step;
+                const step = 500, pad = 150, buffer = 20;
+                const relativeX = (pos.x - (pad - buffer)) % step;
+                const relativeY = (pos.y - (pad - buffer)) % step;
                 if (relativeX >= 0 && relativeX < 350 + buffer * 2 && relativeY >= 0 && relativeY < 350 + buffer * 2) return null;
             }
+
+            // 3. Check against other solid elements
             if (solidTypes.includes(type)) {
                 const otherSolids = Object.values(this.elements)
                     .filter(e => solidTypes.includes(e.type) && e.id !== ignoreId)
                     .map(e => e.body);
-                if (!ignoreId && Query.region(otherSolids, { min: { x: pos.x - 100, y: pos.y - 100 }, max: { x: pos.x + 100, y: pos.y + 100 } }).length > 0) return null;
+                // Use a slightly larger region than the element itself to ensure spacing
+                if (!ignoreId && Query.region(otherSolids, { 
+                    min: { x: pos.x - ew/2 - 10, y: pos.y - eh/2 - 10 }, 
+                    max: { x: pos.x + ew/2 + 10, y: pos.y + eh/2 + 10 } 
+                }).length > 0) return null;
             }
+
+            // 4. Liquid overlap check
             const liquidTypes = [MATERIALS.WATER, MATERIALS.OIL, MATERIALS.ACID, MATERIALS.ELECTRIC, MATERIALS.ICE];
             if (liquidTypes.includes(type)) {
                 const otherLiquids = Object.values(this.elements)
                     .filter(e => liquidTypes.includes(e.type) && e.id !== ignoreId)
                     .map(e => e.body);
-                if (!ignoreId && Query.region(otherLiquids, { min: { x: pos.x - ew*0.8, y: pos.y - ew*0.8 }, max: { x: pos.x + ew*0.8, y: pos.y + ew*0.8 } }).length > 0) return null;
+                if (!ignoreId && Query.region(otherLiquids, { 
+                    min: { x: pos.x - ew*0.6, y: pos.y - eh*0.6 }, 
+                    max: { x: pos.x + ew*0.6, y: pos.y + eh*0.6 } 
+                }).length > 0) return null;
             }
         }
-
-        const padding = 10;
-        if (pos.x - ew/2 < padding || pos.x + ew/2 > this.worldSize - padding || pos.y - eh/2 < padding || pos.y + eh/2 > this.worldSize - padding) return null;
 
         const id = ++this.lastElementId;
         const isSolid = solidTypes.includes(type);
@@ -258,15 +278,25 @@ export class Lobby {
         return this.elements[id];
     }
 
-    spawnBuilding(pos, w, h, shape = 'rect') {
-        const padding = 10;
-        if (pos.x - w/2 < padding || pos.x + w/2 > this.worldSize - padding || pos.y - h/2 < padding || pos.y + h/2 > this.worldSize - padding) return;
+    spawnBuilding(pos, w, h, shape = 'rect', ignoreOverlap = false) {
+        const padding = 15;
+        if (pos.x - w/2 < padding || pos.x + w/2 > this.worldSize - padding || pos.y - h/2 < padding || pos.y + h/2 > this.worldSize - padding) return null;
+        
+        if (!ignoreOverlap) {
+            const existing = Object.values(this.elements).map(e => e.body);
+            if (Query.region(existing, { 
+                min: { x: pos.x - w/2 - 10, y: pos.y - h/2 - 10 }, 
+                max: { x: pos.x + w/2 + 10, y: pos.y + h/2 + 10 } 
+            }).length > 0) return null;
+        }
+
         const id = ++this.lastElementId;
         const body = Bodies.rectangle(pos.x, pos.y, w, h, { label: 'element', isStatic: true, isSensor: false, friction: 0, frictionStatic: 0 });
         body.elementId = id;
         this.elements[id] = { id, body, type: MATERIALS.BUILDING, hp: 800, w, h, shape: shape, x: pos.x, y: pos.y };
         Composite.add(this.engine.world, body);
         this.navGrid.markDirty();
+        return this.elements[id];
     }
 
     destroyBullet(id) {
@@ -302,7 +332,10 @@ export class Lobby {
     }
 
     respawn(player, killerId = null, weaponType = 'UNKNOWN') {
-        player.hp = player.maxHp; player.deaths++;
+        player.hp = 0; 
+        player.deaths++;
+        player.respawnAt = Date.now() + 8000;
+        
         let isOpponentKill = false;
         if (killerId && this.players[killerId]) {
             const killer = this.players[killerId];
@@ -311,15 +344,32 @@ export class Lobby {
         } else {
             this.io.to(this.id).emit('kill-feed', { killer: killerId?.startsWith('guardian') ? 'GUARDIAN' : 'WORLD', victim: player.username, weapon: weaponType, killerTeam: 'neutral', victimTeam: player.team });
         }
+        
         if (!this.gameOver) { 
             this.scores[player.team === 'blue' ? 'pink' : 'blue']++; 
             this.checkMatchEnd(); 
         }
-        player.invulnerableUntil = Date.now() + 3000;
+
+        // Drop scrap where they died
         for (let i = 0; i < 8; i++) this.spawnElement({ x: player.body.position.x + (Math.random()-0.5)*60, y: player.body.position.y + (Math.random()-0.5)*60 }, MATERIALS.SCRAP, 30000);
-        player.hp = CHASSIS[player.chassis].hp; player.scrap = Math.floor(player.scrap / 2);
+        player.scrap = Math.floor(player.scrap / 2);
+        
+        // Move them far away temporarily so they don't block anything while dead
+        Body.setPosition(player.body, { x: -1000, y: -1000 });
+        Body.setVelocity(player.body, { x: 0, y: 0 });
+    }
+
+    performRespawn(player) {
+        const config = CHASSIS[player.chassis];
+        player.hp = config.hp;
+        player.respawnAt = 0;
+        player.invulnerableUntil = Date.now() + 5000; // Increased to 5s due to longer respawn
         const pos = this.getRandomSpawn(player.team);
-        Body.setPosition(player.body, pos); Body.setVelocity(player.body, { x: 0, y: 0 });
+        Body.setPosition(player.body, pos); 
+        Body.setVelocity(player.body, { x: 0, y: 0 });
+        
+        // Reset status effects
+        player.statusEffects = { stun: 0, slip: 0, slow: 0, burn: 0, wet: 0, stunImmunity: 0, revealed: 0, quicksand: 0, trapImmunity: 0 };
     }
 
     replenishElements() {
@@ -351,6 +401,10 @@ export class Lobby {
             this.botAI.processBots(now);
             if (this.dronesEnabled) this.combatEngine.processGuardians(now);
             Object.values(this.players).forEach(p => {
+                if (p.hp <= 0) {
+                    if (p.respawnAt && now >= p.respawnAt) this.performRespawn(p);
+                    return;
+                }
                 const buffLevel = Math.floor(p.scrap / 100);
                 if (buffLevel > p.lastBuffLevel && buffLevel <= 5) {
                     p.lastBuffLevel = buffLevel;
@@ -425,7 +479,8 @@ export class Lobby {
                 slw: p.statusEffects.slow > now, brn: p.statusEffects.burn > now, wt: p.statusEffects.wet > now,
                 slp: p.statusEffects.slip > now, qs: p.statusEffects.quicksand > now,
                 c: (() => { const w = WEAPON_MODULES[p.slots[p.currentSlot]]; return w ? Math.min(100, Math.floor((now-p.lastShot)/(w.reload/(1+p.scrap/200+p.upgrades.power*0.1))*100)) : 100; })(),
-                inv: p.invulnerableUntil > now, seq: p.lastInputSeq
+                inv: p.invulnerableUntil > now, seq: p.lastInputSeq,
+                ra: p.respawnAt || 0
             })),
             guardians: Object.values(this.guardians).map(g => ({ id: g.id, x: +g.body.position.x.toFixed(1), y: +g.body.position.y.toFixed(1), a: +g.angle.toFixed(3), h: g.hp, mh: g.maxHp })),
             bullets: Object.values(this.bullets).map(b => ({ id: b.id, x: +b.position.x.toFixed(1), y: +b.position.y.toFixed(1), t: b.customData.type, w: b.customData.weapon, c: { fire: '#ff4d00', water: '#00a2ff', oil: '#222', electric: '#ffff00', dirt: '#8b4513', steam: 'rgba(255,255,255,0.3)', ice: '#aaddff', metal: '#ffcc44' }[b.customData.type] || '#fff', a: +Math.atan2(b.velocity.y, b.velocity.x).toFixed(3) })),

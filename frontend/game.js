@@ -168,6 +168,8 @@ const hpMaxEl = document.getElementById('hp-max');
 const p2HpBar = document.getElementById('p2-hp');
 const p1CooldownBar = document.getElementById('p1-cooldown');
 const p2CooldownBar = document.getElementById('p2-cooldown');
+const respawnOverlay = document.getElementById('respawn-timer-overlay');
+const respawnSeconds = document.getElementById('respawn-seconds');
 
 // Game State - server (authoritative) vs rendered (interpolated)
 let serverState = { players: [], bullets: [], elements: [], zones: [] };
@@ -2194,6 +2196,15 @@ function renderLoop(now) {
 
             // NEW: Environmental Audio Detection
             updateLocalPlayerAudio(me);
+
+            // Respawn Timer Logic
+            if (me.ra && me.ra > Date.now()) {
+                const remaining = (me.ra - Date.now()) / 1000;
+                if (respawnOverlay) respawnOverlay.classList.remove('hidden');
+                if (respawnSeconds) respawnSeconds.innerText = remaining.toFixed(1);
+            } else {
+                if (respawnOverlay) respawnOverlay.classList.add('hidden');
+            }
         }
 
         if (shake.intensity > 0) {

@@ -119,7 +119,7 @@ export const WEAPON_MODULES = {
     FLAMETHROWER: {
         name: 'Flamethrower',
         type: MATERIALS.FIRE,
-        reload: 100,
+        reload: 350,
         damage: 2,
         speed: 8,
         radius: 12,
@@ -131,7 +131,7 @@ export const WEAPON_MODULES = {
     WATER_CANNON: {
         name: 'Water Cannon',
         type: MATERIALS.WATER,
-        reload: 300,
+        reload: 750,
         damage: 1,
         speed: 10,
         radius: 15,
@@ -142,7 +142,7 @@ export const WEAPON_MODULES = {
     DIRT_GUN: {
         name: 'Dirt Gun',
         type: MATERIALS.DIRT,
-        reload: 1000,
+        reload: 1800,
         damage: 0,
         speed: 6,
         radius: 20,
@@ -153,7 +153,7 @@ export const WEAPON_MODULES = {
     TESLA: {
         name: 'Tesla Coil',
         type: MATERIALS.ELECTRIC,
-        reload: 800,
+        reload: 1600,
         damage: 10,
         speed: 20,
         radius: 5,
@@ -164,7 +164,7 @@ export const WEAPON_MODULES = {
     FROST_GUN: {
         name: 'Frost Gun',
         type: MATERIALS.ICE,
-        reload: 600,
+        reload: 1200,
         damage: 5,
         speed: 12,
         radius: 8,

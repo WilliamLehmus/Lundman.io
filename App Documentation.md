@@ -66,6 +66,13 @@ The environment is reactive:
     - **Engine**: Increases Movement & Turn Speed (+15% per level).
     - **Caliber**: Increases Damage (+25% per level) and reduces Reload Time (-10% per level).
     - *Note: Upgrades go up to Level 5. Costs: 100, 250, 500, 1000, 2000. Upgrades reset after each match.*
+- **Weapon Balancing**:
+    - **Primary Weapons**: Maintain standard fire rates for consistent engagement.
+    - **Extra Weapons**: Secondary and utility modules (Flamethrower, Tesla Coil, Frost Gun, etc.) feature significantly increased cooldowns (e.g., 1.6s for Tesla Coil) to prevent ability spamming and encourage tactical usage.
+- **Respawn Mechanics**:
+    - **8-Second Timer**: Upon destruction, players enter a 8-second death state where their remains are cleared and they are repositioned off-screen.
+    - **HUD Countdown**: A premium-looking UI overlay displays a real-time countdown ("RESPAWNING IN X.Xs") during the death state.
+    - **Deployment Protection**: Respawning players are granted a 5-second invulnerability window (indicated by a pulsing shield effect) to prevent spawn camping.
 - **Premium Tank Rendering**: Tanks use a high-fidelity vector rendering system in-game:
     - **Volumetric Shading**: Gradients and highlights provide a 3D, metallic appearance.
     - **Team Glow**: Soft, pulsed neon glows replace harsh outlines for team identification.
@@ -675,4 +682,13 @@ To transition from a learning project to a **marketable product**, the following
     3. Synkroniserat `CHASSIS.DEV` stats mellan `server.js` och `game.js`.
     4. Uppdaterat CSS för `#debug-menu` med fast bredd, bättre padding och `backdrop-filter` för en premium-känsla som inte stör spelets layout.
 - **Verification**: Verifierat att HP nu visas korrekt (`1000 / 1000`) vid byte till Dev Tank och att lobbyn inte längre visas under pågående match.
-
+#### **Map Generation Overlap Prevention**
+- **Date**: 2026-05-14
+- **Issue**: Buildings and objects (barrels, crates, puddles) would occasionally overlap during map generation, leading to clipping and physics issues.
+- **Fix**:
+    1. **Rigorous Overlap Checks**: Updated `LobbyManager.spawnBuilding` and `LobbyManager.spawnElement` with precise overlap detection using `Matter.Query.region`.
+    2. **Building Spacing**: Buildings now check for a 10px buffer around their bounds before spawning.
+    3. **Object Retries**: Implemented a `safeSpawnElement` helper in `MapGenerator.js` that attempts to find a clear spot (up to 15 retries) for each prop/element.
+    4. **Composite Building Handling**: Added an `ignoreOverlap` flag for L-shaped and T-shaped buildings to allow intentional overlaps within a single complex while preventing overlaps with external structures.
+    5. **Solid Type Expansion**: Added `CACTUS` and `PALM` to the list of solid objects for accurate collision avoidance during generation.
+- **Verification**: Verified syntax with `node -c` and confirmed that the physics engine correctly identifies clear regions during procedural generation.
