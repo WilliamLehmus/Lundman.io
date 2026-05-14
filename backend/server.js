@@ -107,6 +107,9 @@ if (ENVIRONMENT === 'production') {
 
 app.use(express.json()); // Enable JSON parsing for API requests
 
+// Capture Webhook at startup to prevent environment isolation issues
+const CAPTURED_WEBHOOK = process.env.DISCORD_FEEDBACK_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL;
+
 // Feedback API Route
 app.post('/api/feedback', async (req, res) => {
     try {
@@ -118,37 +121,29 @@ app.post('/api/feedback', async (req, res) => {
             return res.status(400).json({ error: 'Message too long (max 1900 characters)' });
         }
 
-        // Fallback logic for webhook URL
-        const webhookUrl = process.env.DISCORD_FEEDBACK_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL;
+        // Diagnostic info for the request
+        const currentEnvKeys = Object.keys(process.env);
+        const discordKeys = currentEnvKeys.filter(k => k.toUpperCase().includes('DISCORD'));
         
-        // DIAGNOSTIC LOG: List keys to see if Railway injected them
-        const allKeys = Object.keys(process.env);
-        const discordKeys = allKeys.filter(k => k.includes('DISCORD'));
-        const hasWebhook = !!webhookUrl;
+        console.log(`[FEEDBACK REQUEST] Diagnostic - Keys found in process.env: ${discordKeys.join(', ') || 'NONE'}`);
+        console.log(`[FEEDBACK REQUEST] Using Captured Webhook: ${!!CAPTURED_WEBHOOK}`);
+
+        const webhookUrl = CAPTURED_WEBHOOK || process.env.DISCORD_FEEDBACK_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL;
         
         if (!webhookUrl) {
-            console.error('[FEEDBACK] ERROR: No Discord Webhook URL found in process.env');
-            console.log(`[FEEDBACK] Diagnostic - Available DISCORD keys: ${discordKeys.join(', ') || 'NONE'}`);
-            
+            console.error('[FEEDBACK] ERROR: No Webhook URL found (Captured or Live)');
             return res.status(500).json({ 
                 error: 'Webhook URL not configured',
                 diagnostic: discordKeys.length > 0 ? discordKeys.join(', ') : 'No DISCORD_ keys found in env',
                 env: ENVIRONMENT,
-                hint: 'Ensure DISCORD_FEEDBACK_WEBHOOK_URL or DISCORD_WEBHOOK_URL is set in the Railway dashboard.'
+                hint: 'Ensure DISCORD_FEEDBACK_WEBHOOK_URL is set in Railway. Server restart may be required.'
             });
         }
 
-        // Masked logging for diagnostics
         const trimmedUrl = webhookUrl.trim();
-        const maskedUrl = trimmedUrl.length > 20 
-            ? trimmedUrl.substring(0, 15) + '...' + trimmedUrl.substring(trimmedUrl.length - 5)
-            : 'INVALID_URL_LENGTH';
-        
-        console.log(`[FEEDBACK] Attempting send to: ${maskedUrl} (Source: ${process.env.DISCORD_FEEDBACK_WEBHOOK_URL ? 'PRIMARY' : 'FALLBACK'})`);
-
         const content = `**Feedback from ${username || 'Anonymous'}:**\n${message}`;
 
-        await axios.post(trimmedUrl, { content }, { timeout: 8000 });
+        await axios.post(trimmedUrl, { content }, { timeout: 10000 });
         res.status(200).json({ success: true });
     } catch (err) {
         console.error('[FEEDBACK] Discord Webhook Error:', err.message);
