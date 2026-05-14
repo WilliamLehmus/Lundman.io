@@ -6,6 +6,7 @@ import { BotAI } from './BotAI.js';
 import { CombatEngine } from './CombatEngine.js';
 import { Navigation } from './Navigation.js';
 import { getPlayerData, savePlayers } from './Persistence.js';
+import PlayerModel from './PlayerModel.js';
 
 const { Engine, Bodies, Body, Composite, Vector, Query, Bounds } = Matter;
 
@@ -145,6 +146,9 @@ export class Lobby {
             lastInputSeq: 0, lastBuffLevel: 0, upgrades: { health: 0, speed: 0, power: 0 }, ready: false,
             joinedAt: Date.now()
         };
+
+        // Send static map data to joining player
+        this.broadcastMapData(socket);
     }
 
     addBot(difficulty = 'NORMAL', pos = null, isActive = true, forcedTeam = null, forcedChassis = 'RANDOM') {
@@ -190,12 +194,8 @@ export class Lobby {
             const team = p.team;
             const username = p.username;
             const playerData = getPlayerData();
-            if (!wasBot && playerData[username]) {
-                playerData[username].kills += p.kills;
-                playerData[username].deaths += p.deaths;
-                playerData[username].scrap += p.scrap;
-                playerData[username].lastSeen = Date.now();
-                savePlayers(playerData);
+            if (!wasBot) {
+                this.updatePlayerStats(p);
             }
             Composite.remove(this.engine.world, p.body);
             delete this.players[socketId];
@@ -264,7 +264,7 @@ export class Lobby {
         const id = ++this.lastElementId;
         const body = Bodies.rectangle(pos.x, pos.y, w, h, { label: 'element', isStatic: true, isSensor: false, friction: 0, frictionStatic: 0 });
         body.elementId = id;
-        this.elements[id] = { id, body, type: MATERIALS.BUILDING, hp: 800, w, h, shape: shape };
+        this.elements[id] = { id, body, type: MATERIALS.BUILDING, hp: 800, w, h, shape: shape, x: pos.x, y: pos.y };
         Composite.add(this.engine.world, body);
         this.navGrid.markDirty();
     }
@@ -316,7 +316,7 @@ export class Lobby {
             this.checkMatchEnd(); 
         }
         player.invulnerableUntil = Date.now() + 3000;
-        for (let i = 0; i < 5; i++) this.spawnElement({ x: player.body.position.x + (Math.random()-0.5)*60, y: player.body.position.y + (Math.random()-0.5)*60 }, MATERIALS.SCRAP, 30000);
+        for (let i = 0; i < 8; i++) this.spawnElement({ x: player.body.position.x + (Math.random()-0.5)*60, y: player.body.position.y + (Math.random()-0.5)*60 }, MATERIALS.SCRAP, 30000);
         player.hp = CHASSIS[player.chassis].hp; player.scrap = Math.floor(player.scrap / 2);
         const pos = this.getRandomSpawn(player.team);
         Body.setPosition(player.body, pos); Body.setVelocity(player.body, { x: 0, y: 0 });
@@ -399,24 +399,39 @@ export class Lobby {
         if (weapon.type === MATERIALS.DIRT) this.spawnElement(pos, MATERIALS.DIRT, 10000, weapon.hp);
     }
 
+    broadcastMapData(socket = null) {
+        const mapData = {
+            zones: this.zones.map(z => ({ ...z, color: BIOMES[z.type].color })),
+            buildings: Object.values(this.elements)
+                .filter(e => e.type === MATERIALS.BUILDING)
+                .map(e => ({ 
+                    id: e.id, x: +(e.x ?? e.body.position.x).toFixed(1), y: +(e.y ?? e.body.position.y).toFixed(1), 
+                    t: MATERIALS.BUILDING, w: e.w, h: e.h, sh: e.shape, c: '#333' 
+                }))
+        };
+        if (socket) socket.emit('map-data', mapData);
+        else this.io.to(this.id).emit('map-data', mapData);
+    }
+
     broadcastState() {
         const now = Date.now();
         const state = {
             active: this.active, worldSize: this.worldSize, timer: this.matchTimer, scores: this.scores, gameOver: this.gameOver,
-            zones: this.zones.map(z => ({ ...z, color: BIOMES[z.type].color })),
             players: Object.values(this.players).map(p => ({
-                id: p.id, u: p.username, t: p.team, x: +p.body.position.x.toFixed(1), y: +p.body.position.y.toFixed(1), a: +p.body.angle.toFixed(3),
+                id: p.id, x: +p.body.position.x.toFixed(1), y: +p.body.position.y.toFixed(1), a: +p.body.angle.toFixed(3),
                 aa: +(p.inputs.aimAngle ?? p.body.angle).toFixed(3), v: [+p.body.velocity.x.toFixed(2), +p.body.velocity.y.toFixed(2), +p.body.angularVelocity.toFixed(3)],
-                h: p.hp, mh: p.maxHp, w: p.slots[p.currentSlot], cs: p.currentSlot,
-                sl: p.slots, s: p.scrap, hid: p.hidden, up: p.upgrades, ch: p.chassis, st: p.statusEffects.stun > now,
+                h: p.hp, w: p.slots[p.currentSlot], cs: p.currentSlot,
+                s: p.scrap, hid: p.hidden, up: p.upgrades, st: p.statusEffects.stun > now,
                 slw: p.statusEffects.slow > now, brn: p.statusEffects.burn > now, wt: p.statusEffects.wet > now,
-                slp: p.statusEffects.slip > now,
+                slp: p.statusEffects.slip > now, qs: p.statusEffects.quicksand > now,
                 c: (() => { const w = WEAPON_MODULES[p.slots[p.currentSlot]]; return w ? Math.min(100, Math.floor((now-p.lastShot)/(w.reload/(1+p.scrap/200+p.upgrades.power*0.1))*100)) : 100; })(),
                 inv: p.invulnerableUntil > now, seq: p.lastInputSeq
             })),
             guardians: Object.values(this.guardians).map(g => ({ id: g.id, x: +g.body.position.x.toFixed(1), y: +g.body.position.y.toFixed(1), a: +g.angle.toFixed(3), h: g.hp, mh: g.maxHp })),
-            bullets: Object.values(this.bullets).map(b => ({ id: b.id, x: +b.position.x.toFixed(1), y: +b.position.y.toFixed(1), t: b.customData.type, w: b.customData.weapon, c: { fire: '#ff4d00', water: '#00a2ff', oil: '#222', electric: '#ffff00', dirt: '#8b4513', steam: 'rgba(255,255,255,0.3)', ice: '#aaddff' }[b.customData.type] || '#fff', a: +Math.atan2(b.velocity.y, b.velocity.x).toFixed(3) })),
-            elements: Object.values(this.elements).map(e => ({ id: e.id, x: +e.body.position.x.toFixed(1), y: +e.body.position.y.toFixed(1), t: e.type, r: e.body.circleRadius, w: e.w, h: e.h, sh: e.shape, c: { scrap: '#ffff00', oil: '#333', fire: '#ff4400', water: '#0088ff', electric: '#00f2ff', ice: '#aaddff', dirt: '#8b4513', steam: 'rgba(200,200,200,0.4)' }[e.type] || '#fff' }))
+            bullets: Object.values(this.bullets).map(b => ({ id: b.id, x: +b.position.x.toFixed(1), y: +b.position.y.toFixed(1), t: b.customData.type, w: b.customData.weapon, c: { fire: '#ff4d00', water: '#00a2ff', oil: '#222', electric: '#ffff00', dirt: '#8b4513', steam: 'rgba(255,255,255,0.3)', ice: '#aaddff', metal: '#ffcc44' }[b.customData.type] || '#fff', a: +Math.atan2(b.velocity.y, b.velocity.x).toFixed(3) })),
+            elements: Object.values(this.elements)
+                .filter(e => e.type !== MATERIALS.BUILDING)
+                .map(e => ({ id: e.id, x: +e.body.position.x.toFixed(1), y: +e.body.position.y.toFixed(1), t: e.type, r: e.body.circleRadius, w: e.w, h: e.h, sh: e.shape, c: { scrap: '#ffff00', oil: '#333', fire: '#ff4400', water: '#0088ff', electric: '#00f2ff', ice: '#aaddff', dirt: '#8b4513', steam: 'rgba(200,200,200,0.4)' }[e.type] || '#fff' }))
         };
         this.io.to(this.id).emit('state', state);
         Object.values(this.bullets).forEach(b => { if (b.position.x < -100 || b.position.x > this.worldSize + 100 || b.position.y < -100 || b.position.y > this.worldSize + 100) this.destroyBullet(b.id); });
@@ -427,6 +442,16 @@ export class Lobby {
         this.setupWorld(Object.keys(this.players).length, mapType);
         this.active = true; this.matchTimer = 480; this.scores = { blue: 0, pink: 0 }; this.gameOver = false; this.lastTimeTick = Date.now();
         Object.values(this.players).forEach(p => { p.hp = p.maxHp; p.scrap = 0; const spawn = this.getRandomSpawn(p.team); Body.setPosition(p.body, spawn); Body.setVelocity(p.body, { x: 0, y: 0 }); });
+        
+        // Broadcast static map data to all players
+        this.broadcastMapData();
+
+        // Spawn 2 killer drones if enabled
+        if (this.dronesEnabled) {
+            for (let i = 0; i < 2; i++) {
+                this.combatEngine.spawnGuardian();
+            }
+        }
     }
 
     checkMatchEnd() {
@@ -434,9 +459,9 @@ export class Lobby {
         let winner = this.scores.blue >= this.scoreCap ? 'blue' : (this.scores.pink >= this.scoreCap ? 'pink' : (this.matchTimer <= 0 ? (this.scores.blue > this.scores.pink ? 'blue' : (this.scores.pink > this.scores.blue ? 'pink' : 'draw')) : null));
         if (winner) {
             this.gameOver = true;
-            const data = getPlayerData();
-            Object.values(this.players).forEach(p => { if (!p.isBot && data[p.username]) { data[p.username].kills += p.kills; data[p.username].deaths += p.deaths; data[p.username].scrap += p.scrap; data[p.username].lastSeen = Date.now(); } });
-            savePlayers(data);
+            Object.values(this.players).forEach(p => { 
+                if (!p.isBot) this.updatePlayerStats(p);
+            });
             this.io.to(this.id).emit('match-ended', { winner, scores: this.scores, stats: Object.values(this.players).map(p => ({ u: p.username, t: p.team, kills: p.kills, deaths: p.deaths, s: p.scrap })).sort((a,b) => b.kills-a.kills) });
         }
     }
@@ -449,11 +474,49 @@ export class Lobby {
         this.io.to(this.id).emit('lobby-reset', { id: this.id, ...this.mapLobbyPlayers() });
     }
 
-    destroyGuardian(id, killerId) {
-        if (this.guardians[id]) { Composite.remove(this.engine.world, this.guardians[id].body); delete this.guardians[id]; }
-        if (killerId && this.players[killerId]) {
-            for (let i = 0; i < 8; i++) this.spawnElement({ x: this.players[killerId].body.position.x, y: this.players[killerId].body.position.y }, MATERIALS.SCRAP, 30000);
+    async updatePlayerStats(p) {
+        if (process.env.MONGO_URL) {
+            try {
+                await PlayerModel.findOneAndUpdate(
+                    { username: p.username },
+                    { 
+                        $inc: { kills: p.kills, deaths: p.deaths, scrap: p.scrap },
+                        $set: { lastSeen: new Date() }
+                    }
+                );
+            } catch (err) {
+                console.error('Error updating player stats in DB:', err);
+            }
+        } else {
+            const data = getPlayerData();
+            if (data[p.username]) {
+                data[p.username].kills += p.kills;
+                data[p.username].deaths += p.deaths;
+                data[p.username].scrap += p.scrap;
+                data[p.username].lastSeen = Date.now();
+                savePlayers(data);
+            }
         }
+    }
+
+    destroyGuardian(id, killerId) {
+        const g = this.guardians[id];
+        if (!g) return;
+        
+        this.io.to(this.id).emit('collision-effect', { x: g.body.position.x, y: g.body.position.y, type: MATERIALS.ELECTRIC, targetLabel: 'explosion' });
+        
+        if (killerId && this.players[killerId]) {
+            for (let i = 0; i < 12; i++) {
+                this.spawnElement({ 
+                    x: g.body.position.x + (Math.random() - 0.5) * 60, 
+                    y: g.body.position.y + (Math.random() - 0.5) * 60 
+                }, MATERIALS.SCRAP, 30000);
+            }
+        }
+        
+        Composite.remove(this.engine.world, g.body); 
+        delete this.guardians[id];
+        this.nextGuardianSpawn = Date.now() + 30000;
     }
 
     destroy() { clearInterval(this.physicsInterval); clearInterval(this.syncInterval); }

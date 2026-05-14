@@ -47,13 +47,9 @@ async function generateSFX(text, filename, duration = null) {
 
 // Map of sounds to generate
 const sounds = [
-    { text: "Heavy thick mud squelch, sucking vacuum sound, deep liquid trap, cinematic", file: "quicksand_entry.mp3", dur: 1.0 },
-    { text: "Electric spark discharge, high voltage zap, short circuit crackle, sharp and quick", file: "electric_zap.mp3", dur: 0.6 },
-    { text: "Metal tank tracks sliding on solid ice, sharp skating sound, frozen surface friction", file: "ice_slide.mp3", dur: 0.8 },
-    { text: "Large fire ignition fwoosh, gas flare, intense heat burst, cinematic", file: "fire_entry.mp3", dur: 1.2 },
-    { text: "Toxic gas cloud hiss, chemical spray release, subtle poison atmosphere", file: "gas_entry.mp3", dur: 1.0 },
-    { text: "Large cinematic tank barrel explosion, deep bass boom, fire crackle, powerful resonance", file: "explosion.mp3", dur: 1.5 },
-    { text: "Metal barrel breaking, liquid splash, mechanical crunch, hollow metallic impact shatter", file: "barrel_break.mp3", dur: 0.8 }
+    { text: "Heavy mechanical thud, high velocity metallic cannon blast, futuristic impact, cinematic", file: "drone_cannon.mp3", dur: 1.0 },
+    { text: "Crushing metal crunch, electric short circuit, dying robot screech, sparks, explosive finish", file: "drone_death.mp3", dur: 1.5 },
+    { text: "Low pitched pulsing hover sound, ominous mechanical drone hum, sci-fi engine loop", file: "drone_hum.mp3", dur: 2.0 }
 ];
 
 async function run() {

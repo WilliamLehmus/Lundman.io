@@ -247,6 +247,7 @@
                 <input type="checkbox" id="premium-visuals-toggle" style="width: 22px; height: 22px; cursor: pointer; accent-color: #00f2ff;">
             </div>
             <button id="close-options" class="btn">BACK TO GAME</button>
+            <button id="open-feedback-btn" class="secondary-btn" style="margin-top: 15px; width: 100%; border-color: #00f2ff !important; color: #00f2ff !important;">SEND FEEDBACK</button>
             <button id="quit-to-menu-btn" class="secondary-btn" style="margin-top: 15px; width: 100%; border-color: #ff4444 !important; color: #ff4444 !important;">QUIT TO MAIN MENU</button>
         </div>
     </div>
@@ -283,6 +284,23 @@
             </div>
             <div id="shop-hint">LVL 5 MAX | COSTS INCREASE PER LEVEL</div>
             <button id="close-shop" class="btn">CLOSE SHOP (B)</button>
+        </div>
+    </div>
+
+    <!-- Feedback Menu -->
+    <div id="feedback-modal" class="overlay" style="display: none;">
+        <div class="menu-content" style="max-width: 500px; width: 90%;">
+            <h1 style="font-size: 2rem;">SEND FEEDBACK</h1>
+            <p style="text-align: center; color: rgba(255,255,255,0.7); margin-bottom: 20px; font-size: 14px;">Spotted a bug? Have an idea? Let us know!</p>
+            
+            <textarea id="feedback-message" placeholder="Type your feedback here..." rows="5" style="width: 100%; background: rgba(0,0,0,0.5); border: 1px solid rgba(0, 242, 255, 0.3); color: #fff; padding: 15px; font-family: 'Outfit', sans-serif; font-size: 16px; border-radius: 4px; resize: vertical; margin-bottom: 20px; outline: none; transition: border-color 0.3s;" onfocus="this.style.borderColor='#00f2ff'" onblur="this.style.borderColor='rgba(0, 242, 255, 0.3)'"></textarea>
+            
+            <div id="feedback-status" style="text-align: center; margin-bottom: 15px; height: 20px; font-size: 14px; font-weight: bold;"></div>
+
+            <div style="display: flex; gap: 15px; width: 100%;">
+                <button id="submit-feedback-btn" class="primary-btn" style="flex: 1;">SEND TO DISCORD</button>
+                <button id="close-feedback-btn" class="secondary-btn" style="flex: 1;">CANCEL</button>
+            </div>
         </div>
     </div>
 

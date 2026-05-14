@@ -92,7 +92,7 @@ socket.on('debug-init', () => {
         CHASSIS.DEV = {
             name: 'Dev Tank',
             hp: 1000,
-            speed: 0.012, 
+            speed: 0.0040, 
             turnSpeed: 0.08,
             mass: 10,
             slots: 7,
@@ -172,6 +172,9 @@ const p2CooldownBar = document.getElementById('p2-cooldown');
 // Game State - server (authoritative) vs rendered (interpolated)
 let serverState = { players: [], bullets: [], elements: [], zones: [] };
 let gameState   = { players: [], bullets: [], elements: [], zones: [] };
+let playerProfiles = new Map(); // Cache for static player data (u, t, mh, ch, sl)
+let staticMapData = { zones: [], buildings: [] };
+
 let lastScrap = 0;
 let popups = []; // { x, y, text, life }
 let killFeed = []; // { killer, victim, weapon, killerTeam, victimTeam, time }
@@ -748,7 +751,17 @@ socket.on('collision-effect', (data) => {
     else if (data.targetLabel === 'explosion' && data.type === MATERIALS.ELECTRIC) hitColor = '#00f2ff'; // Cyan for electric
     else if (data.targetLabel === 'alchemy') hitColor = '#ffffff'; // White for alchemy puffs
     
-    spawnParticles(data.x, data.y, hitColor, 8);
+    if (data.targetLabel === 'explosion') {
+        spawnExplosion(data.x, data.y, hitColor);
+        shake.intensity = Math.max(shake.intensity, 12); // Big shake for big booms
+        if (data.type === MATERIALS.ELECTRIC) {
+            audioManager.playSFX(droneDeathSFX, 1.5);
+        } else {
+            audioManager.playSFX(explosionSFX, 1.2);
+        }
+    } else {
+        spawnParticles(data.x, data.y, hitColor, 8);
+    }
     
     // PREMIUM: Extra impact juice
     if (ENABLE_PREMIUM_VISUALS) {
@@ -958,6 +971,13 @@ const closeOptionsBtn = document.getElementById('close-options');
 const closeShopBtn = document.getElementById('close-shop');
 const openShopBtn = document.getElementById('open-shop-btn');
 
+const feedbackModal = document.getElementById('feedback-modal');
+const openFeedbackBtn = document.getElementById('open-feedback-btn');
+const closeFeedbackBtn = document.getElementById('close-feedback-btn');
+const submitFeedbackBtn = document.getElementById('submit-feedback-btn');
+const feedbackMessage = document.getElementById('feedback-message');
+const feedbackStatus = document.getElementById('feedback-status');
+
 const musicTracks = [
     new Audio('/music_track1.mp3'),
     new Audio('/music_track2.mp3'),
@@ -972,6 +992,9 @@ const waterSFX = new Audio('/water_cannon.mp3');
 const iceSFX = new Audio('/ice_shatter.mp3');
 const dirtSFX = new Audio('/dirt_impact.mp3');
 const heavySFX = new Audio('/heavy_gun.mp3');
+const droneCannonSFX = new Audio('/drone_cannon.mp3');
+const droneDeathSFX = new Audio('/drone_death.mp3');
+const droneHumSFX = new Audio('/drone_hum.mp3');
 
 // Environmental SFX
 const steamSFX = new Audio('/steam_hiss.mp3');
@@ -1060,6 +1083,7 @@ function playWeaponSound(type, x, y) {
             audioManager.playChannel('weapon-flame', flameSFX, 1.0 * volMult, 150);
             break;
         case 'TESLA':
+        case 'GUARDIAN_PULSE':
             audioManager.playChannel('weapon-tesla', teslaSFX, 1.0 * volMult, 200);
             break;
         case 'WATER_CANNON':
@@ -1073,6 +1097,9 @@ function playWeaponSound(type, x, y) {
             break;
         case 'HEAVY_GUN':
             audioManager.playSFX(heavySFX, 1.4 * volMult);
+            break;
+        case 'DRONE_CANNON':
+            audioManager.playSFX(droneCannonSFX, 1.1 * volMult);
             break;
         default:
             audioManager.playSFX(shotSFX, 0.8 * volMult);
@@ -1230,6 +1257,100 @@ function updateShopUI() {
 
 if (closeOptionsBtn) closeOptionsBtn.onclick = toggleMenu;
 if (closeShopBtn) closeShopBtn.onclick = toggleShop;
+
+// Feedback Logic
+console.log("Feedback button attached:", !!openFeedbackBtn, !!feedbackModal);
+if (openFeedbackBtn) {
+    openFeedbackBtn.onclick = (e) => {
+        e.preventDefault();
+        console.log("Feedback button clicked!");
+        toggleMenu(); // Close options menu
+        
+        const modal = document.getElementById('feedback-modal');
+        if (modal) {
+            console.log("Modal found, showing it");
+            modal.style.display = 'flex';
+            modal.style.pointerEvents = 'auto';
+            modal.style.opacity = '1';
+            modal.style.visibility = 'visible';
+            
+            const msgInput = document.getElementById('feedback-message');
+            if (msgInput) msgInput.value = '';
+            
+            const statusEl = document.getElementById('feedback-status');
+            if (statusEl) {
+                statusEl.innerText = '';
+                statusEl.style.color = 'inherit';
+            }
+        } else {
+            console.error("CRITICAL: feedback-modal element NOT FOUND in DOM!");
+            alert("Error: Feedback form missing from page.");
+        }
+    };
+}
+
+if (closeFeedbackBtn) {
+    closeFeedbackBtn.onclick = () => {
+        const modal = document.getElementById('feedback-modal');
+        if (modal) modal.style.display = 'none';
+    };
+}
+
+
+if (submitFeedbackBtn) {
+    submitFeedbackBtn.onclick = async () => {
+        const msgInput = document.getElementById('feedback-message');
+        const statusEl = document.getElementById('feedback-status');
+        const modal = document.getElementById('feedback-modal');
+        
+        const msg = msgInput ? msgInput.value.trim() : '';
+        if (!msg) {
+            if (statusEl) {
+                statusEl.innerText = 'PLEASE ENTER A MESSAGE';
+                statusEl.style.color = '#ff4444';
+            }
+            return;
+        }
+
+        submitFeedbackBtn.disabled = true;
+        if (statusEl) {
+            statusEl.innerText = 'SENDING...';
+            statusEl.style.color = '#fff';
+        }
+
+        const username = localStorage.getItem('tanks_username') || 'Anonymous Player';
+
+        try {
+            const res = await fetch('/api/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: msg, username })
+            });
+
+            const data = await res.json();
+
+            if (res.ok) {
+                if (statusEl) {
+                    statusEl.innerText = 'FEEDBACK SENT! THANK YOU.';
+                    statusEl.style.color = '#00ff00';
+                }
+                setTimeout(() => {
+                    if (modal) modal.style.display = 'none';
+                    submitFeedbackBtn.disabled = false;
+                }, 2000);
+            } else {
+                throw new Error(data.detail || data.error || 'Server error');
+            }
+        } catch (err) {
+            if (statusEl) {
+                statusEl.innerText = `ERROR: ${err.message.substring(0, 40)}`;
+                statusEl.style.color = '#ff4444';
+                console.error("Feedback submission failed:", err.message);
+            }
+            submitFeedbackBtn.disabled = false;
+        }
+    };
+}
 
 // Shop Logic
 document.querySelectorAll('.buy-upgrade-btn').forEach(btn => {
@@ -1679,10 +1800,33 @@ function updateLobbyUI(id, payload) {
 }
 
 socket.on('lobby-update', (payload) => {
-    const { id } = payload;
-    splashScreen.classList.add('hidden');
-    lobbyScreen.classList.remove('hidden');
-    updateLobbyUI(id, payload);
+    const { id, players } = payload;
+    
+    // Cache player profiles for in-game use (reduces tick payload)
+    if (players) {
+        players.forEach(p => {
+            playerProfiles.set(p.id, {
+                u: p.u,
+                t: p.t,
+                mh: CHASSIS[p.ch]?.hp || 100,
+                ch: p.ch,
+                sl: p.sl
+            });
+        });
+    }
+
+    if (!gameActive) {
+        splashScreen.classList.add('hidden');
+        lobbyScreen.classList.remove('hidden');
+        updateLobbyUI(id, payload);
+    }
+});
+
+socket.on('map-data', (data) => {
+    console.log('Received static map data:', data.buildings.length, 'buildings');
+    staticMapData = data;
+    // Inject immediately into state for early rendering if needed
+    serverState.zones = data.zones;
 });
 
 socket.on('auth-error', (data) => {
@@ -1807,6 +1951,25 @@ socket.on('player-event', (data) => {
 });
 
 socket.on('state', (state) => {
+    // 1. Reconstruct full state from static caches (Egress Optimization)
+    state.zones = staticMapData.zones || [];
+    
+    // Inject player metadata
+    state.players.forEach(p => {
+        const profile = playerProfiles.get(p.id);
+        if (profile) {
+            p.u = profile.u;
+            p.t = profile.t;
+            p.ch = profile.ch;
+            p.sl = profile.sl;
+            // Calculate current maxHp based on base HP + health upgrades
+            p.mh = profile.mh + (p.up?.health || 0) * 20;
+        }
+    });
+
+    // Merge static buildings with dynamic elements
+    state.elements = [...(staticMapData.buildings || []), ...(state.elements || [])];
+
     serverState = state;
     
     // Play sounds for new bullets
@@ -4707,12 +4870,25 @@ function drawElements() {
     });
 }
 
+const droneHums = new Map();
 function drawGuardians() {
     if (!gameState.guardians) return;
+    const now = Date.now();
     gameState.guardians.forEach(g => {
         ctx.save();
         ctx.translate(g.x, g.y);
         
+        // Audio Hum
+        const lastHum = droneHums.get(g.id) || 0;
+        if (now - lastHum > 1800) {
+            droneHums.set(g.id, now);
+            const dist = Math.hypot(camera.x + canvas.width/2 - g.x, camera.y + canvas.height/2 - g.y);
+            if (dist < 1500) {
+                const vol = Math.max(0, 1 - dist / 1500);
+                audioManager.playSFX(droneHumSFX, vol * 0.6);
+            }
+        }
+
         // Shadow
         ctx.fillStyle = 'rgba(0,0,0,0.4)';
         ctx.beginPath();

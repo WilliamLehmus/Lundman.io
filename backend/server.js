@@ -7,9 +7,11 @@ import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import Matter from 'matter-js';
+import axios from 'axios';
 
 // Import Modular Logic
 import { loadPlayers, savePlayers, getPlayerData, setPlayerData } from './logic/Persistence.js';
+import PlayerModel from './logic/PlayerModel.js';
 import { Lobby } from './logic/LobbyManager.js';
 import { CHASSIS, MIN_PLAYERS, ALL_WEAPONS } from './gameConfig.js';
 
@@ -64,14 +66,81 @@ if (MONGO_URL) {
         .catch(err => console.error('MongoDB connection error:', err));
 }
 
-// Initial Data Load
-setPlayerData(loadPlayers());
+// Initial Data Load & Migration
+const localPlayers = loadPlayers();
+setPlayerData(localPlayers);
 const lobbies = {};
+
+async function migratePlayersToDB() {
+    if (!MONGO_URL || !PlayerModel) return;
+    try {
+        const count = await PlayerModel.countDocuments();
+        if (count === 0 && Object.keys(localPlayers).length > 0) {
+            console.log('Migrating local players to MongoDB...');
+            const playersToInsert = Object.entries(localPlayers).map(([username, data]) => ({
+                username,
+                ...data
+            }));
+            await PlayerModel.insertMany(playersToInsert);
+            console.log(`Successfully migrated ${playersToInsert.length} players to MongoDB.`);
+        }
+    } catch (err) {
+        console.error('Migration Error:', err);
+    }
+}
+migratePlayersToDB();
 
 // Production Static Serving
 if (ENVIRONMENT === 'production') {
     app.use(express.static(path.join(__dirname, '../frontend/dist')));
 }
+
+app.use(express.json()); // Enable JSON parsing for API requests
+
+// Feedback API Route
+app.post('/api/feedback', async (req, res) => {
+    try {
+        const { message, username } = req.body;
+        if (!message) return res.status(400).json({ error: 'Message is required' });
+        
+        // Discord content limit is 2000 characters
+        if (message.length > 1900) {
+            return res.status(400).json({ error: 'Message too long (max 1900 characters)' });
+        }
+
+        const webhookUrl = process.env.DISCORD_FEEDBACK_WEBHOOK_URL;
+        if (!webhookUrl) {
+            console.error('[FEEDBACK] ERROR: DISCORD_FEEDBACK_WEBHOOK_URL is missing or empty');
+            return res.status(500).json({ error: 'Webhook URL not configured' });
+        }
+
+        // Masked logging for diagnostics
+        const maskedUrl = webhookUrl.trim().length > 20 
+            ? webhookUrl.trim().substring(0, 15) + '...' + webhookUrl.trim().substring(webhookUrl.trim().length - 5)
+            : 'REDACTED (INVALID URL LENGTH)';
+        console.log(`[FEEDBACK] Attempting send to: ${maskedUrl}`);
+
+        const content = `**Feedback from ${username || 'Anonymous'}:**\n${message}`;
+
+        await axios.post(webhookUrl.trim(), { content }, { timeout: 5000 });
+        res.status(200).json({ success: true });
+    } catch (err) {
+        console.error('[FEEDBACK] Discord Webhook Error:', err.message);
+        
+        let detail = err.message;
+        if (err.response) {
+            detail = `Discord returned ${err.response.status}: ${JSON.stringify(err.response.data)}`;
+        } else if (err.request) {
+            detail = 'No response from Discord (Network Timeout)';
+        }
+
+        res.status(500).json({ 
+            error: 'Failed to send feedback', 
+            detail: detail,
+            hint: 'Double-check DISCORD_FEEDBACK_WEBHOOK_URL in the Railway dashboard.'
+        });
+    }
+});
 
 app.use((req, res, next) => {
     if (req.url.startsWith('/socket.io')) {
@@ -131,17 +200,40 @@ io.on('connection', (socket) => {
         if (IS_DEV) allowedChassis.push('DEV');
         if (!allowedChassis.includes(chassisType)) chassisType = 'SCOUT';
 
-        const playerData = getPlayerData();
-        if (playerData[username]) {
-            if (!pin || !playerData[username].pin) {
-                if (pin) playerData[username].pin = await bcrypt.hash(pin, 10);
+        let dbPlayer = null;
+        if (MONGO_URL) {
+            dbPlayer = await PlayerModel.findOne({ username });
+        } else {
+            const playerData = getPlayerData();
+            dbPlayer = playerData[username];
+        }
+
+        if (dbPlayer) {
+            if (!pin || !dbPlayer.pin) {
+                if (pin) {
+                    const hashed = await bcrypt.hash(pin, 10);
+                    if (MONGO_URL) {
+                        await PlayerModel.updateOne({ username }, { pin: hashed });
+                    } else {
+                        getPlayerData()[username].pin = hashed;
+                    }
+                }
             } else {
-                const match = await bcrypt.compare(pin, playerData[username].pin);
+                const match = await bcrypt.compare(pin, dbPlayer.pin);
                 if (!match) return socket.emit('auth-error', { message: 'INVALID PIN FOR THIS CALLSIGN!' });
             }
         } else {
             const hashedPin = pin ? await bcrypt.hash(pin, 10) : null;
-            playerData[username] = { kills: 0, deaths: 0, scrap: 0, lastSeen: Date.now(), pin: hashedPin };
+            if (MONGO_URL) {
+                await PlayerModel.create({
+                    username,
+                    pin: hashedPin,
+                    kills: 0, deaths: 0, scrap: 0,
+                    lastSeen: new Date()
+                });
+            } else {
+                getPlayerData()[username] = { kills: 0, deaths: 0, scrap: 0, lastSeen: Date.now(), pin: hashedPin };
+            }
         }
 
         let lobbyList = Object.values(lobbies).filter(l => Object.keys(l.players).length < 10);
@@ -166,15 +258,31 @@ io.on('connection', (socket) => {
         let { username, chassisType, pin } = data;
         username = username.trim().substring(0, 12);
 
-        const playerData = getPlayerData();
-        if (playerData[username]) {
-            if (playerData[username].pin) {
-                const match = await bcrypt.compare(pin, playerData[username].pin);
+        let dbPlayer = null;
+        if (MONGO_URL) {
+            dbPlayer = await PlayerModel.findOne({ username });
+        } else {
+            const playerData = getPlayerData();
+            dbPlayer = playerData[username];
+        }
+
+        if (dbPlayer) {
+            if (dbPlayer.pin) {
+                const match = await bcrypt.compare(pin, dbPlayer.pin);
                 if (!match) return socket.emit('auth-error', { message: 'INVALID PIN!' });
             }
         } else {
             const hashedPin = pin ? await bcrypt.hash(pin, 10) : null;
-            playerData[username] = { kills: 0, deaths: 0, scrap: 0, lastSeen: Date.now(), pin: hashedPin };
+            if (MONGO_URL) {
+                await PlayerModel.create({
+                    username,
+                    pin: hashedPin,
+                    kills: 0, deaths: 0, scrap: 0,
+                    lastSeen: new Date()
+                });
+            } else {
+                getPlayerData()[username] = { kills: 0, deaths: 0, scrap: 0, lastSeen: Date.now(), pin: hashedPin };
+            }
         }
 
         const id = Math.random().toString(36).substring(7);
@@ -201,9 +309,16 @@ io.on('connection', (socket) => {
         if (!lobby) return socket.emit('auth-error', { message: 'LOBBY NOT FOUND!' });
         const { username, chassisType, pin } = data;
         
-        const playerData = getPlayerData();
-        if (playerData[username] && playerData[username].pin) {
-            const match = await bcrypt.compare(pin, playerData[username].pin);
+        let dbPlayer = null;
+        if (MONGO_URL) {
+            dbPlayer = await PlayerModel.findOne({ username });
+        } else {
+            const playerData = getPlayerData();
+            dbPlayer = playerData[username];
+        }
+
+        if (dbPlayer && dbPlayer.pin) {
+            const match = await bcrypt.compare(pin, dbPlayer.pin);
             if (!match) return socket.emit('auth-error', { message: 'INVALID PIN!' });
         }
 
@@ -379,6 +494,9 @@ io.on('connection', (socket) => {
             p.slots = [...config.weapons]; p.currentSlot = 0;
             if (p.body) Matter.Body.setMass(p.body, config.mass);
             socket.emit('player-event', { text: `GOD MODE: ${chassisType} ACTIVATED`, color: '#ff00ff' });
+            
+            // Sync with all clients so they update their playerProfiles cache (Egress Optimization)
+            io.to(lobby.id).emit('lobby-update', { id: lobby.id, ...lobby.mapLobbyPlayers() });
         }
     });
 

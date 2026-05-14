@@ -463,7 +463,7 @@ export class CombatEngine {
             if (g.hp <= 0) return;
 
             let target = null;
-            let minDist = 600;
+            let minDist = 1000; // Ruthless range
 
             Object.values(this.lobby.players).forEach(p => {
                 if (p.hp > 0 && !p.hidden) {
@@ -480,16 +480,23 @@ export class CombatEngine {
                 g.angle = angle;
                 Body.setAngle(g.body, angle);
                 
-                if (now - g.lastShot > 1500) {
-                    this.lobby.fireGuardianPulse(g, angle);
+                // Ruthless firing rate (1.2s reload)
+                if (now - g.lastShot > 1200) {
+                    g.shotCount = (g.shotCount || 0) + 1;
+                    // Every 3rd shot is a Tesla pulse, others are 40mm Cannon
+                    if (g.shotCount % 3 === 0) {
+                        this.lobby.fireGuardianPulse(g, angle);
+                    } else {
+                        this.fireGuardianCannon(g, angle);
+                    }
                     g.lastShot = now;
                 }
 
                 const dist = Vector.magnitude(Vector.sub(target.body.position, g.body.position));
-                if (dist > 250) {
+                if (dist > 200) {
                     Body.applyForce(g.body, g.body.position, {
-                        x: Math.cos(angle) * 0.015,
-                        y: Math.sin(angle) * 0.015
+                        x: Math.cos(angle) * 0.025, // Ruthless speed
+                        y: Math.sin(angle) * 0.025
                     });
                 }
             } else {
@@ -497,6 +504,25 @@ export class CombatEngine {
                 Body.setAngle(g.body, g.angle);
             }
         });
+    }
+
+    fireGuardianCannon(g, angle) {
+        const id = ++this.lobby.lastBulletId;
+        const bullet = Bodies.circle(g.body.position.x + Math.cos(angle)*40, g.body.position.y + Math.sin(angle)*40, 6, { 
+            label: 'bullet', frictionAir: 0, mass: 0.1 
+        });
+        bullet.id = id; 
+        bullet.customData = { 
+            ownerId: `guardian-${g.id}`, 
+            damage: 25, 
+            impact: 0.04, 
+            type: MATERIALS.METAL, 
+            weapon: 'DRONE_CANNON', 
+            expiresAt: Date.now() + 2000 
+        };
+        Body.setVelocity(bullet, { x: Math.cos(angle)*15, y: Math.sin(angle)*15 });
+        this.lobby.bullets[id] = bullet; 
+        Composite.add(this.lobby.engine.world, bullet);
     }
 
     spawnGuardian() {
@@ -511,9 +537,9 @@ export class CombatEngine {
             mass: 5
         });
         this.lobby.guardians[id] = {
-            id, body, hp: 300, maxHp: 300, angle: 0, lastShot: 0
+            id, body, hp: 400, maxHp: 400, angle: 0, lastShot: 0
         };
         Composite.add(this.lobby.engine.world, body);
-        this.lobby.nextGuardianSpawn = Date.now() + 20000;
+        this.lobby.nextGuardianSpawn = Date.now() + 30000;
     }
 }

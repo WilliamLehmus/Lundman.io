@@ -1,5 +1,5 @@
 {
-  "name": "lundman.io",
+  "name": "tanks.io",
   "version": "1.0.0",
   "type": "module",
   "main": "backend/server.js",

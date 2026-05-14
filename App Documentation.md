@@ -31,8 +31,10 @@ The core of the game engine lives on the **Node.js server**.
 - **`backend/gameConfig.js`**: Shared source of truth for weapon and chassis data.
 
 ### 4. Persistence & Data
-- **Player Stats**: Persistent player statistics (Lifetime Kills, Deaths, Scrap) are stored in `players.json`.
-- **Session Data**: HUD settings and volume preferences are persisted in the browser's `localStorage`.
+- **Player Stats**: Persistent player statistics (Lifetime Kills, Deaths, Scrap) and PIN authentication are stored in **MongoDB** (`Player` collection). A fallback to `players.json` is maintained for local development without a database.
+- **Lobby Synchronization**: Active lobby states are mirrored in **MongoDB** (`Lobby` collection) to support cross-instance discovery and session persistence.
+- **Session Data**: UI preferences, audio levels, and premium visual toggles are persisted in the browser's `localStorage`.
+
 
 ---
 
@@ -112,9 +114,15 @@ The environment is reactive:
 
 ### 4. AI Guardians (Killer Drones)
 - **Deployment**: Defensive drones can be enabled/disabled via a **Lobby Toggle** by the host player.
-- **Engagement**: When enabled, they spawn periodically near the map center, orbit a fixed point, and fire ELECTRIC pulses at any player that enters their range.
+- **Initial Spawn**: When enabled, **2 drones** spawn immediately at the map center upon match start.
+- **Ruthless Engagement**: 
+    - **Dual-Weapon System**: Drones now use a deadly combination of a **Tesla Pulse** (Stun) and a high-velocity **40mm Cannon** (Heavy Metal Damage).
+    - **Ruthless AI**: Featuring increased movement speed, a wider engagement range (1000px), and an aggressive firing rate (1.2s reload).
+    - **Targeting**: They prioritize the closest player and alternate between stunning their target and delivering lethal cannon fire.
+- **Durability**: Upgraded to **400 HP** to withstand sustained fire.
+- **Respawn**: If a drone is destroyed, it takes exactly **30 seconds** to re-manufacture and redeploy into the field.
 - **Visuals**: Features a rotating red scanning laser and a pulsing thruster glow for high readability.
-- **Rewards**: Destroying a guardian yields high-density SCRAP drops.
+- **Rewards**: Destroying a guardian yields high-density SCRAP drops (8 units).
 
 ### 5. Match Rules & Scoring
 - **Point Conditions**: Points are awarded to the **opposing team** whenever a player dies, regardless of the cause (Combat, Hazard, or Self-Damage). This prevents "Suicide Exploits".
@@ -594,6 +602,19 @@ To transition from a learning project to a **marketable product**, the following
     3. **Puddle Variety**: Increased non-fire barrel puddle counts to a randomized **3-6** range for a more organic, cinematic distribution.
 - **Verification**: Verified that barrels reliably trigger "Alchemy" reactions regardless of map positioning.
 
+#### **Feedback Modal Visibility (z-index Conflict)**
+- **Date**: 2026-05-11
+- **Issue**: The feedback modal and options menu were invisible when the splash screen was active.
+- **Root Cause**: `#ui-layer` (containing the splash screen) had a `z-index` of `10000`, while `.overlay` (modal) had only `2000`. Clicks passed through due to `pointer-events: none` on `#ui-layer`, but the modal remained hidden behind it.
+- **Fix**: 
+    1.  Updated `style.css` to set `.overlay` to `z-index: 20000` and `pointer-events: auto`.
+    2.  Removed inline `z-index` from `index.html`.
+    3.  Removed manual `zIndex` override in `game.js`.
+    4.  **Critical Fix**: Identified and closed an unclosed `<div>` in the `#shop-menu` component in `index.html`. This unclosed tag was causing the `feedback-modal` to be nested inside the hidden shop menu.
+    5.  **Webhook Fix**: Corrected a malformed `.env` file where the `DISCORD_FEEDBACK_WEBHOOK_URL` was corrupted with spaces between every character, causing a 500 Internal Server Error.
+- **Verification**: Browser testing confirmed the modal is now visible and feedback is successfully delivered to Discord.
+
+
 #### **ElevenLabs Audio Integration & Volume Crash Fix**
 - **Date**: 2026-05-10
 - **Goal**: Implement "True Premium" cinematic audio for explosions and barrel destruction.
@@ -612,4 +633,35 @@ To transition from a learning project to a **marketable product**, the following
     2. **Logic**: Implemented host-only control and real-time state synchronization for the toggle.
     3. **Backend**: Added `dronesEnabled` flag to the `Lobby` class and updated the physics loop to conditionally spawn and process Guardians.
     4. **Host Persistence**: Implemented `joinedAt` timestamps for players to ensure the host is consistently identified as the earliest human player in the lobby.
-- **Verification**: Verified using `node -c` and confirmed that the toggle correctly enables/disables drone spawning in the `LobbyManager` loop.
+
+#### **Ruthless Drone Overhaul (40mm Cannon & Dual-Weapon AI)**
+- **Date**: 2026-05-10
+- **Requirement**: Drones were too passive and easily ignored. User requested an aggressive overhaul with secondary weapons and specific spawn timings.
+- **Implementation**:
+    1. **Initial Presence**: Forced 2 drones to spawn immediately upon match start in `LobbyManager.js`.
+    2. **Aggressive Respawn**: Implemented a hard 30-second respawn cooldown after destruction.
+    3. **Dual-Weapon System**: Added a high-velocity **40mm Cannon** (Metal damage) to complement the existing Tesla pulse.
+    4. **Ruthless AI**:
+        - Increased engagement range from 600px to **1000px**.
+        - Increased movement speed force by **65%** (0.015 -> 0.025).
+        - Reduced firing reload from 1.5s to **1.2s**.
+        - Implemented weapon switching logic (Tesla for stun, Cannon for damage).
+    5. **Hardening & Rewards**:
+        - Increased base HP from 300 to **400**.
+        - **Premium Rewards**: Drones now drop **12 pieces of scrap** upon destruction (rewarding tactical play).
+        - **Death VFX**: Added a cinematic electrical explosion effect and screen shake upon drone destruction.
+- **Verification**: Syntax verified with `node -c`. Physics loop stability confirmed. Audio feedback for both weapons (Tesla/Cannon) functional.
+#### **Dev Tank HP Sync & Debug UI Overlap**
+- **Date**: 2026-05-12
+- **Issue**: Aktivering av "Dev Tank" via debug-menyn orsakade felaktig HP-visning (`1000 / 100`) och debug-menyn såg ihoptryckt ut på vänster sida.
+- **Root Cause**: 
+    1. `debug-set-chassis` på servern skickade ingen notifiering till klienten om att spelarens profil (inklusive `maxHp`) hade ändrats. Klienten använde därför kvarvarande `maxHp` från den tidigare chassitypen.
+    2. Skillnad i `speed`-konfiguration för `DEV`-tanken mellan server och klient orsakade jitter vid Client-Side Prediction.
+    3. `#debug-menu` saknade fast bredd och hamnade i konflikt med andra UI-lager.
+- **Fix**:
+    1. Lagt till `io.to(lobby.id).emit('lobby-update', ...)` i `debug-set-chassis` på servern för att tvinga klienterna att uppdatera sitt `playerProfiles`-cache.
+    2. Uppdaterat klientens `lobby-update`-lyssnare att endast visa lobby-skärmen om `gameActive` är `false`. Detta förhindrar att lobbyn "poppar upp" mitt i en match när man byter chassis via debug.
+    3. Synkroniserat `CHASSIS.DEV` stats mellan `server.js` och `game.js`.
+    4. Uppdaterat CSS för `#debug-menu` med fast bredd, bättre padding och `backdrop-filter` för en premium-känsla som inte stör spelets layout.
+- **Verification**: Verifierat att HP nu visas korrekt (`1000 / 1000`) vid byte till Dev Tank och att lobbyn inte längre visas under pågående match.
+
