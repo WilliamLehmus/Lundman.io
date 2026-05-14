@@ -201,11 +201,10 @@ app.post('/api/feedback', async (req, res) => {
             const sortedKeys = [...currentKeys].sort().join(', ');
             return res.status(500).json({ 
                 error: 'Webhook URL not configured',
-                env: process.env.RAILWAY_ENVIRONMENT_NAME || 'unknown',
-                service: process.env.RAILWAY_SERVICE_NAME || 'unknown',
-                diagnostic: `Found ${currentKeys.length} keys. Discord keys: ${currentKeys.filter(k => k.includes('DISCORD')).join(', ')}. Greedy match: ${!!greedyMatchKey}`,
-                all_keys: sortedKeys,
-                hint: 'Check if variables are set in the CORRECT SERVICE and ENVIRONMENT (Production vs Default) in Railway. Try a manual REDEPLOY.'
+                env: process.env.RAILWAY_ENVIRONMENT_NAME || 'unknown-env',
+                service: process.env.RAILWAY_SERVICE_NAME || 'unknown-service',
+                diagnostic: `Found ${currentKeys.length} keys. Discord keys: ${currentKeys.filter(k => k.toUpperCase().includes('DISCORD')).join(', ')}. Greedy match: ${!!greedyMatchKey}`,
+                hint: `Verify that DISCORD_FEEDBACK_WEBHOOK_URL is set in Service: "${process.env.RAILWAY_SERVICE_NAME || '?'}" and Environment: "${process.env.RAILWAY_ENVIRONMENT_NAME || '?'}" in Railway.`
             });
         }
 
