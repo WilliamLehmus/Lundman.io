@@ -71,6 +71,16 @@ const localPlayers = loadPlayers();
 setPlayerData(localPlayers);
 const lobbies = {};
 
+// DIAGNOSTIC STARTUP LOG
+const discordKeys = Object.keys(process.env).filter(k => k.includes('DISCORD'));
+console.log(`[STARTUP] Environment - NODE_ENV: ${process.env.NODE_ENV}`);
+console.log(`[STARTUP] Discord Diagnostic - Found keys: ${discordKeys.join(', ')}`);
+if (process.env.DISCORD_FEEDBACK_WEBHOOK_URL) {
+    console.log(`[STARTUP] Discord Webhook URL is present (Length: ${process.env.DISCORD_FEEDBACK_WEBHOOK_URL.length})`);
+} else {
+    console.warn(`[STARTUP] WARNING: DISCORD_FEEDBACK_WEBHOOK_URL IS MISSING!`);
+}
+
 async function migratePlayersToDB() {
     if (!MONGO_URL || !PlayerModel) return;
     try {
