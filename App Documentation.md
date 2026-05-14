@@ -616,10 +616,12 @@ To transition from a learning project to a **marketable product**, the following
         - **Date**: 2026-05-14
         - **Issue**: Persistent 500 errors and MIME type errors on production.
         - **Fix (Server)**:
-            1. **Greedy Webhook Discovery**: Implemented `findDiscordWebhook()` which scans ALL environment variables for a Discord URL format, bypassing naming mismatches.
-            2. **Early Loading**: Moved `dotenv.config()` to the absolute top level to ensure variables are available during boot.
-            3. **Cache-Busting**: Added `Cache-Control: no-cache` middleware for `index.html` to force clients to request the latest assets.
-            4. **MIME Protection**: Updated the SPA catch-all to return 404 for missing assets instead of serving `index.html`, preventing "text/html" MIME errors.
+            1. **Greedy Webhook Discovery**: Implemented `findDiscordWebhook()` which scans ALL environment variables for a Discord URL format, bypassing naming mismatches. (Fixes 500 error where `process.env` keys were missing or misnamed in Railway).
+            2. **Advanced Diagnostics**: Updated `/api/feedback` to return every environment key to the client on failure, allowing for instant dashboard vs runtime verification.
+            3. **Memory Leak Prevention**: Added `Matter.Engine.clear()` and `Matter.Composite.clear()` to the `Lobby.destroy()` method. (Fixes `SIGTERM` crashes caused by accumulating physics bodies and stale engine intervals).
+            4. **Memory Logging**: Implemented a 60-second interval log showing RSS and Heap usage to monitor production stability.
+            5. **Cache-Busting**: Added `Cache-Control: no-cache` middleware for `index.html` to force clients to request the latest assets.
+            6. **MIME Protection**: Updated the SPA catch-all to return 404 for missing assets instead of serving `index.html`, preventing "text/html" MIME errors.
         - **UX**: Retained detailed diagnostic alerts to help identify future configuration gaps.
 - **Verification**: Browser testing confirmed the modal is now visible and feedback is successfully delivered to Discord.
 

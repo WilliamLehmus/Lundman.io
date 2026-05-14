@@ -519,5 +519,10 @@ export class Lobby {
         this.nextGuardianSpawn = Date.now() + 30000;
     }
 
-    destroy() { clearInterval(this.physicsInterval); clearInterval(this.syncInterval); }
+    destroy() { 
+        clearInterval(this.physicsInterval); 
+        clearInterval(this.syncInterval); 
+        Matter.Engine.clear(this.engine);
+        Matter.Composite.clear(this.engine.world, true);
+    }
 }

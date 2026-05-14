@@ -14,13 +14,13 @@ function findDiscordWebhook() {
     const keys = Object.keys(process.env);
     
     // Preference 1: Explicit keys
-    if (process.env.DISCORD_FEEDBACK_WEBHOOK_URL) return process.env.DISCORD_FEEDBACK_WEBHOOK_URL;
-    if (process.env.DISCORD_WEBHOOK_URL) return process.env.DISCORD_WEBHOOK_URL;
+    if (process.env.DISCORD_FEEDBACK_WEBHOOK_URL) return process.env.DISCORD_FEEDBACK_WEBHOOK_URL.trim();
+    if (process.env.DISCORD_WEBHOOK_URL) return process.env.DISCORD_WEBHOOK_URL.trim();
     
     // Preference 2: Any key containing DISCORD (case insensitive)
     const discordKey = keys.find(k => k.toUpperCase().includes('DISCORD'));
-    if (discordKey && process.env[discordKey] && process.env[discordKey].startsWith('http')) {
-        return process.env[discordKey];
+    if (discordKey && process.env[discordKey] && typeof process.env[discordKey] === 'string' && process.env[discordKey].startsWith('http')) {
+        return process.env[discordKey].trim();
     }
     
     // Preference 3: Greedy search for Discord Webhook URL format in ALL variables
@@ -29,11 +29,17 @@ function findDiscordWebhook() {
         return val && typeof val === 'string' && val.includes('discord.com/api/webhooks/');
     });
     
-    if (greedyMatch) return process.env[greedyMatch];
+    if (greedyMatch) return process.env[greedyMatch].trim();
     return null;
 }
 
-const BOOT_WEBHOOK = findDiscordWebhook();
+let BOOT_WEBHOOK = findDiscordWebhook();
+
+// Memory Logging (Help debug SIGTERM/OOM issues)
+setInterval(() => {
+    const mem = process.memoryUsage();
+    console.log(`[SYS] RSS: ${(mem.rss / 1024 / 1024).toFixed(1)}MB | Heap: ${(mem.heapUsed / 1024 / 1024).toFixed(1)}MB | Lobbies: ${Object.keys(lobbies || {}).length}`);
+}, 60000);
 
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
@@ -170,19 +176,27 @@ app.post('/api/feedback', async (req, res) => {
         
         const currentKeys = Object.keys(process.env);
         const currentDiscordKey = currentKeys.find(k => k.toUpperCase().includes('DISCORD'));
+        const greedyMatchKey = currentKeys.find(k => (process.env[k] || '').includes('discord.com/api/webhooks/'));
         
         console.log('--- FEEDBACK DEBUG ---');
-        console.log(`Now Keys: ${currentKeys.length} | Discord Key Now: ${currentDiscordKey || 'NONE'}`);
-        console.log(`Frozen Webhook exists: ${!!FROZEN_WEBHOOK}`);
+        console.log(`Keys: ${currentKeys.length} | Discord Key: ${currentDiscordKey || 'NONE'} | Greedy Key: ${greedyMatchKey || 'NONE'}`);
         
-        // Priority: Frozen > Live > Fallback
-        const webhookUrl = FROZEN_WEBHOOK || process.env.DISCORD_FEEDBACK_WEBHOOK_URL || (currentDiscordKey ? process.env[currentDiscordKey] : null);
+        // Priority: Frozen > Live > Fallback > Greedy
+        const webhookUrl = BOOT_WEBHOOK || 
+                           process.env.DISCORD_FEEDBACK_WEBHOOK_URL || 
+                           process.env.DISCORD_WEBHOOK_URL || 
+                           (currentDiscordKey ? process.env[currentDiscordKey] : null) ||
+                           (greedyMatchKey ? process.env[greedyMatchKey] : null);
 
         if (!webhookUrl) {
+            const sortedKeys = [...currentKeys].sort().join(', ');
             return res.status(500).json({ 
                 error: 'Webhook URL not configured',
-                diagnostic: `Keys: ${currentKeys.join(', ')}`,
-                hint: 'Check if variables are set in the CORRECT SERVICE (not just the project or database service) in Railway.'
+                env: process.env.RAILWAY_ENVIRONMENT_NAME || 'unknown',
+                service: process.env.RAILWAY_SERVICE_NAME || 'unknown',
+                diagnostic: `Found ${currentKeys.length} keys. Discord keys: ${currentKeys.filter(k => k.includes('DISCORD')).join(', ')}. Greedy match: ${!!greedyMatchKey}`,
+                all_keys: sortedKeys,
+                hint: 'Check if variables are set in the CORRECT SERVICE and ENVIRONMENT (Production vs Default) in Railway. Try a manual REDEPLOY.'
             });
         }
 
@@ -204,7 +218,7 @@ app.post('/api/feedback', async (req, res) => {
         res.status(500).json({ 
             error: 'Failed to send feedback', 
             detail: detail,
-            hint: 'Double-check DISCORD_FEEDBACK_WEBHOOK_URL in the Railway dashboard.'
+            hint: 'Check if the Webhook URL is valid and hasn\'t been deleted in Discord.'
         });
     }
 });
