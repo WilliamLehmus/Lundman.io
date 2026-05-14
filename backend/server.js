@@ -179,10 +179,11 @@ app.post('/api/feedback', async (req, res) => {
         const webhookUrl = FROZEN_WEBHOOK || process.env.DISCORD_FEEDBACK_WEBHOOK_URL || (currentDiscordKey ? process.env[currentDiscordKey] : null);
 
         if (!webhookUrl) {
+            const first20Keys = currentKeys.slice(0, 20).join(', ');
             return res.status(500).json({ 
                 error: 'Webhook URL not configured',
-                diagnostic: `StartupKeys: ${STARTUP_ENV_KEYS.length}, NowKeys: ${currentKeys.length}, StartupDiscord: ${STARTUP_DISCORD_KEY || 'None'}`,
-                hint: 'If StartupDiscord is present but webhookUrl is null, contact support.'
+                diagnostic: `StartupKeys: ${STARTUP_ENV_KEYS.length}, NowKeys: ${currentKeys.length}, StartupDiscord: ${STARTUP_DISCORD_KEY || 'None'}. Keys[0-20]: ${first20Keys}`,
+                hint: 'Check if variables are set in the correct Railway environment (e.g., Production).'
             });
         }
 
