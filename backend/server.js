@@ -126,7 +126,11 @@ app.post('/api/feedback', async (req, res) => {
         
         if (!webhookUrl) {
             console.error('[FEEDBACK] ERROR: DISCORD_FEEDBACK_WEBHOOK_URL is missing or empty');
-            return res.status(500).json({ error: 'Webhook URL not configured' });
+            return res.status(500).json({ 
+                error: 'Webhook URL not configured',
+                diagnostic: discordKeys.join(', '),
+                env: ENVIRONMENT
+            });
         }
 
         // Masked logging for diagnostics
