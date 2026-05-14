@@ -107,8 +107,14 @@ if (ENVIRONMENT === 'production') {
 
 app.use(express.json()); // Enable JSON parsing for API requests
 
-// Capture Webhook at startup to prevent environment isolation issues
-const CAPTURED_WEBHOOK = process.env.DISCORD_FEEDBACK_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL;
+// Capture everything at the absolute top level
+const STARTUP_ENV_KEYS = Object.keys(process.env);
+const STARTUP_DISCORD_KEY = STARTUP_ENV_KEYS.find(k => k.toUpperCase().includes('DISCORD'));
+const FROZEN_WEBHOOK = process.env.DISCORD_FEEDBACK_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL || (STARTUP_DISCORD_KEY ? process.env[STARTUP_DISCORD_KEY] : null);
+
+console.log(`[BOOT] Startup Keys: ${STARTUP_ENV_KEYS.length}`);
+console.log(`[BOOT] Found Discord Key at boot: ${STARTUP_DISCORD_KEY || 'NONE'}`);
+console.log(`[BOOT] Frozen Webhook length: ${FROZEN_WEBHOOK ? FROZEN_WEBHOOK.length : 0}`);
 
 // Feedback API Route
 app.post('/api/feedback', async (req, res) => {
@@ -116,31 +122,21 @@ app.post('/api/feedback', async (req, res) => {
         const { message, username } = req.body;
         if (!message) return res.status(400).json({ error: 'Message is required' });
         
-        // Discord content limit is 2000 characters
-        if (message.length > 1900) {
-            return res.status(400).json({ error: 'Message too long (max 1900 characters)' });
-        }
-
-        // Diagnostic info for the request
-        const currentEnvKeys = Object.keys(process.env);
-        const discordKeys = currentEnvKeys.filter(k => k.toUpperCase().includes('DISCORD'));
+        const currentKeys = Object.keys(process.env);
+        const currentDiscordKey = currentKeys.find(k => k.toUpperCase().includes('DISCORD'));
         
-        console.log('--- FEEDBACK REQUEST DIAGNOSTIC ---');
-        console.log(`Time: ${new Date().toISOString()}`);
-        console.log(`Captured Webhook Status: ${!!CAPTURED_WEBHOOK} (Length: ${CAPTURED_WEBHOOK ? CAPTURED_WEBHOOK.length : 0})`);
-        console.log(`Keys with "DISCORD": ${discordKeys.join(', ') || 'NONE'}`);
-        console.log(`First 20 Env Keys: ${currentEnvKeys.slice(0, 20).join(', ')}`);
-        console.log('-----------------------------------');
-
-        const webhookUrl = CAPTURED_WEBHOOK || process.env.DISCORD_FEEDBACK_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL;
+        console.log('--- FEEDBACK DEBUG ---');
+        console.log(`Now Keys: ${currentKeys.length} | Discord Key Now: ${currentDiscordKey || 'NONE'}`);
+        console.log(`Frozen Webhook exists: ${!!FROZEN_WEBHOOK}`);
         
+        // Priority: Frozen > Live > Fallback
+        const webhookUrl = FROZEN_WEBHOOK || process.env.DISCORD_FEEDBACK_WEBHOOK_URL || (currentDiscordKey ? process.env[currentDiscordKey] : null);
+
         if (!webhookUrl) {
-            console.error('[FEEDBACK] ERROR: No Webhook URL found (Captured or Live)');
             return res.status(500).json({ 
                 error: 'Webhook URL not configured',
-                diagnostic: discordKeys.length > 0 ? discordKeys.join(', ') : `No DISCORD keys found. Total keys: ${currentEnvKeys.length}`,
-                env: ENVIRONMENT,
-                hint: 'Check Railway Logs for "FEEDBACK REQUEST DIAGNOSTIC" section.'
+                diagnostic: `StartupKeys: ${STARTUP_ENV_KEYS.length}, NowKeys: ${currentKeys.length}, StartupDiscord: ${STARTUP_DISCORD_KEY || 'None'}`,
+                hint: 'If StartupDiscord is present but webhookUrl is null, contact support.'
             });
         }
 
