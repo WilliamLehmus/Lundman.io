@@ -1339,13 +1339,26 @@ if (submitFeedbackBtn) {
                     submitFeedbackBtn.disabled = false;
                 }, 2000);
             } else {
-                throw new Error(data.detail || data.error || 'Server error');
+                const error = new Error(data.detail || data.error || 'Server error');
+                error.diagnostic = data.diagnostic;
+                error.hint = data.hint;
+                throw error;
             }
         } catch (err) {
             if (statusEl) {
-                statusEl.innerText = `ERROR: ${err.message.substring(0, 40)}`;
+                // If the error has a JSON body with diagnostic/hint, use it
+                const errorMsg = err.message.substring(0, 50);
+                statusEl.innerText = `ERROR: ${errorMsg}`;
                 statusEl.style.color = '#ff4444';
+                
                 console.error("Feedback submission failed:", err.message);
+                if (err.diagnostic) console.warn("Diagnostic keys found:", err.diagnostic);
+                if (err.hint) console.info("Hint:", err.hint);
+                
+                // Show a more detailed alert if it's a configuration error
+                if (err.message.includes('not configured')) {
+                    alert(`FEEDBACK CONFIG ERROR\n\nThe server couldn't find the Discord Webhook URL.\n\nKeys found: ${err.diagnostic || 'None'}\n\nHint: ${err.hint || 'Check Railway variables'}`);
+                }
             }
             submitFeedbackBtn.disabled = false;
         }

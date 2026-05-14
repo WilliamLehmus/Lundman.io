@@ -118,30 +118,37 @@ app.post('/api/feedback', async (req, res) => {
             return res.status(400).json({ error: 'Message too long (max 1900 characters)' });
         }
 
-        const webhookUrl = process.env.DISCORD_FEEDBACK_WEBHOOK_URL;
+        // Fallback logic for webhook URL
+        const webhookUrl = process.env.DISCORD_FEEDBACK_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL;
         
         // DIAGNOSTIC LOG: List keys to see if Railway injected them
-        const discordKeys = Object.keys(process.env).filter(k => k.includes('DISCORD'));
-        console.log(`[FEEDBACK] Diagnostic - Found keys: ${discordKeys.join(', ')}`);
+        const allKeys = Object.keys(process.env);
+        const discordKeys = allKeys.filter(k => k.includes('DISCORD'));
+        const hasWebhook = !!webhookUrl;
         
         if (!webhookUrl) {
-            console.error('[FEEDBACK] ERROR: DISCORD_FEEDBACK_WEBHOOK_URL is missing or empty');
+            console.error('[FEEDBACK] ERROR: No Discord Webhook URL found in process.env');
+            console.log(`[FEEDBACK] Diagnostic - Available DISCORD keys: ${discordKeys.join(', ') || 'NONE'}`);
+            
             return res.status(500).json({ 
                 error: 'Webhook URL not configured',
-                diagnostic: discordKeys.join(', '),
-                env: ENVIRONMENT
+                diagnostic: discordKeys.length > 0 ? discordKeys.join(', ') : 'No DISCORD_ keys found in env',
+                env: ENVIRONMENT,
+                hint: 'Ensure DISCORD_FEEDBACK_WEBHOOK_URL or DISCORD_WEBHOOK_URL is set in the Railway dashboard.'
             });
         }
 
         // Masked logging for diagnostics
-        const maskedUrl = webhookUrl.trim().length > 20 
-            ? webhookUrl.trim().substring(0, 15) + '...' + webhookUrl.trim().substring(webhookUrl.trim().length - 5)
-            : 'REDACTED (INVALID URL LENGTH)';
-        console.log(`[FEEDBACK] Attempting send to: ${maskedUrl}`);
+        const trimmedUrl = webhookUrl.trim();
+        const maskedUrl = trimmedUrl.length > 20 
+            ? trimmedUrl.substring(0, 15) + '...' + trimmedUrl.substring(trimmedUrl.length - 5)
+            : 'INVALID_URL_LENGTH';
+        
+        console.log(`[FEEDBACK] Attempting send to: ${maskedUrl} (Source: ${process.env.DISCORD_FEEDBACK_WEBHOOK_URL ? 'PRIMARY' : 'FALLBACK'})`);
 
         const content = `**Feedback from ${username || 'Anonymous'}:**\n${message}`;
 
-        await axios.post(webhookUrl.trim(), { content }, { timeout: 5000 });
+        await axios.post(trimmedUrl, { content }, { timeout: 8000 });
         res.status(200).json({ success: true });
     } catch (err) {
         console.error('[FEEDBACK] Discord Webhook Error:', err.message);

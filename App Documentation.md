@@ -612,6 +612,11 @@ To transition from a learning project to a **marketable product**, the following
     3.  Removed manual `zIndex` override in `game.js`.
     4.  **Critical Fix**: Identified and closed an unclosed `<div>` in the `#shop-menu` component in `index.html`. This unclosed tag was causing the `feedback-modal` to be nested inside the hidden shop menu.
     5.  **Webhook Fix**: Corrected a malformed `.env` file where the `DISCORD_FEEDBACK_WEBHOOK_URL` was corrupted with spaces between every character, causing a 500 Internal Server Error.
+    6.  **Feedback System Robustness & Diagnostics**:
+        - **Date**: 2026-05-14
+        - **Issue**: Feedback submission failed on production with "Webhook URL not configured".
+        - **Fix**: Added a fallback in `server.js` to check for `DISCORD_WEBHOOK_URL` if `DISCORD_FEEDBACK_WEBHOOK_URL` is missing. Enhanced diagnostic logging to return found keys and hints to the client.
+        - **UX**: Updated `game.js` to display detailed diagnostic alerts when configuration errors occur, helping developers identify missing environment variables without checking server logs.
 - **Verification**: Browser testing confirmed the modal is now visible and feedback is successfully delivered to Discord.
 
 
