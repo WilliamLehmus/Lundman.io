@@ -125,8 +125,12 @@ app.post('/api/feedback', async (req, res) => {
         const currentEnvKeys = Object.keys(process.env);
         const discordKeys = currentEnvKeys.filter(k => k.toUpperCase().includes('DISCORD'));
         
-        console.log(`[FEEDBACK REQUEST] Diagnostic - Keys found in process.env: ${discordKeys.join(', ') || 'NONE'}`);
-        console.log(`[FEEDBACK REQUEST] Using Captured Webhook: ${!!CAPTURED_WEBHOOK}`);
+        console.log('--- FEEDBACK REQUEST DIAGNOSTIC ---');
+        console.log(`Time: ${new Date().toISOString()}`);
+        console.log(`Captured Webhook Status: ${!!CAPTURED_WEBHOOK} (Length: ${CAPTURED_WEBHOOK ? CAPTURED_WEBHOOK.length : 0})`);
+        console.log(`Keys with "DISCORD": ${discordKeys.join(', ') || 'NONE'}`);
+        console.log(`First 20 Env Keys: ${currentEnvKeys.slice(0, 20).join(', ')}`);
+        console.log('-----------------------------------');
 
         const webhookUrl = CAPTURED_WEBHOOK || process.env.DISCORD_FEEDBACK_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL;
         
@@ -134,9 +138,9 @@ app.post('/api/feedback', async (req, res) => {
             console.error('[FEEDBACK] ERROR: No Webhook URL found (Captured or Live)');
             return res.status(500).json({ 
                 error: 'Webhook URL not configured',
-                diagnostic: discordKeys.length > 0 ? discordKeys.join(', ') : 'No DISCORD_ keys found in env',
+                diagnostic: discordKeys.length > 0 ? discordKeys.join(', ') : `No DISCORD keys found. Total keys: ${currentEnvKeys.length}`,
                 env: ENVIRONMENT,
-                hint: 'Ensure DISCORD_FEEDBACK_WEBHOOK_URL is set in Railway. Server restart may be required.'
+                hint: 'Check Railway Logs for "FEEDBACK REQUEST DIAGNOSTIC" section.'
             });
         }
 
