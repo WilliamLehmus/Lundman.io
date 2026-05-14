@@ -97,7 +97,16 @@ const LobbyModel = MONGO_URL ? mongoose.model('Lobby', lobbySchema) : null;
 
 if (MONGO_URL) {
     mongoose.connect(MONGO_URL)
-        .then(() => console.log('Connected to MongoDB'))
+        .then(async () => {
+            console.log('Connected to MongoDB');
+            // 112: DB is cleared on server startup to ensure only 'live' lobbies are listed.
+            try {
+                const result = await LobbyModel.deleteMany({});
+                console.log(`[STARTUP] Cleared ${result.deletedCount} stale lobbies from database.`);
+            } catch (err) {
+                console.error('[STARTUP] Failed to clear lobbies:', err);
+            }
+        })
         .catch(err => console.error('MongoDB connection error:', err));
 }
 
@@ -384,7 +393,9 @@ io.on('connection', (socket) => {
 
     socket.on('request-lobbies', async () => {
         if (MONGO_URL) {
-            const list = await LobbyModel.find({}).lean();
+            // Only show lobbies updated in the last 2 minutes to prevent ghosting
+            const twoMinutesAgo = new Date(Date.now() - 120000);
+            const list = await LobbyModel.find({ lastUpdate: { $gt: twoMinutesAgo } }).lean();
             socket.emit('lobbies-list', list.map(l => ({ id: l.lobbyId, players: l.players, bots: l.bots, active: l.active })));
         } else {
             socket.emit('lobbies-list', Object.values(lobbies).map(l => ({ id: l.id, players: Object.values(l.players).filter(p => !p.isBot).length, bots: Object.values(l.players).filter(p => p.isBot).length, active: l.active })));
@@ -618,6 +629,28 @@ async function syncLobbyToDB(lobby) {
             { upsert: true }
         );
     } catch (e) { console.error('DB Sync Error:', e); }
+}
+
+// Periodic cleanup of stale lobbies in DB (every 5 minutes)
+if (MONGO_URL) {
+    setInterval(async () => {
+        try {
+            const fiveMinutesAgo = new Date(Date.now() - 300000);
+            const deleted = await LobbyModel.deleteMany({ lastUpdate: { $lt: fiveMinutesAgo } });
+            if (deleted.deletedCount > 0) {
+                console.log(`[SYS] Cleaned up ${deleted.deletedCount} stale lobbies from DB.`);
+            }
+        } catch (e) {
+            console.error('[SYS] Periodic cleanup failed:', e);
+        }
+    }, 300000);
+}
+
+// Heartbeat to keep active lobbies fresh in DB (every 30 seconds)
+if (MONGO_URL) {
+    setInterval(() => {
+        Object.values(lobbies).forEach(syncLobbyToDB);
+    }, 30000);
 }
 
 server.listen(PORT, '0.0.0.0', () => {
