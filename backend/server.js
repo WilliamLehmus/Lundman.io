@@ -3,11 +3,40 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import dotenv from 'dotenv';
-import mongoose from 'mongoose';
-import bcrypt from 'bcryptjs';
 import Matter from 'matter-js';
 import axios from 'axios';
+import dotenv from 'dotenv';
+
+// 1. Initial Load of environment variables
+dotenv.config();
+
+function findDiscordWebhook() {
+    const keys = Object.keys(process.env);
+    
+    // Preference 1: Explicit keys
+    if (process.env.DISCORD_FEEDBACK_WEBHOOK_URL) return process.env.DISCORD_FEEDBACK_WEBHOOK_URL;
+    if (process.env.DISCORD_WEBHOOK_URL) return process.env.DISCORD_WEBHOOK_URL;
+    
+    // Preference 2: Any key containing DISCORD (case insensitive)
+    const discordKey = keys.find(k => k.toUpperCase().includes('DISCORD'));
+    if (discordKey && process.env[discordKey] && process.env[discordKey].startsWith('http')) {
+        return process.env[discordKey];
+    }
+    
+    // Preference 3: Greedy search for Discord Webhook URL format in ALL variables
+    const greedyMatch = keys.find(k => {
+        const val = process.env[k];
+        return val && typeof val === 'string' && val.includes('discord.com/api/webhooks/');
+    });
+    
+    if (greedyMatch) return process.env[greedyMatch];
+    return null;
+}
+
+const BOOT_WEBHOOK = findDiscordWebhook();
+
+import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
 
 // Import Modular Logic
 import { loadPlayers, savePlayers, getPlayerData, setPlayerData } from './logic/Persistence.js';
@@ -32,7 +61,7 @@ if (IS_DEV) {
 }
 
 
-dotenv.config();
+
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -102,15 +131,32 @@ migratePlayersToDB();
 
 // Production Static Serving
 if (ENVIRONMENT === 'production') {
-    app.use(express.static(path.join(__dirname, '../frontend/dist')));
+    // 1. Set Cache-Control for index.html to prevent stale client builds
+    app.use((req, res, next) => {
+        if (req.path === '/' || req.path === '/index.html') {
+            res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+            res.setHeader('Surrogate-Control', 'no-store');
+        }
+        next();
+    });
+
+    // 2. Serve static files
+    app.use(express.static(path.join(__dirname, '../frontend/dist'), {
+        etag: true,
+        lastModified: true,
+        maxAge: '1d' // Assets can be cached for a day, but index.html is bypassed above
+    }));
 }
 
 app.use(express.json()); // Enable JSON parsing for API requests
 
 // Capture everything at the absolute top level
+// Capture everything at the absolute top level for requests
 const STARTUP_ENV_KEYS = Object.keys(process.env);
 const STARTUP_DISCORD_KEY = STARTUP_ENV_KEYS.find(k => k.toUpperCase().includes('DISCORD'));
-const FROZEN_WEBHOOK = process.env.DISCORD_FEEDBACK_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL || (STARTUP_DISCORD_KEY ? process.env[STARTUP_DISCORD_KEY] : null);
+const FROZEN_WEBHOOK = BOOT_WEBHOOK || process.env.DISCORD_FEEDBACK_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL || (STARTUP_DISCORD_KEY ? process.env[STARTUP_DISCORD_KEY] : null);
 
 console.log(`[BOOT] Startup Keys: ${STARTUP_ENV_KEYS.length}`);
 console.log(`[BOOT] Found Discord Key at boot: ${STARTUP_DISCORD_KEY || 'NONE'}`);
@@ -175,6 +221,12 @@ app.use((req, res, next) => {
 // SPA Catch-all
 app.use((req, res) => {
     if (ENVIRONMENT === 'production' && !req.path.startsWith('/api')) {
+        // Prevent serving index.html for missing JS/CSS/Assets (which causes MIME type errors)
+        const isAsset = /\.(js|css|png|jpg|jpeg|gif|svg|ico|mp3)$/i.test(req.path);
+        if (isAsset) {
+            console.warn(`[404] Asset not found: ${req.path}`);
+            return res.status(404).send('Asset Not Found');
+        }
         res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
     } else {
         res.status(404).send('Not Found');
