@@ -291,17 +291,18 @@ io.on('connection', (socket) => {
     socket.on('join-game', async (data) => {
         if (!data || !data.username || data.username.trim() === '') return;
         let { username, chassisType, pin } = data;
-        username = username.trim().substring(0, 12);
+        username = username.trim().substring(0, 12); // Preserve casing
         const allowedChassis = ['SCOUT', 'BRAWLER', 'ARTILLERY'];
         if (IS_DEV) allowedChassis.push('DEV');
         if (!allowedChassis.includes(chassisType)) chassisType = 'SCOUT';
 
         let dbPlayer = null;
+        const identityKey = PlayerModel.getIdentityKey(username);
         if (MONGO_URL) {
-            dbPlayer = await PlayerModel.findOne({ username });
+            dbPlayer = await PlayerModel.findOne({ identityKey });
         } else {
             const playerData = getPlayerData();
-            dbPlayer = playerData[username];
+            dbPlayer = playerData[identityKey];
         }
 
         if (dbPlayer) {
@@ -309,9 +310,9 @@ io.on('connection', (socket) => {
                 if (pin) {
                     const hashed = await bcrypt.hash(pin, 10);
                     if (MONGO_URL) {
-                        await PlayerModel.updateOne({ username }, { pin: hashed });
+                        await PlayerModel.updateOne({ identityKey }, { pin: hashed });
                     } else {
-                        getPlayerData()[username].pin = hashed;
+                        getPlayerData()[identityKey].pin = hashed;
                     }
                 }
             } else {
@@ -323,12 +324,13 @@ io.on('connection', (socket) => {
             if (MONGO_URL) {
                 await PlayerModel.create({
                     username,
+                    identityKey,
                     pin: hashedPin,
                     kills: 0, deaths: 0, scrap: 0,
                     lastSeen: new Date()
                 });
             } else {
-                getPlayerData()[username] = { kills: 0, deaths: 0, scrap: 0, lastSeen: Date.now(), pin: hashedPin };
+                getPlayerData()[identityKey] = { username, kills: 0, deaths: 0, scrap: 0, lastSeen: Date.now(), pin: hashedPin };
             }
         }
 
@@ -352,14 +354,15 @@ io.on('connection', (socket) => {
     socket.on('host-game', async (data) => {
         if (!data || !data.username || data.username.trim() === '') return;
         let { username, chassisType, pin } = data;
-        username = username.trim().substring(0, 12);
+        username = username.trim().substring(0, 12); // Preserve casing
 
         let dbPlayer = null;
+        const identityKey = PlayerModel.getIdentityKey(username);
         if (MONGO_URL) {
-            dbPlayer = await PlayerModel.findOne({ username });
+            dbPlayer = await PlayerModel.findOne({ identityKey });
         } else {
             const playerData = getPlayerData();
-            dbPlayer = playerData[username];
+            dbPlayer = playerData[identityKey];
         }
 
         if (dbPlayer) {
@@ -372,12 +375,13 @@ io.on('connection', (socket) => {
             if (MONGO_URL) {
                 await PlayerModel.create({
                     username,
+                    identityKey,
                     pin: hashedPin,
                     kills: 0, deaths: 0, scrap: 0,
                     lastSeen: new Date()
                 });
             } else {
-                getPlayerData()[username] = { kills: 0, deaths: 0, scrap: 0, lastSeen: Date.now(), pin: hashedPin };
+                getPlayerData()[identityKey] = { username, kills: 0, deaths: 0, scrap: 0, lastSeen: Date.now(), pin: hashedPin };
             }
         }
 
@@ -405,14 +409,16 @@ io.on('connection', (socket) => {
     socket.on('join-lobby', async (data) => {
         const lobby = lobbies[data?.lobbyId];
         if (!lobby) return socket.emit('auth-error', { message: 'LOBBY NOT FOUND!' });
-        const { username, chassisType, pin } = data;
+        let { username, chassisType, pin } = data;
+        username = username.trim().substring(0, 12); // Preserve casing
         
         let dbPlayer = null;
+        const identityKey = PlayerModel.getIdentityKey(username);
         if (MONGO_URL) {
-            dbPlayer = await PlayerModel.findOne({ username });
+            dbPlayer = await PlayerModel.findOne({ identityKey });
         } else {
             const playerData = getPlayerData();
-            dbPlayer = playerData[username];
+            dbPlayer = playerData[identityKey];
         }
 
         if (dbPlayer && dbPlayer.pin) {
