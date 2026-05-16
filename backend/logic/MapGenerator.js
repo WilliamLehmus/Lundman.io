@@ -24,56 +24,69 @@ export class MapGenerator {
 
         for (let x = padding; x < this.lobby.worldSize - padding; x += blockSize + streetWidth) {
             for (let y = padding; y < this.lobby.worldSize - padding; y += blockSize + streetWidth) {
+                // Add random jitter to break the grid pattern
+                const jitterX = (Math.random() - 0.5) * (streetWidth * 0.8);
+                const jitterY = (Math.random() - 0.5) * (streetWidth * 0.8);
+                const jx = x + jitterX;
+                const jy = y + jitterY;
+                
                 const rand = Math.random();
                 
                 if (mapType === 'URBAN') {
-                    if (rand < 0.85) this.generateCityBlock(x, y, blockSize);
-                    else if (rand > 0.95) this.safeSpawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.WATER, null, null, null, 160 * sizeMult, 160 * sizeMult);
+                    if (rand < 0.75) this.generateCityBlock(jx, jy, blockSize);
+                    else if (rand > 0.95) this.safeSpawnElement({ x: jx + blockSize/2, y: jy + blockSize/2 }, MATERIALS.WATER, null, null, null, 160 * sizeMult, 160 * sizeMult);
                 } 
                 else if (mapType === 'WASTELAND') {
-                    if (rand < 0.35) this.generateCityBlock(x, y, blockSize);
-                    else if (rand < 0.55) this.safeSpawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.OIL, 300000, null, null, 150 * sizeMult, 150 * sizeMult);
-                    else if (rand < 0.75) this.safeSpawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.ACID, null, null, null, 180 * sizeMult, 180 * sizeMult);
-                    else if (rand < 0.85) this.safeSpawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.DIRT, null, null, null, 200 * sizeMult, 200 * sizeMult);
+                    if (rand < 0.3) this.generateCityBlock(jx, jy, blockSize);
+                    else if (rand < 0.5) this.safeSpawnElement({ x: jx + blockSize/2, y: jy + blockSize/2 }, MATERIALS.OIL, 300000, null, null, 150 * sizeMult, 150 * sizeMult);
+                    else if (rand < 0.7) this.safeSpawnElement({ x: jx + blockSize/2, y: jy + blockSize/2 }, MATERIALS.ACID, null, null, null, 180 * sizeMult, 180 * sizeMult);
+                    else if (rand < 0.8) this.safeSpawnElement({ x: jx + blockSize/2, y: jy + blockSize/2 }, MATERIALS.DIRT, null, null, null, 200 * sizeMult, 200 * sizeMult);
                 }
                 else if (mapType === 'DESERT') {
-                    if (rand < 0.2) this.generateCityBlock(x, y, blockSize);
-                    else if (rand < 0.3) this.safeSpawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.OIL, 300000, null, null, 140 * sizeMult, 140 * sizeMult);
-                    else if (rand < 0.4) this.safeSpawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.WATER, null, null, null, 180 * sizeMult, 180 * sizeMult);
-                    else if (rand < 0.6) this.safeSpawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.DIRT, null, null, null, 180 * sizeMult, 180 * sizeMult);
-                    else if (rand < 0.75) {
+                    if (rand < 0.15) this.generateCityBlock(jx, jy, blockSize);
+                    else if (rand < 0.25) this.safeSpawnElement({ x: jx + blockSize/2, y: jy + blockSize/2 }, MATERIALS.OIL, 300000, null, null, 140 * sizeMult, 140 * sizeMult);
+                    else if (rand < 0.35) this.safeSpawnElement({ x: jx + blockSize/2, y: jy + blockSize/2 }, MATERIALS.WATER, null, null, null, 180 * sizeMult, 180 * sizeMult);
+                    else if (rand < 0.55) this.safeSpawnElement({ x: jx + blockSize/2, y: jy + blockSize/2 }, MATERIALS.DIRT, null, null, null, 180 * sizeMult, 180 * sizeMult);
+                    else if (rand < 0.7) {
                         const pType = Math.random() > 0.4 ? MATERIALS.CACTUS : MATERIALS.PALM;
-                        this.safeSpawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, pType);
+                        this.safeSpawnElement({ x: jx + blockSize/2, y: jy + blockSize/2 }, pType);
                         for(let i=0; i<2; i++) {
                             this.safeSpawnElement({ 
-                                x: x + blockSize/2 + (Math.random()-0.5)*100, 
-                                y: y + blockSize/2 + (Math.random()-0.5)*100 
+                                x: jx + blockSize/2 + (Math.random()-0.5)*100, 
+                                y: jy + blockSize/2 + (Math.random()-0.5)*100 
                             }, pType);
                         }
                     }
                 }
                 else if (mapType === 'INDUSTRIAL') {
-                    if (rand < 0.6) this.generateIndustrialComplex(x, y, blockSize);
+                    if (rand < 0.55) this.generateIndustrialComplex(jx, jy, blockSize);
                 }
                 else if (mapType === 'WETLAND') {
-                    if (rand < 0.3) this.generateCityBlock(x, y, blockSize);
-                    else if (rand < 0.8) {
+                    if (rand < 0.25) this.generateCityBlock(jx, jy, blockSize);
+                    else if (rand < 0.75) {
                         const r2 = Math.random();
                         let pType = MATERIALS.WATER;
                         if (r2 > 0.5 && r2 <= 0.8) pType = MATERIALS.ACID;
                         else if (r2 > 0.8) pType = MATERIALS.GAS;
-                        this.safeSpawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, pType, null, null, null, 220 * sizeMult, 220 * sizeMult);
+                        this.safeSpawnElement({ x: jx + blockSize/2, y: jy + blockSize/2 }, pType, null, null, null, 220 * sizeMult, 220 * sizeMult);
                     }
-                    if (Math.random() > 0.7) this.safeSpawnElement({ x: x + blockSize, y: y + blockSize }, MATERIALS.DIRT, null, null, null, 150, 150);
+                    if (Math.random() > 0.75) this.safeSpawnElement({ x: jx + blockSize, y: jy + blockSize }, MATERIALS.DIRT, null, null, null, 150, 150);
                 }
                 else if (mapType === 'TUNDRA') {
-                    if (rand < 0.2) this.generateCityBlock(x, y, blockSize);
-                    else if (rand < 0.8) this.safeSpawnElement({ x: x + blockSize/2, y: y + blockSize/2 }, MATERIALS.ICE, null, null, null, 180, 180);
+                    if (rand < 0.15) this.generateCityBlock(jx, jy, blockSize);
+                    else if (rand < 0.75) {
+                        // Tundra now spawns clusters or single ice puddles with more size variation
+                        const size = 150 + Math.random() * 100;
+                        this.safeSpawnElement({ x: jx + blockSize/2, y: jy + blockSize/2 }, MATERIALS.ICE, null, null, null, size, size);
+                        if (Math.random() > 0.7) {
+                             this.safeSpawnElement({ x: jx + blockSize/2 + 100, y: jy + blockSize/2 + 80 }, MATERIALS.ICE, null, null, null, size * 0.7, size * 0.7);
+                        }
+                    }
                 }
             }
         }
 
-        if (['INDUSTRIAL', 'URBAN', 'WASTELAND', 'DESERT'].includes(mapType)) {
+        if (['INDUSTRIAL', 'URBAN', 'WASTELAND', 'DESERT', 'TUNDRA'].includes(mapType)) {
             const isUrban = mapType === 'URBAN';
             const isDesert = mapType === 'DESERT';
             const isWasteland = mapType === 'WASTELAND';
@@ -97,6 +110,8 @@ export class MapGenerator {
                         if (r > 0.7) pType = MATERIALS.WATER;
                         else if (r > 0.4) pType = MATERIALS.OIL;
                         else pType = MATERIALS.DIRT;
+                    } else if (mapType === 'TUNDRA') {
+                        pType = MATERIALS.ICE;
                     } else { // Industrial
                         pType = MATERIALS.ELECTRIC;
                         if (r > 0.5 && r <= 0.7) pType = MATERIALS.ACID;
@@ -139,27 +154,56 @@ export class MapGenerator {
             }
         }
 
-        const cellSize = 350; 
+        const playerCount = Object.keys(this.lobby.players).length || 2;
+        const maxBarrels = 10 + Math.max(0, Math.ceil(playerCount / 2) - 2) * 2;
+        let barrelCount = 0;
+
+        const cellSize = 380; 
         for (let gx = cellSize; gx < this.lobby.worldSize - cellSize; gx += cellSize) {
             for (let gy = cellSize; gy < this.lobby.worldSize - cellSize; gy += cellSize) {
+                // Add random jitter to break the grid pattern
+                const jitterX = (Math.random() - 0.5) * (cellSize * 0.8);
+                const jitterY = (Math.random() - 0.5) * (cellSize * 0.8);
+                const jx = gx + jitterX;
+                const jy = gy + jitterY;
+
+                // Skip some cells to reduce density and grid feeling
+                if (Math.random() > 0.45) continue;
+
                 const distToCenter = Math.hypot(gx - this.lobby.worldSize/2, gy - this.lobby.worldSize/2);
                 if (distToCenter < 500) continue;
 
                 const rand = Math.random();
-                let pType;
-                if (rand < 0.20) pType = MATERIALS.BARREL_EXPLOSIVE;
-                else if (rand < 0.40) pType = MATERIALS.BARREL_OIL;
-                else if (rand < 0.50) pType = MATERIALS.BARREL_ACID;
-                else if (rand < 0.60) pType = MATERIALS.BARREL_ELECTRIC;
-                else if (rand < 0.70) pType = MATERIALS.BARREL_FROST;
-                else if (rand < 0.80) pType = MATERIALS.BARREL_GAS;
-                else pType = MATERIALS.CRATE;
+                let pType = null;
                 
-                const props = MATERIAL_PROPERTIES[pType];
-                this.safeSpawnElement({ 
-                    x: gx + (Math.random() - 0.5) * (cellSize * 0.7), 
-                    y: gy + (Math.random() - 0.5) * (cellSize * 0.7) 
-                }, pType, null, props.hp, null, null, null, null, 15);
+                // Tundra specific decorative spawns
+                if (mapType === 'TUNDRA') {
+                    if (rand < 0.2) pType = MATERIALS.SNOW_DRIFT;
+                    else if (rand < 0.45) pType = MATERIALS.PINE_TREE;
+                    else if (rand < 0.55) pType = MATERIALS.BOULDER;
+                }
+
+                if (!pType) {
+                    // Barrel/Crate Spawning with Limit
+                    if (rand < 0.8) {
+                        const bTypes = [
+                            MATERIALS.BARREL_EXPLOSIVE, MATERIALS.BARREL_OIL, MATERIALS.BARREL_ACID, 
+                            MATERIALS.BARREL_ELECTRIC, MATERIALS.BARREL_FROST, MATERIALS.BARREL_GAS
+                        ];
+                        const isBarrel = rand < 0.6;
+                        if (isBarrel && barrelCount < maxBarrels) {
+                            pType = bTypes[Math.floor(Math.random() * bTypes.length)];
+                            barrelCount++;
+                        } else if (!isBarrel) {
+                            pType = MATERIALS.CRATE;
+                        }
+                    }
+                }
+                
+                if (pType) {
+                    const props = MATERIAL_PROPERTIES[pType];
+                    this.safeSpawnElement({ x: jx, y: jy }, pType, null, props ? props.hp : null, null, null, null, null, 15);
+                }
             }
         }
     }

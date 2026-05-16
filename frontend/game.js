@@ -1,6 +1,6 @@
 import { io } from "socket.io-client";
 import versionData from './version.json';
-import { MATERIALS, MATERIAL_PROPERTIES, BIOMES, CHASSIS, WEAPON_MODULES, ALL_WEAPONS } from '../backend/gameConfig.js';
+import { MATERIALS, MATERIAL_PROPERTIES, BIOMES, CHASSIS, WEAPON_MODULES, ALL_WEAPONS, MIN_PLAYERS } from '../backend/gameConfig.js';
 
 // Connect to the same host the game is served from
 const socket = io({
@@ -69,6 +69,40 @@ socket.on('barrel-break', (data) => {
     else if (data.type === MATERIALS.GAS) sfx = gasEntrySFX;
     
     if (sfx) audioManager.playSFX(sfx, vol);
+});
+
+socket.on('collision-effect', (data) => {
+    // Handles visual feedback for bullet hitting elements (puddles, buildings)
+    const { x, y, type, targetLabel } = data;
+    
+    if (targetLabel === 'element' || targetLabel === 'alchemy') {
+        let color = '#fff';
+        let count = 8;
+        let size = 1;
+        
+        switch(type) {
+            case MATERIALS.WATER:    color = '#00aaff'; break;
+            case MATERIALS.OIL:      color = '#111111'; break;
+            case MATERIALS.ACID:     color = '#00ff00'; break;
+            case MATERIALS.FIRE:     color = '#ff4400'; count = 15; size = 1.5; break;
+            case MATERIALS.ELECTRIC: color = '#ffff00'; count = 12; break;
+            case MATERIALS.ICE:      color = '#aaddff'; break;
+            case MATERIALS.DIRT:     color = '#5d4037'; break;
+            case MATERIALS.GAS:      color = '#ffffaa'; count = 20; size = 2; break;
+            case MATERIALS.STEAM:    color = '#ffffff'; count = 15; size = 2.5; break;
+            case MATERIALS.QUICKSAND: color = '#3d2a14'; count = 10; break;
+        }
+        
+        spawnParticles(x, y, color, count, size);
+        
+        // Play small impact sound if near player
+        const me = gameState.players.find(p => p.id === myId);
+        if (me && Math.hypot(me.x - x, me.y - y) < 600) {
+             if (type === MATERIALS.WATER) audioManager.playSFX(waterSplashSFX, 0.3);
+             else if (type === MATERIALS.FIRE) audioManager.playSFX(fireEntrySFX, 0.4);
+             else if (type === MATERIALS.ELECTRIC) audioManager.playSFX(electricZapSFX, 0.4);
+        }
+    }
 });
 
 socket.on('player-event', (data) => {
@@ -1783,13 +1817,37 @@ function updateLobbyUI(id, payload) {
 
     const isHost = players.length > 0 && players[0].id === myId;
     const totalCount = players.length;
-    if (isHost && totalCount >= 1) { // Bots count, so 1 human + anything is fine
+    const allReady = players.filter(p => !p.isBot).every(p => p.ready);
+    
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const requiredPlayers = isLocalhost ? 1 : MIN_PLAYERS;
+    
+    if (isHost) {
         startGameBtn.classList.remove('hidden');
-        lobbyStatus.innerText = `READY TO DEPLOY (${totalCount}/10)`;
-        lobbyStatus.style.color = '#00ff00';
+        // Require at least requiredPlayers participants (human or bot)
+        const canStart = totalCount >= requiredPlayers;
+        
+        if (!canStart) {
+            startGameBtn.disabled = true;
+            startGameBtn.style.opacity = '0.5';
+            startGameBtn.title = `NEED AT LEAST ${requiredPlayers} PARTICIPANTS TO START`;
+            lobbyStatus.innerText = `NEED MORE PLAYERS (${totalCount}/${requiredPlayers})`;
+            lobbyStatus.style.color = '#ffcc00';
+        } else if (!allReady) {
+            startGameBtn.disabled = true;
+            startGameBtn.style.opacity = '0.5';
+            lobbyStatus.innerText = `WAITING FOR ALL TO BE READY...`;
+            lobbyStatus.style.color = '#ffcc00';
+        } else {
+            startGameBtn.disabled = false;
+            startGameBtn.style.opacity = '1';
+            startGameBtn.title = '';
+            lobbyStatus.innerText = `READY TO DEPLOY! (${totalCount}/10)`;
+            lobbyStatus.style.color = '#00ff00';
+        }
     } else {
         startGameBtn.classList.add('hidden');
-        if (totalCount < 1) {
+        if (totalCount < requiredPlayers) {
             lobbyStatus.innerText = `WAITING FOR PLAYERS...`;
             lobbyStatus.style.color = '#ffcc00';
         } else {
@@ -2380,13 +2438,33 @@ function drawTank(p) {
     }
     
     ctx.translate(p.x, p.y);
+    
+    // 1.5 SPAWN PROTECTION SHIELD
+    if (p.inv) {
+        ctx.save();
+        const pulse = Math.sin(Date.now() * 0.01) * 0.2 + 0.8;
+        ctx.strokeStyle = p.t === 'blue' ? `rgba(0, 242, 255, ${0.4 * pulse})` : `rgba(255, 0, 255, ${0.4 * pulse})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, 35, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Inner glow
+        const grad = ctx.createRadialGradient(0, 0, 25, 0, 0, 35);
+        grad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+        grad.addColorStop(1, p.t === 'blue' ? 'rgba(0, 242, 255, 0.1)' : 'rgba(255, 0, 255, 0.1)');
+        ctx.fillStyle = grad;
+        ctx.fill();
+        ctx.restore();
+    }
 
     // 2. STATUS EFFECTS V2 (Floating above tank)
-    if (p.stunned || p.slowed || p.burning || p.scrap >= 100) {
+    if (p.stunned || p.slowed || p.burning || p.inv || p.scrap >= 100) {
         ctx.save();
         ctx.translate(0, -TANK_HEIGHT - 45);
         ctx.textAlign = 'center';
         let yOff = 0;
+        if (p.inv) { ctx.fillStyle = '#00f2ff'; ctx.font = '900 14px Outfit'; ctx.fillText('🛡️ PROTECTED', 0, yOff); yOff -= 18; }
         if (p.stunned) { ctx.fillStyle = '#ffff00'; ctx.font = '900 14px Outfit'; ctx.fillText('⚡ STUNNED', 0, yOff); yOff -= 18; }
         if (p.slowed)  { ctx.fillStyle = '#00aaff'; ctx.font = '900 14px Outfit'; ctx.fillText('❄️ SLOWED', 0, yOff); yOff -= 18; }
         if (p.burning) { ctx.fillStyle = '#ff4400'; ctx.font = '900 14px Outfit'; ctx.fillText('🔥 BURNING', 0, yOff); yOff -= 18; }
@@ -4405,6 +4483,49 @@ function drawElements() {
                     spawnParticles(e.x + (Math.random()-0.5)*e.w, e.y - e.h/2, '#ffffaa', 3, 0.8);
                 }
             }
+        } else if (e.t === MATERIALS.SNOW_DRIFT) {
+            ctx.translate(e.x, e.y);
+            const g = ctx.createRadialGradient(0, -5, 0, 0, 0, e.w/2);
+            g.addColorStop(0, '#fff');
+            g.addColorStop(0.7, '#eef');
+            g.addColorStop(1, 'rgba(200, 200, 255, 0)');
+            ctx.fillStyle = g;
+            ctx.beginPath();
+            ctx.ellipse(0, 0, e.w/2, e.h/2, 0, 0, Math.PI * 2);
+            ctx.fill();
+            if (Math.sin(renderTime * 0.002 + e.id) > 0.9) {
+                ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.6;
+                ctx.beginPath(); ctx.arc(-5, -5, 2, 0, Math.PI*2); ctx.fill();
+            }
+        } else if (e.t === MATERIALS.PINE_TREE) {
+            ctx.translate(e.x, e.y);
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            ctx.beginPath(); ctx.ellipse(5, 5, 20, 10, 0, 0, Math.PI*2); ctx.fill();
+            for (let i = 0; i < 3; i++) {
+                ctx.fillStyle = i === 2 ? '#fff' : (i === 1 ? '#1a3a1a' : '#0d2d0d');
+                const tw = e.w * (1 - i * 0.3);
+                const th = e.h * 0.6;
+                const ty = -i * 15;
+                ctx.beginPath();
+                ctx.moveTo(0, ty - th);
+                ctx.lineTo(-tw/2, ty);
+                ctx.lineTo(tw/2, ty);
+                ctx.closePath();
+                ctx.fill();
+            }
+        } else if (e.t === MATERIALS.BOULDER) {
+            ctx.translate(e.x, e.y);
+            ctx.fillStyle = '#3a3a4a';
+            ctx.beginPath();
+            for (let i = 0; i < 8; i++) {
+                const a = (i / 8) * Math.PI * 2;
+                const r = (e.w/2) * (0.8 + getStableRandom(e.id + i) * 0.3);
+                if (i === 0) ctx.moveTo(Math.cos(a)*r, Math.sin(a)*r);
+                else ctx.lineTo(Math.cos(a)*r, Math.sin(a)*r);
+            }
+            ctx.closePath(); ctx.fill();
+            ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.4;
+            ctx.beginPath(); ctx.moveTo(-e.w/3, -e.h/3); ctx.lineTo(0, -e.h/2.2); ctx.lineTo(e.w/4, -e.h/4); ctx.fill();
         } else if (e.t === MATERIALS.SCRAP) {
             // Draw Scrap as a rotating gold gear/nut
             ctx.translate(e.x, e.y);

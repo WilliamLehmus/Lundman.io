@@ -1,5 +1,5 @@
 import Matter from 'matter-js';
-import { MATERIALS, MATERIAL_PROPERTIES, WEAPON_MODULES, CHASSIS, BIOMES } from '../gameConfig.js';
+import { MATERIALS, MATERIAL_PROPERTIES, WEAPON_MODULES, CHASSIS, BIOMES, CAT_TANK, CAT_BULLET, CAT_WALL, CAT_SOLID, CAT_FOLIAGE } from '../gameConfig.js';
 
 const { Bodies, Body, Composite, Vector, Events, Query, Bounds } = Matter;
 
@@ -19,12 +19,15 @@ export class CombatEngine {
 
         Events.on(this.lobby.engine, 'collisionStart', (event) => {
             event.pairs.forEach((pair) => {
-                const bodyA = pair.bodyA;
-                const bodyB = pair.bodyB;
-                
+                const { bodyA, bodyB } = pair;
                 if (bodyA.label === 'bullet' || bodyB.label === 'bullet') {
                     const bullet = bodyA.label === 'bullet' ? bodyA : bodyB;
                     const target = bodyA.label === 'bullet' ? bodyB : bodyA;
+                    
+                    // DEBUG: Log all bullet-to-element collisions
+                    if (target.label === 'element') {
+                        console.log(`[Combat] Bullet-Element Collision: Bullet=${bullet.id} Target=${target.elementId} (Sensor: ${target.isSensor})`);
+                    }
                     
                     this.io.to(this.lobby.id).emit('collision-effect', {
                         x: bullet.position.x,
@@ -33,6 +36,7 @@ export class CombatEngine {
                         targetLabel: target.label
                     });
 
+                    const element = this.lobby.elements[target.elementId];
                     this.processBulletCollision(bullet, target);
                 }
             });
@@ -110,9 +114,29 @@ export class CombatEngine {
         
         if (target.label === 'element') {
             const element = this.lobby.elements[target.elementId];
+            if (!element) {
+                this.lobby.destroyBullet(bullet.id);
+                return;
+            }
             if (element) {
+                if (bulletData.type === MATERIALS.ICE && element.type === MATERIALS.WATER) {
+                    element.type = MATERIALS.ICE;
+                    element.body.isSensor = false; // Ice is solid
+                    element.expiresAt = Date.now() + 5000;
+                    if (this.lobby.mapType === 'TUNDRA') {
+                        element.expiresAt = Date.now() + 30000;
+                        element.originalType = MATERIALS.ICE;
+                    } else {
+                        element.expiresAt = null;
+                        element.originalType = null;
+                    }
+                    this.lobby.destroyBullet(bullet.id);
+                    return;
+                }
+                
                 if (bulletData.type === MATERIALS.FIRE && element.type === MATERIALS.ICE) {
                     element.type = MATERIALS.WATER;
+                    element.body.isSensor = true; // Water is passable
                     if (this.lobby.mapType === 'TUNDRA') {
                         element.expiresAt = Date.now() + 30000;
                         element.originalType = MATERIALS.ICE;
@@ -143,11 +167,18 @@ export class CombatEngine {
                     const oldPos = { x: element.body.position.x, y: element.body.position.y };
                     Composite.remove(this.lobby.engine.world, element.body);
                     element.body = Bodies.rectangle(oldPos.x, oldPos.y, element.w, element.h, {
-                        label: 'element', isStatic: true, isSensor: true, collisionFilter: { category: 0, mask: 0 }
+                        label: 'element', isStatic: true, isSensor: true, collisionFilter: { category: CAT_SOLID, mask: -1 }
                     });
                     element.body.elementId = element.id;
                     Composite.add(this.lobby.engine.world, element.body);
-                    this.io.to(this.lobby.id).emit('collision-effect', { x: oldPos.x, y: oldPos.y, type: MATERIALS.QUICKSAND, targetLabel: 'alchemy' });
+                }
+
+                if (isFireVSWater) {
+                    const pos = { x: element.body.position.x, y: element.body.position.y };
+                    const size = { w: element.w * 1.5, h: element.h * 1.5 };
+                    this.lobby.destroyElement(element.id);
+                    this.lobby.spawnElement(pos, MATERIALS.STEAM, 5000, null, bulletData.ownerId, size.w, size.h);
+                    this.io.to(this.lobby.id).emit('collision-effect', { x: pos.x, y: pos.y, type: MATERIALS.STEAM, targetLabel: 'alchemy' });
                     this.lobby.destroyBullet(bullet.id);
                     return;
                 }
@@ -363,7 +394,7 @@ export class CombatEngine {
                         }
                     }
                 }
-                if (element.type === MATERIALS.QUICKSAND) {
+                if (element.type === MATERIALS.QUICKSAND && !isInvulnerable) {
                     p.statusEffects.quicksand = now + 1000;
                     if (now > p.statusEffects.stun && now > (p.statusEffects.trapImmunity || 0)) {
                         p.statusEffects.stun = now + 3000;
@@ -406,6 +437,9 @@ export class CombatEngine {
         Object.values(this.lobby.players).forEach(p => {
             const dist = Vector.magnitude(Vector.sub(p.body.position, pos));
             if (dist < radius) {
+                const now = Date.now();
+                if (p.invulnerableUntil && now < p.invulnerableUntil) return;
+                
                 const damage = (1 - dist/radius) * 70;
                 p.hp -= damage;
                 if (p.hp <= 0) this.lobby.respawn(p, ownerId, 'EXPLOSION');
@@ -446,6 +480,9 @@ export class CombatEngine {
             Object.values(this.lobby.players).forEach(p => {
                 const dist = Vector.magnitude(Vector.sub(p.body.position, pos));
                 if (dist < radius) {
+                    const now = Date.now();
+                    if (p.invulnerableUntil && now < p.invulnerableUntil) return;
+
                     p.hp -= 15; // Direct direct damage
                     p.statusEffects.stun = Date.now() + 1500; // Stun effect
                     if (p.hp <= 0) this.lobby.respawn(p, ownerId, 'ELECTRIC_BARREL');
@@ -510,7 +547,7 @@ export class CombatEngine {
         const id = ++this.lobby.lastBulletId;
         const bullet = Bodies.circle(g.body.position.x + Math.cos(angle)*40, g.body.position.y + Math.sin(angle)*40, 6, { 
             label: 'bullet', frictionAir: 0, mass: 0.1,
-            collisionFilter: { category: 0x0002, mask: ~0x0010 }
+            collisionFilter: { category: CAT_BULLET, mask: ~CAT_FOLIAGE }
         });
         bullet.id = id; 
         bullet.customData = { 
@@ -536,7 +573,7 @@ export class CombatEngine {
             label: `guardian-${id}`,
             frictionAir: 0.1,
             mass: 5,
-            collisionFilter: { category: 0x0001, mask: -1 } // Treat as Tank
+            collisionFilter: { category: CAT_TANK, mask: -1 }
         });
         this.lobby.guardians[id] = {
             id, body, hp: 400, maxHp: 400, angle: 0, lastShot: 0

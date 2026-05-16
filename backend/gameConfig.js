@@ -1,4 +1,5 @@
-export const MIN_PLAYERS = 1;
+export const MIN_PLAYERS = 2;
+export const SPAWN_PROTECTION_DURATION = 5000;
 export const MATERIALS = {
     METAL: 'metal',
     FIRE: 'fire',
@@ -22,8 +23,18 @@ export const MATERIALS = {
     DRONE: 'drone',
     QUICKSAND: 'quicksand',
     CACTUS: 'cactus',
-    PALM: 'palm'
+    PALM: 'palm',
+    SNOW_DRIFT: 'snow_drift',
+    PINE_TREE: 'pine_tree',
+    BOULDER: 'boulder'
 };
+
+// Collision Categories
+export const CAT_TANK = 0x0001;
+export const CAT_BULLET = 0x0002;
+export const CAT_WALL = 0x0004;
+export const CAT_SOLID = 0x0008;
+export const CAT_FOLIAGE = 0x0010;
 
 export const MATERIAL_PROPERTIES = {
     [MATERIALS.WATER]: { w: 100, h: 100, color: 'rgba(0, 100, 255, 0.4)' },
@@ -47,7 +58,10 @@ export const MATERIAL_PROPERTIES = {
     [MATERIALS.DRONE]: { w: 40, h: 40, color: '#00f2ff', hp: 150 },
     [MATERIALS.QUICKSAND]: { w: 140, h: 140, color: '#4d3a24', name: 'Quicksand' },
     [MATERIALS.CACTUS]: { w: 35, h: 35, color: '#2d4d2d', hp: 40, name: 'Cactus' },
-    [MATERIALS.PALM]: { w: 50, h: 50, color: '#8b4513', hp: 60, name: 'Palm Tree' }
+    [MATERIALS.PALM]: { w: 50, h: 50, color: '#8b4513', hp: 60, name: 'Palm Tree' },
+    [MATERIALS.SNOW_DRIFT]: { w: 80, h: 60, color: '#ffffff', name: 'Snow Drift' },
+    [MATERIALS.PINE_TREE]: { w: 40, h: 40, color: '#0d2d0d', hp: 80, name: 'Pine Tree' },
+    [MATERIALS.BOULDER]: { w: 60, h: 60, color: '#555555', hp: 200, name: 'Boulder' }
 };
 
 export const BIOMES = {

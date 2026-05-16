@@ -1,6 +1,6 @@
 import Matter from 'matter-js';
 import { Server } from 'socket.io';
-import { MATERIALS, MATERIAL_PROPERTIES, BIOMES, CHASSIS, WEAPON_MODULES } from '../gameConfig.js';
+import { MATERIALS, MATERIAL_PROPERTIES, BIOMES, CHASSIS, WEAPON_MODULES, CAT_TANK, CAT_BULLET, CAT_WALL, CAT_SOLID, CAT_FOLIAGE, SPAWN_PROTECTION_DURATION } from '../gameConfig.js';
 import { MapGenerator } from './MapGenerator.js';
 import { BotAI } from './BotAI.js';
 import { CombatEngine } from './CombatEngine.js';
@@ -133,7 +133,7 @@ export class Lobby {
         const body = Bodies.circle(startPos.x, startPos.y, 20, {
             frictionAir: config.speed > 0.005 ? 0.1 : 0.2, mass: config.mass,
             label: `tank-${socket.id}`, friction: 0.02, restitution: 0.1,
-            collisionFilter: { category: 0x0001, mask: -1 } // CAT_TANK
+            collisionFilter: { category: CAT_TANK, mask: -1 }
         });
         
         if (team === 'pink') Body.setAngle(body, Math.PI);
@@ -146,7 +146,8 @@ export class Lobby {
             inputs: { up: false, down: false, left: false, right: false, shoot: false, aimAngle: 0 },
             lastInputSeq: 0, lastBuffLevel: 0, upgrades: { health: 0, speed: 0, power: 0 }, ready: false,
             joinedAt: Date.now(),
-            respawnAt: 0
+            respawnAt: 0,
+            invulnerableUntil: Date.now() + SPAWN_PROTECTION_DURATION
         };
 
         // Send static map data to joining player
@@ -169,7 +170,7 @@ export class Lobby {
         
         const body = Bodies.circle(startPos.x, startPos.y, 20, {
             frictionAir: config.frictionAir || 0.15, friction: 0.02, restitution: 0.1, mass: config.mass, label: `tank-${id}`,
-            collisionFilter: { category: 0x0001, mask: -1 } // CAT_TANK
+            collisionFilter: { category: CAT_TANK, mask: -1 }
         });
         
         if (team === 'pink' && !pos) Body.setAngle(body, Math.PI);
@@ -186,7 +187,8 @@ export class Lobby {
             role: Math.random() > 0.6 ? 'FLANKER' : 'ASSAULT', strafeDir: Math.random() > 0.5 ? 1 : -1,
             lastRoleSwitch: Date.now(), path: [], lastPathUpdate: 0, lastBuffLevel: 0,
             upgrades: { health: 0, speed: 0, power: 0 }, ready: true,
-            joinedAt: Date.now()
+            joinedAt: Date.now(),
+            invulnerableUntil: Date.now() + SPAWN_PROTECTION_DURATION
         };
     }
 
@@ -266,20 +268,14 @@ export class Lobby {
         const id = ++this.lastElementId;
         const isSolid = solidTypes.includes(type);
         
-        // Define Collision Categories
-        const CAT_TANK = 0x0001;
-        const CAT_BULLET = 0x0002;
-        const CAT_WALL = 0x0004;
-        const CAT_SOLID = 0x0008;
-        const CAT_FOLIAGE = 0x0010; // New category for trees/bushes
-
-        let collisionFilter = { category: isSolid ? CAT_SOLID : 0, mask: -1 };
+        // All elements (solid or sensor) must have CAT_SOLID to be hit by bullets/tanks
+        let collisionFilter = { category: CAT_SOLID, mask: -1 };
         
         // Special rule for foliage (Cactus/Palm): Block tanks, but let bullets pass
         if (type === MATERIALS.CACTUS || type === MATERIALS.PALM) {
             collisionFilter = {
                 category: CAT_FOLIAGE,
-                mask: CAT_TANK | CAT_WALL | CAT_SOLID // Do NOT include CAT_BULLET
+                mask: CAT_TANK | CAT_WALL | CAT_SOLID
             };
         }
 
@@ -316,7 +312,7 @@ export class Lobby {
         }
 
         const id = ++this.lastElementId;
-        const body = Bodies.rectangle(pos.x, pos.y, w, h, { label: 'element', isStatic: true, isSensor: false, friction: 0, frictionStatic: 0 });
+        const body = Bodies.rectangle(pos.x, pos.y, w, h, { label: 'element', isStatic: true, isSensor: false, friction: 0, frictionStatic: 0, collisionFilter: { category: CAT_SOLID, mask: -1 } });
         body.elementId = id;
         this.elements[id] = { id, body, type: MATERIALS.BUILDING, hp: 800, w, h, shape: shape, x: pos.x, y: pos.y };
         Composite.add(this.engine.world, body);
@@ -346,7 +342,7 @@ export class Lobby {
                     const oldPos = { x: e.body.position.x, y: e.body.position.y };
                     Composite.remove(this.engine.world, e.body);
                     e.type = e.originalType; e.originalType = null; e.expiresAt = null; 
-                    const newBody = Bodies.rectangle(oldPos.x, oldPos.y, e.w, e.h, { label: 'element', isStatic: true, isSensor: false, collisionFilter: { category: 1, mask: -1 } });
+                    const newBody = Bodies.rectangle(oldPos.x, oldPos.y, e.w, e.h, { label: 'element', isStatic: true, isSensor: false, collisionFilter: { category: CAT_SOLID, mask: -1 } });
                     newBody.elementId = e.id; e.body = newBody; Composite.add(this.engine.world, newBody);
                 } else this.destroyElement(id);
             }
@@ -388,7 +384,7 @@ export class Lobby {
         const config = CHASSIS[player.chassis];
         player.hp = config.hp;
         player.respawnAt = 0;
-        player.invulnerableUntil = Date.now() + 5000; // Increased to 5s due to longer respawn
+        player.invulnerableUntil = Date.now() + SPAWN_PROTECTION_DURATION; 
         const pos = this.getRandomSpawn(player.team);
         Body.setPosition(player.body, pos); 
         Body.setVelocity(player.body, { x: 0, y: 0 });
@@ -461,7 +457,7 @@ export class Lobby {
 
     fireGuardianPulse(g, angle) {
         const id = ++this.lastBulletId;
-        const bullet = Bodies.circle(g.body.position.x + Math.cos(angle)*40, g.body.position.y + Math.sin(angle)*40, 8, { label: 'bullet', frictionAir: 0, mass: 0.1 });
+        const bullet = Bodies.circle(g.body.position.x + Math.cos(angle)*40, g.body.position.y + Math.sin(angle)*40, 8, { label: 'bullet', frictionAir: 0, mass: 0.1, collisionFilter: { category: CAT_BULLET, mask: ~CAT_FOLIAGE } });
         bullet.id = id; bullet.customData = { ownerId: `guardian-${g.id}`, damage: 15, impact: 0.02, type: MATERIALS.ELECTRIC, weapon: 'GUARDIAN_PULSE', expiresAt: Date.now() + 1500 };
         Body.setVelocity(bullet, { x: Math.cos(angle)*12, y: Math.sin(angle)*12 });
         this.bullets[id] = bullet; Composite.add(this.engine.world, bullet);
@@ -473,7 +469,7 @@ export class Lobby {
         const bullet = Bodies.circle(pos.x, pos.y, weapon.radius, { 
             label: 'bullet', frictionAir: 0, mass: 0.1, 
             isSensor: weapon.type === MATERIALS.DIRT,
-            collisionFilter: { category: 0x0002, mask: ~0x0010 } // CAT_BULLET, mask NOT foliage
+            collisionFilter: { category: CAT_BULLET, mask: ~CAT_FOLIAGE }
         });
         bullet.id = id; bullet.customData = { ownerId: p.id, damage: weapon.damage * buff, impact: weapon.impact * buff, type: weapon.type, weapon: mod, expiresAt: Date.now() + (weapon.ttl || 2000) };
         Body.setVelocity(bullet, { x: Math.cos(aim)*weapon.speed, y: Math.sin(aim)*weapon.speed });
@@ -525,7 +521,14 @@ export class Lobby {
         if (this.active) return;
         this.setupWorld(Object.keys(this.players).length, mapType);
         this.active = true; this.matchTimer = 480; this.scores = { blue: 0, pink: 0 }; this.gameOver = false; this.lastTimeTick = Date.now();
-        Object.values(this.players).forEach(p => { p.hp = p.maxHp; p.scrap = 0; const spawn = this.getRandomSpawn(p.team); Body.setPosition(p.body, spawn); Body.setVelocity(p.body, { x: 0, y: 0 }); });
+        Object.values(this.players).forEach(p => { 
+            p.hp = p.maxHp; 
+            p.scrap = 0; 
+            p.invulnerableUntil = Date.now() + SPAWN_PROTECTION_DURATION;
+            const spawn = this.getRandomSpawn(p.team); 
+            Body.setPosition(p.body, spawn); 
+            Body.setVelocity(p.body, { x: 0, y: 0 }); 
+        });
         
         // Broadcast static map data to all players
         this.broadcastMapData();

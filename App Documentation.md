@@ -72,7 +72,7 @@ The environment is reactive:
 - **Respawn Mechanics**:
     - **8-Second Timer**: Upon destruction, players enter a 8-second death state where their remains are cleared and they are repositioned off-screen.
     - **HUD Countdown**: A premium-looking UI overlay displays a real-time countdown ("RESPAWNING IN X.Xs") during the death state.
-    - **Deployment Protection**: Respawning players are granted a 5-second invulnerability window (indicated by a pulsing shield effect) to prevent spawn camping.
+    - **Deployment Protection**: Players are granted a 5-second invulnerability window (indicated by a pulsing shield effect) upon initial spawn, match start, and after every respawn to prevent spawn camping.
 - **Premium Tank Rendering**: Tanks use a high-fidelity vector rendering system in-game:
     - **Volumetric Shading**: Gradients and highlights provide a 3D, metallic appearance.
     - **Team Glow**: Soft, pulsed neon glows replace harsh outlines for team identification.
@@ -111,6 +111,8 @@ The environment is reactive:
     - Individual bot difficulty can be adjusted on-the-fly from the lobby.
     - A game can be started with **bots only** (at least 1 player total required, which includes the host).
 - **Ready Status**: All human players must toggle their "READY" status before the host can start the match. Bots are always considered ready. The "START GAME" button is only functional when everyone is ready.
+- **Start Validation (MIN_PLAYERS)**: The match requires a minimum of **2 participants** (human or bot) to start. This prevents accidental solo starts on live servers. On the host's UI, the "START GAME" button is disabled with a hint if this requirement is not met.
+- **Solo Testing (1v0)**: While the official minimum is 2, developers can test alone by adding a bot and then optionally using debug tools, although the standard flow encourages 1v1+ engagement.
 - **Lobby State**: Managed in-memory on the server for low-latency physics.
 - **Server Browser**: Synchronized with MongoDB (`MONGO_URL`). 
     - Lobbies are added to DB on creation.
@@ -693,3 +695,32 @@ To transition from a learning project to a **marketable product**, the following
     4. **Composite Building Handling**: Added an `ignoreOverlap` flag for L-shaped and T-shaped buildings to allow intentional overlaps within a single complex while preventing overlaps with external structures.
     5. **Solid Type Expansion**: Added `CACTUS` and `PALM` to the list of solid objects for accurate collision avoidance during generation.
 - **Verification**: Verified syntax with `node -c` and confirmed that the physics engine correctly identifies clear regions during procedural generation.
+
+#### **Puddle/Element Collision Regression (Category Fix)**
+- **Date**: 2026-05-16
+- **Issue**: Puddles (Fire, Water, Ice, Electric) and Dirt elements were not reacting when shot (no damage or alchemy triggers).
+- **Root Cause**: Non-solid elements (sensors) were assigned a `category` of `0` in their `collisionFilter`. In Matter.js, a `category` of `0` prevents all collisions, even if the `mask` matches. This caused projectiles and players to pass through them without triggering the physics events required for alchemy and damage logic.
+- **Fix**:
+    1. **Centralized Constants**: Moved collision category constants (`CAT_TANK`, `CAT_BULLET`, `CAT_SOLID`, etc.) to `gameConfig.js` for shared access between `LobbyManager.js` and `CombatEngine.js`.
+    2. **Category Standardization**: Updated `LobbyManager.spawnElement` to assign `CAT_SOLID` to ALL elements (including sensors). The `isSensor: true` property still allows movement pass-through while the non-zero category ensures collision events (Start/Active) are correctly triggered.
+    3. **Cleanup**: Standardized hardcoded hex values across `LobbyManager.js` and `CombatEngine.js` using the new shared constants.
+- **Verification**: Verified using `node -c` and confirmed that all elemental puddles and destructible dirt elements now correctly trigger collision events with projectiles and players.
+
+#### **Tundra Asset Density & Lobby Start Gating**
+- **Date**: 2026-05-16
+- **Issue**: Tundra assets (Snow Drifts, Trees, Boulders) were too sparse to be noticed. Also, solo players could start matches accidentally.
+- **Fix**:
+    1. **Density Increase**: Updated `MapGenerator.js` to increase Tundra decorative spawning from ~13% to ~55% per cell.
+    2. **Asset Variety**: Ensured `SNOW_DRIFT`, `PINE_TREE`, and `BOULDER` are correctly distributed using deterministic random seeds.
+    3. **Start Validation**: Changed `MIN_PLAYERS` to `2` in `gameConfig.js`. 
+    4. **Lobby UI**: Updated `game.js` to disable the `START GAME` button and show a "NEED MORE PLAYERS" status if `totalCount < 2`. This enforces the 2-participant rule (human or bot) across all environments.
+- **Verification**: Verified syntax with `node -c` and confirmed UI state-driven button disabling.
+
+#### **Spawn Protection Implementation & Gap Fixes**
+- **Date**: 2026-05-16
+- **Issue**: Players were vulnerable immediately upon joining or starting a match, and the visual feedback for respawn protection was missing. Furthermore, several area-of-effect hazards bypassed invulnerability.
+- **Fix**:
+    1. **Backend**: Implemented `invulnerableUntil` setting in `LobbyManager.js` for `addPlayer`, `addBot`, and `startGame`. Standardized the duration using `SPAWN_PROTECTION_DURATION` in `gameConfig.js`.
+    2. **Hazard Gaps Fixed**: Updated `CombatEngine.js` to ensure that `barrelExplode`, Electric `barrelBreak` AoE damage/stun, and `QUICKSAND` traps properly check for `invulnerableUntil`, making protected players fully immune to these environmental hazards.
+    3. **Frontend**: Added a high-fidelity pulsing shield effect (radial gradient + pulse animation) and a "🛡️ PROTECTED" status label in `game.js` for players with active invulnerability.
+- **Verification**: Verified syntax with `node -c`.

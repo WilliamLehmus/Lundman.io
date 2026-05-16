@@ -456,7 +456,8 @@ io.on('connection', (socket) => {
 
     socket.on('start-game', (data) => {
         const lobby = lobbies[socket.lobbyId];
-        if (lobby && Object.keys(lobby.players).length >= MIN_PLAYERS) {
+        const requiredPlayers = process.env.NODE_ENV === 'production' ? MIN_PLAYERS : 1;
+        if (lobby && Object.keys(lobby.players).length >= requiredPlayers) {
             if (Object.values(lobby.players).filter(p => !p.isBot).every(p => p.ready)) {
                 lobby.startGame(data?.mapType);
                 io.to(lobby.id).emit('game-started');
