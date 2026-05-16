@@ -132,7 +132,8 @@ export class Lobby {
         
         const body = Bodies.circle(startPos.x, startPos.y, 20, {
             frictionAir: config.speed > 0.005 ? 0.1 : 0.2, mass: config.mass,
-            label: `tank-${socket.id}`, friction: 0.02, restitution: 0.1
+            label: `tank-${socket.id}`, friction: 0.02, restitution: 0.1,
+            collisionFilter: { category: 0x0001, mask: -1 } // CAT_TANK
         });
         
         if (team === 'pink') Body.setAngle(body, Math.PI);
@@ -167,7 +168,8 @@ export class Lobby {
         const config = CHASSIS[chassisType];
         
         const body = Bodies.circle(startPos.x, startPos.y, 20, {
-            frictionAir: config.frictionAir || 0.15, friction: 0.02, restitution: 0.1, mass: config.mass, label: `tank-${id}`
+            frictionAir: config.frictionAir || 0.15, friction: 0.02, restitution: 0.1, mass: config.mass, label: `tank-${id}`,
+            collisionFilter: { category: 0x0001, mask: -1 } // CAT_TANK
         });
         
         if (team === 'pink' && !pos) Body.setAngle(body, Math.PI);
@@ -263,7 +265,30 @@ export class Lobby {
 
         const id = ++this.lastElementId;
         const isSolid = solidTypes.includes(type);
-        const body = Bodies.rectangle(pos.x, pos.y, ew, eh, { label: 'element', isStatic: true, isSensor: !isSolid });
+        
+        // Define Collision Categories
+        const CAT_TANK = 0x0001;
+        const CAT_BULLET = 0x0002;
+        const CAT_WALL = 0x0004;
+        const CAT_SOLID = 0x0008;
+        const CAT_FOLIAGE = 0x0010; // New category for trees/bushes
+
+        let collisionFilter = { category: isSolid ? CAT_SOLID : 0, mask: -1 };
+        
+        // Special rule for foliage (Cactus/Palm): Block tanks, but let bullets pass
+        if (type === MATERIALS.CACTUS || type === MATERIALS.PALM) {
+            collisionFilter = {
+                category: CAT_FOLIAGE,
+                mask: CAT_TANK | CAT_WALL | CAT_SOLID // Do NOT include CAT_BULLET
+            };
+        }
+
+        const body = Bodies.rectangle(pos.x, pos.y, ew, eh, { 
+            label: 'element', 
+            isStatic: true, 
+            isSensor: !isSolid,
+            collisionFilter: collisionFilter
+        });
         body.elementId = id;
 
         this.elements[id] = { id, body, type, hp: (type === MATERIALS.DIRT && hp === null) ? 150 : hp, ownerId, expiresAt: duration ? Date.now() + duration : null, originalType: (type === MATERIALS.WATER && this.mapType === 'TUNDRA' && !duration) ? MATERIALS.ICE : null, w: ew, h: eh, x: pos.x, y: pos.y };
@@ -445,7 +470,11 @@ export class Lobby {
     fire(p, weapon, mod, buff) {
         const id = ++this.lastBulletId, aim = p.inputs.aimAngle ?? p.body.angle, dist = weapon.type === MATERIALS.DIRT ? 80 : 45;
         const pos = { x: p.body.position.x + Math.cos(aim)*dist, y: p.body.position.y + Math.sin(aim)*dist };
-        const bullet = Bodies.circle(pos.x, pos.y, weapon.radius, { label: 'bullet', frictionAir: 0, mass: 0.1, isSensor: weapon.type === MATERIALS.DIRT });
+        const bullet = Bodies.circle(pos.x, pos.y, weapon.radius, { 
+            label: 'bullet', frictionAir: 0, mass: 0.1, 
+            isSensor: weapon.type === MATERIALS.DIRT,
+            collisionFilter: { category: 0x0002, mask: ~0x0010 } // CAT_BULLET, mask NOT foliage
+        });
         bullet.id = id; bullet.customData = { ownerId: p.id, damage: weapon.damage * buff, impact: weapon.impact * buff, type: weapon.type, weapon: mod, expiresAt: Date.now() + (weapon.ttl || 2000) };
         Body.setVelocity(bullet, { x: Math.cos(aim)*weapon.speed, y: Math.sin(aim)*weapon.speed });
         if (weapon.recoil) Body.applyForce(p.body, p.body.position, { x: -Math.cos(aim)*weapon.recoil, y: -Math.sin(aim)*weapon.recoil });

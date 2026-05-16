@@ -509,7 +509,8 @@ export class CombatEngine {
     fireGuardianCannon(g, angle) {
         const id = ++this.lobby.lastBulletId;
         const bullet = Bodies.circle(g.body.position.x + Math.cos(angle)*40, g.body.position.y + Math.sin(angle)*40, 6, { 
-            label: 'bullet', frictionAir: 0, mass: 0.1 
+            label: 'bullet', frictionAir: 0, mass: 0.1,
+            collisionFilter: { category: 0x0002, mask: ~0x0010 }
         });
         bullet.id = id; 
         bullet.customData = { 
@@ -534,7 +535,8 @@ export class CombatEngine {
         const body = Bodies.circle(pos.x, pos.y, 25, {
             label: `guardian-${id}`,
             frictionAir: 0.1,
-            mass: 5
+            mass: 5,
+            collisionFilter: { category: 0x0001, mask: -1 } // Treat as Tank
         });
         this.lobby.guardians[id] = {
             id, body, hp: 400, maxHp: 400, angle: 0, lastShot: 0
